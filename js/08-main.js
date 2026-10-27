@@ -1,4 +1,4 @@
-﻿// 依赖：全部前置文件，必须最后加载
+// 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbPut, escapeHtml, now, openDB, pick, randInt, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getTheme, openChat, openContactSettingsFromChatDirect, openPage, renderContacts, renderMeBrief, saveContact } from './03-data.js';
