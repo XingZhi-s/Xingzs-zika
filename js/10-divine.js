@@ -156,25 +156,43 @@ function shuffleArr(arr) {
   return a;
 }
 
-// ---- 页面入口与渲染 ----
+// ---- 页面入口与渲染（分步流程：1 选牌种 → 2 选牌阵+问题 → 3 结果） ----
 export function openDivinePage() {
+  // 每次进入页面都重置回第一步
+  state.divineStep = 1;
+  state.divineQuestion = '';
   openPage('page-divine');
+  const q = $('divine-question'); if (q) q.value = '';
   renderDivinePage();
 }
+function applyDivineStep() {
+  const s = state.divineStep || 1;
+  for (const n of [1, 2, 3]) {
+    const el = $(`divine-step-${n}`);
+    if (el) el.classList.toggle('hide', n !== s);
+  }
+}
 export function renderDivinePage() {
-  const tabs = $('divine-type-tabs');
-  if (tabs) {
-    tabs.innerHTML = [['tarot', '塔罗牌'], ['lenormand', '雷诺曼']].map(([v, n]) =>
-      `<button class="mood-role-tab${state.divineType === v ? ' sel' : ''}" onclick="switchDivineType('${v}')">${n}</button>`
-    ).join('');
+  applyDivineStep();
+  const s = state.divineStep || 1;
+  if (s === 2) {
+    const t2 = $('divine-step2-title');
+    if (t2) t2.textContent = `${state.divineType === 'tarot' ? '塔罗牌' : '雷诺曼'} · 选择牌阵`;
+    const sl = $('divine-spread-list');
+    if (sl) {
+      sl.innerHTML = DIVINE_SPREADS[state.divineType].map((sp, i) =>
+        `<button class="mood-role-tab${state.divineSpreadIdx[state.divineType] === i ? ' sel' : ''}" onclick="selectDivineSpread(${i})">${sp.name}</button>`
+      ).join('');
+    }
+  } else if (s === 3) {
+    renderDivine();
   }
-  const sl = $('divine-spread-list');
-  if (sl) {
-    sl.innerHTML = DIVINE_SPREADS[state.divineType].map((s, i) =>
-      `<button class="mood-role-tab${state.divineSpreadIdx[state.divineType] === i ? ' sel' : ''}" onclick="selectDivineSpread(${i})">${s.name}</button>`
-    ).join('');
-  }
-  renderDivine();
+}
+// 第一步：选择牌种 → 进入第二步
+export function divinePickKind(t) {
+  state.divineType = t;
+  state.divineStep = 2;
+  renderDivinePage();
 }
 export function switchDivineType(t) {
   state.divineType = t;
@@ -182,6 +200,21 @@ export function switchDivineType(t) {
 }
 export function selectDivineSpread(i) {
   state.divineSpreadIdx[state.divineType] = i;
+  renderDivinePage();
+}
+// 第二步：记录问题并抽牌 → 进入第三步
+export async function startDivineDraw() {
+  const q = $('divine-question');
+  state.divineQuestion = q ? q.value.trim() : '';
+  await drawDivine();
+  state.divineStep = 3;
+  renderDivinePage();
+}
+// 重新抽牌：清空问题并回到第一步
+export function divineRestart() {
+  state.divineStep = 1;
+  state.divineQuestion = '';
+  const q = $('divine-question'); if (q) q.value = '';
   renderDivinePage();
 }
 
@@ -194,7 +227,7 @@ export async function drawDivine() {
     const upright = type === 'tarot' ? Math.random() < 0.5 : true;
     return { pos: spread.positions[i], name: card.name, upright, meaning: type === 'tarot' ? (upright ? card.up : card.rev) : card.meaning };
   });
-  const result = { id: uid(), ts: now(), dtype: type, spread: spread.name, cards: drawn };
+  const result = { id: uid(), ts: now(), dtype: type, spread: spread.name, question: state.divineQuestion || '', cards: drawn };
   const text = buildDivineText(result);
   state._lastDivine = { result, text };
   await pushDivineHistory(result, text);
@@ -205,7 +238,8 @@ function buildDivineText(r) {
   const lines = r.cards.map(c => r.dtype === 'tarot'
     ? `【${c.pos}】${c.name}（${c.upright ? '正位' : '逆位'}）\n${c.meaning}`
     : `【${c.pos}】${c.name}\n${c.meaning}`);
-  return `🔮 ${title} · ${r.spread}\n${lines.join('\n')}`;
+  const qLine = r.question ? `问题：${r.question}\n` : '';
+  return `${qLine}🔮 ${title} · ${r.spread}\n${lines.join('\n')}`;
 }
 
 // ---- 结果渲染（牌面卡片 + 翻转牌义） ----
@@ -321,5 +355,7 @@ export function divineToInspiration() {
 export function initDivineModule() {
   state.divineType = 'tarot';
   state.divineSpreadIdx = { tarot: 0, lenormand: 0 };
+  state.divineStep = 1;
+  state.divineQuestion = '';
   state._lastDivine = null;
 }

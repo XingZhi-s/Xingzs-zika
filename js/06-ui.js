@@ -522,6 +522,22 @@ export async function renderCardLib() {
     </div>`;
   }).join('');
 }
+export function filterCardLib(keyword) {
+  const box = $('card-groups');
+  if (!box) return;
+  const kw = (keyword || '').trim().toLowerCase();
+  if (!kw) { renderCardLib(); return; }
+  box.querySelectorAll('.group-block').forEach(group => {
+    let hasVisible = false;
+    group.querySelectorAll('.card-item').forEach(card => {
+      const hit = card.textContent.toLowerCase().includes(kw);
+      card.style.display = hit ? 'block' : 'none';
+      if (hit) hasVisible = true;
+    });
+    group.style.display = hasVisible ? 'block' : 'none';
+    if (hasVisible) group.classList.remove('collapsed');
+  });
+}
 export async function createCardGroup() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const name = prompt('分组名：', '新分组');

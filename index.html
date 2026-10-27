@@ -535,7 +535,6 @@ a { text-decoration:none; color:inherit; }
 .app-tile.ph:active { transform: none; }
 
 /* ========== 心情日历 & 灵感随记 ========== */
-.mood-role-bar { display:flex; gap:8px; padding:10px 14px; overflow-x:auto; border-bottom:1px solid var(--border-color); background:var(--card-bg); flex-shrink:0; }
 .mood-role-tab { flex-shrink:0; padding:6px 14px; min-height:0; min-width:0; height:auto; border-radius:999px; background:var(--bg-color); color:var(--text-secondary); font-size:13px; border:1px solid var(--border-color); }
 .mood-role-tab.sel { background:var(--theme-color); color:#fff; border-color:var(--theme-color); }
 .mood-cal-head { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 4px; }
@@ -560,6 +559,17 @@ a { text-decoration:none; color:inherit; }
 .mood-view-card .mv-emoji { font-size:44px; }
 .mood-view-card .mv-text { margin-top:10px; font-size:14px; line-height:1.6; }
 .mood-view-card .mv-time { margin-top:8px; font-size:12px; color:var(--text-secondary); }
+/* 心情日历 · 抽屉式联系人菜单 */
+.mood-drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:960; }
+.mood-drawer-panel { position:absolute; top:0; right:0; bottom:0; width:250px; background:var(--card-bg); box-shadow:-4px 0 18px rgba(0,0,0,.14); display:flex; flex-direction:column; padding:16px 10px; overflow-y:auto; animation:moodDrawerIn .25s ease; }
+@keyframes moodDrawerIn { from { transform:translateX(100%); } to { transform:translateX(0); } }
+.mood-drawer-title { font-size:13px; color:var(--text-secondary); padding:2px 10px 10px; flex-shrink:0; }
+.mood-drawer-item { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border-radius:12px; border:none; background:transparent; text-align:left; min-height:0; }
+.mood-drawer-item:active { background:var(--bg-color); }
+.mood-drawer-item.sel { background:var(--theme-light); }
+.mood-drawer-item img { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.mood-drawer-item .md-name { font-size:14px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mood-drawer-item.sel .md-name { color:var(--theme-color); font-weight:600; }
 .insp-input-bar { display:flex; gap:8px; padding:12px 14px; background:var(--card-bg); border-bottom:1px solid var(--border-color); flex-shrink:0; }
 .insp-input-bar .input { flex:1; }
 .insp-list { padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
@@ -568,12 +578,24 @@ a { text-decoration:none; color:inherit; }
 .insp-item .it-time { margin-top:6px; font-size:12px; color:var(--text-secondary); }
 .insp-empty { text-align:center; color:var(--text-secondary); padding:40px 0; font-size:13px; }
 
-/* ========== 占卜 ========== */
+/* ========== 占卜（分步沉浸式） ========== */
 .divine-body { padding-bottom:20px; }
+.divine-step { display:flex; flex-direction:column; align-items:center; padding:26px 16px 20px; }
+.dv-step-title { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:18px; text-align:center; }
+.dv-kind-grid { display:flex; gap:14px; width:100%; justify-content:center; }
+.dv-kind-card { flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:8px; padding:26px 10px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; box-shadow:var(--shadow); min-height:0; }
+.dv-kind-card:active { transform:scale(.97); }
+.dv-kind-emoji { font-size:38px; line-height:1; }
+.dv-kind-name { font-size:15px; font-weight:600; }
+.dv-kind-desc { font-size:11px; color:var(--text-secondary); }
+.divine-step .divine-spread-bar { justify-content:center; padding:0 0 16px; }
+.divine-step #divine-question { width:100%; }
+.divine-draw-btn { width:100%; margin-top:12px; }
+.dv-back-link { margin-top:14px; background:none; border:none; color:var(--text-secondary); font-size:13px; min-height:32px; }
+.divine-step .divine-result { width:100%; padding:0; }
+.divine-restart-wrap { padding:18px 14px 8px; display:flex; justify-content:center; }
+.divine-restart-wrap .btn { min-width:160px; }
 .divine-spread-bar { display:flex; gap:8px; padding:10px 14px; flex-wrap:wrap; }
-.divine-draw-wrap { padding:4px 14px 12px; }
-.divine-draw-btn { width:100%; }
-.divine-result { padding:0 14px; }
 .dv-cards { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; padding-top:6px; }
 .dv-card { width:104px; height:168px; perspective:700px; background:transparent; border:none; padding:0; min-height:0; min-width:0; }
 .dv-card-inner { position:relative; width:100%; height:100%; transition:transform .5s; transform-style:preserve-3d; }
@@ -857,40 +879,14 @@ a { text-decoration:none; color:inherit; }
 .msg-choice-option.choice-picked .choice-letter { background:#fff; color:var(--theme-color); }
 .msg-choice-result { padding:10px 12px; background:var(--theme-color); color:#fff; border-radius:10px; font-weight:600; }
 
-/* 系统提示消息（图1样式：两行居中胶囊白底） */
-.msg-system { display:flex; justify-content:center; padding:10px 12px; max-width:100%; }
-.msg-system .sys-card {
-  display:flex; flex-direction:column; align-items:center; gap:6px;
-  font-size:14px; font-weight:500; color:#3a4a63;
-  background:#ffffff;
-  border:1px solid #eef2f8;
-  padding:10px 22px;
-  border-radius:22px;
-  max-width:90%;
-  text-align:center;
-  box-shadow: 0 2px 8px rgba(140,160,210,0.1);
-  line-height: 1.45;
-}
-.sys-line {
-  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
-  gap: 4px 6px;
-}
-.sys-line.sys-line-2 {
-  font-size:13px;
-  color:#5a6e8f;
-}
-.sys-icon {
-  display:inline-flex; align-items:center; justify-content:center;
-  width: 24px; height: 24px; border-radius: 50%;
-  background: #eef3fb;
-  color: #7c97bf;
-  flex-shrink: 0;
-}
-.sys-icon svg { width: 14px; height: 14px; stroke-width: 2; }
-.sys-name { font-weight: 700; color:#2a3a56; }
+/* 系统提示消息（单行紧凑胶囊） */
+.msg-system { display:flex; justify-content:center; padding:6px 12px; max-width:100%; }
+.msg-system .sys-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px; font-size:12px; color:#5a6e8f; background:#ffffff; border:1px solid #eef2f8; padding:6px 16px; border-radius:20px; max-width:90%; line-height:1.4; box-shadow:0 2px 8px rgba(140,160,210,0.08); }
+.sys-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#eef3fb; color:#7c97bf; flex-shrink:0; }
+.sys-icon svg { width:10px; height:10px; stroke-width:2; }
+.sys-name { font-weight:700; color:#2a3a56; }
 .sys-action { color:#5a6e8f; font-weight:500; }
-.sys-dur { font-weight: 700; color:#2a3a56; font-variant-numeric: tabular-nums; margin-left:4px; font-size:14px; }
-.sys-dot { color:#bcc9de; opacity: .9; margin: 0 2px; }
+.sys-dur { font-weight:600; color:#2a3a56; margin-left:4px; }
 .msg-row.msg-center { justify-content:center; padding:8px 12px; gap:0; }
 .msg-row.msg-center .msg-wrap { max-width:100%; align-items:center; }
 .msg-typing { font-size:12px; color:var(--text-secondary); padding:4px 0; display:flex; align-items:center; gap:4px; }
@@ -903,6 +899,10 @@ a { text-decoration:none; color:inherit; }
 .chat-input-btn { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; font-size:20px; flex-shrink:0; }
 .chat-input-btn:hover { background:var(--bg-color); }
 .chat-input-box { flex:1; background:#f3f4f6; border-radius:20px; padding:10px 14px; font-size:14px; min-height:40px; max-height:120px; overflow-y:auto; resize:none; line-height:1.4; }
+/* 输入框上方引用条 */
+.quote-bar { display:flex; align-items:center; gap:8px; background:#f3f6fc; border-left:3px solid var(--theme-color); border-radius:8px; padding:7px 10px; margin:6px 10px 0; font-size:12px; color:var(--text-secondary); }
+.quote-bar .quote-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.quote-bar .quote-clear { width:22px; height:22px; min-width:22px; min-height:22px; border-radius:50%; background:#e5e9f0; color:#5a6e8f; font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .chat-send-btn { background:var(--theme-color); color:#fff; border-radius:50%; width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; flex-shrink:0; }
 
 /* 表情下面板 */
@@ -1001,7 +1001,7 @@ a { text-decoration:none; color:inherit; }
 .group-block { margin-bottom:16px; background:var(--card-bg); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
 .group-header { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-weight:600; background:#f9fafb; }
 .group-content { padding:12px 16px; }
-.cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; }
+.cards-grid { display:grid; grid-template-columns:1fr; gap:8px; }
 .card-item { background:#f9fafb; border-radius:8px; padding:10px; font-size:13px; cursor:pointer; line-height:1.4; position:relative; border:1px solid var(--border-color); }
 .card-item:hover { border-color:var(--theme-color); }
 .card-item .del { position:absolute; top:4px; right:4px; background:var(--danger); color:#fff; width:20px; height:20px; border-radius:50%; font-size:11px; display:none; align-items:center; justify-content:center; min-width:20px; min-height:20px; }
@@ -1299,13 +1299,15 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </button>
       </div>
 
-      <!-- ========== 心情日历页（角色切换：我 / 各联系人；有记录的日期格显示 Emoji） ========== -->
+      <!-- ========== 心情日历页（右上角菜单 → 抽屉式角色切换：我 / 各联系人；有记录的日期格显示 Emoji） ========== -->
       <div class="page" id="page-mood">
         <div class="top-bar">
           <button class="chat-header-back" onclick="openPage('page-home')"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow">心情日历</div>
+          <button class="top-bar-btn" onclick="toggleMoodDrawer(true)" title="切换查看">
+            <svg class="i"><use href="#icon-menu"/></svg>
+          </button>
         </div>
-        <div class="mood-role-bar" id="mood-role-bar"></div>
         <div class="mood-cal-head">
           <button class="mood-cal-nav" onclick="moodPrevMonth()" title="上个月"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="mood-cal-title" id="mood-cal-title"></div>
@@ -1313,6 +1315,13 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </div>
         <div class="mood-cal-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
         <div class="mood-cal-grid" id="mood-cal-grid"></div>
+        <!-- 抽屉式联系人菜单：蒙层 + 右侧滑出面板 -->
+        <div id="mood-drawer" class="mood-drawer-mask hide" onclick="if(event.target===this)toggleMoodDrawer(false)">
+          <div class="mood-drawer-panel">
+            <div class="mood-drawer-title">切换查看</div>
+            <div id="mood-drawer-list"></div>
+          </div>
+        </div>
       </div>
 
       <!-- ========== 灵感随记页（极简列表，时间倒序，支持修改/删除） ========== -->
@@ -1328,7 +1337,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <div class="insp-list" id="insp-list"></div>
       </div>
 
-      <!-- ========== 占卜页（塔罗/雷诺曼切换 → 牌阵选择 → 抽牌 → 牌面翻转结果） ========== -->
+      <!-- ========== 占卜页（分步沉浸式：①选牌种 → ②选牌阵+输入问题 → ③牌面翻转结果） ========== -->
       <div class="page" id="page-divine">
         <div class="top-bar">
           <button class="chat-header-back" onclick="openPage('page-home')"><svg class="i"><use href="#icon-back"/></svg></button>
@@ -1338,12 +1347,37 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           </button>
         </div>
         <div class="divine-body">
-          <div class="mood-role-bar" id="divine-type-tabs"></div>
-          <div class="divine-spread-bar" id="divine-spread-list"></div>
-          <div class="divine-draw-wrap">
-            <button class="btn divine-draw-btn" onclick="drawDivine()">静心 · 点击抽牌</button>
+          <!-- 第一步：选择牌种 -->
+          <div class="divine-step" id="divine-step-1">
+            <div class="dv-step-title">静心默念所问之事，选择牌种</div>
+            <div class="dv-kind-grid">
+              <button class="dv-kind-card" onclick="divinePickKind('tarot')">
+                <span class="dv-kind-emoji">🔮</span>
+                <span class="dv-kind-name">塔罗牌</span>
+                <span class="dv-kind-desc">78 张 · 正逆位 · 深层洞察</span>
+              </button>
+              <button class="dv-kind-card" onclick="divinePickKind('lenormand')">
+                <span class="dv-kind-emoji">🃏</span>
+                <span class="dv-kind-name">雷诺曼</span>
+                <span class="dv-kind-desc">36 张 · 直截了当 · 日常指引</span>
+              </button>
+            </div>
           </div>
-          <div class="divine-result" id="divine-result"></div>
+          <!-- 第二步：选牌阵 + 输入问题 -->
+          <div class="divine-step hide" id="divine-step-2">
+            <div class="dv-step-title" id="divine-step2-title">选择牌阵</div>
+            <div class="divine-spread-bar" id="divine-spread-list"></div>
+            <textarea class="input" id="divine-question" rows="3" placeholder="输入你想问的问题（可不填）..." style="resize:none;line-height:1.5;"></textarea>
+            <button class="btn divine-draw-btn" onclick="startDivineDraw()">✨ 开始抽牌</button>
+            <button class="dv-back-link" onclick="divineRestart()">← 重新选择牌种</button>
+          </div>
+          <!-- 第三步：展示结果 -->
+          <div class="divine-step hide" id="divine-step-3">
+            <div class="divine-result" id="divine-result"></div>
+            <div class="divine-restart-wrap">
+              <button class="btn btn-outline" onclick="divineRestart()">重新抽牌</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1426,6 +1460,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
                 <input type="file" accept="image/*" id="sticker-panel-file" class="hide" multiple onchange="quickAddMyStickers(this)">
               </div>
               <div class="sticker-grid" id="sticker-panel-grid"></div>
+            </div>
+            <div class="quote-bar hide" id="quote-bar">
+              <span class="quote-text" id="quote-text"></span>
+              <button class="quote-clear" onclick="clearQuoteReply()" title="取消引用">✕</button>
             </div>
             <div class="chat-input">
               <button class="chat-input-btn" title="图片" onclick="document.getElementById('chat-img-file').click()">
@@ -1565,6 +1603,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <button class="btn btn-ghost" style="width:100%;margin-bottom:16px;" onclick="createCardGroup()">
             <svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg> 新建分组
           </button>
+          <input class="input" id="card-search-input" placeholder="🔍 搜索字卡关键词..." oninput="filterCardLib(this.value)" style="margin-bottom:12px;">
           <div id="card-groups"></div>
         </div>
       </div>

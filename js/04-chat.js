@@ -22,6 +22,11 @@ export function cascadeReadFromMe(cc, upToMsgId) {
 
 // ============ 聊天消息渲染（支持懒加载：最后50条，往上滑加载更多） ============
 export async function renderChatMessages(contactId, scrollToBottom=false) {
+  // 切换联系人时清空引用条（同一联系人刷新不动）
+  if (state._quoteRenderCid !== contactId) {
+    state._quoteRenderCid = contactId;
+    clearQuoteReply();
+  }
   const [c, me] = await Promise.all([getContact(contactId), getMe()]);
   if (!c) return;
   const box = $('chat-messages');
@@ -106,16 +111,15 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
   let wrapClass = 'msg-row ';
   if (isSys) {
     wrapClass += 'msg-center';
-    // 第一行：图标 + 姓名 + sysAction
-    const line1 = `<div class="sys-line sys-line-1"><span class="sys-icon"><svg class="i"><use href="#${sysIcon}"/></svg></span><span class="sys-name">${escapeHtml(sysName)}</span>${sysAction ? ` <span class="sys-action">${escapeHtml(sysAction)}</span>` : ''}</div>`;
-    // 第二行：sysSub · 时长 XX:XX （时长为空时就只 sysSub）
-    let line2 = '';
-    if (sysSub || sysDuration) {
-      const d = sysDuration ? `<span class="sys-slot">时长<span class="sys-dur">${escapeHtml(sysDuration)}</span></span>` : '';
-      const items = [sysSub, d].filter(Boolean);
-      line2 = `<div class="sys-line sys-line-2">${items.join('<span class="sys-dot">·</span>')}</div>`;
-    }
-    const wrapInner = `<div class="msg-system"><div class="sys-card">${line1}${line2}</div></div>`;
+    // 单行紧凑结构：图标 + 姓名 + 动作 · 说明 · 时长
+    const sysCardHtml = `<div class="sys-card">
+      <span class="sys-icon"><svg class="i"><use href="#${sysIcon}"/></svg></span>
+      <span class="sys-name">${escapeHtml(sysName)}</span>
+      ${sysAction ? `<span class="sys-action">${escapeHtml(sysAction)}</span>` : ''}
+      ${sysSub ? `<span>· ${escapeHtml(sysSub)}</span>` : ''}
+      ${sysDuration ? `<span>· 时长<span class="sys-dur">${escapeHtml(sysDuration)}</span></span>` : ''}
+    </div>`;
+    const wrapInner = `<div class="msg-system">${sysCardHtml}</div>`;
     return `<div class="${wrapClass}" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="${m.type}">${wrapInner}</div>`;
   }
   wrapClass += isMe ? 'me' : 'other';
@@ -237,17 +241,25 @@ export function showLongpressMenu(row, x, y) {
 }
 export async function quoteReply(msgId) {
   const c = await getContact(state.currentContactId);
-  if (!c) return;
-  const m = (c.messages || []).find(x => x.id === msgId);
+  const m = (c?.messages || []).find(x => x.id === msgId);
   if (!m) return;
   const box = $('chat-input-box');
-  const prefix = m.from === 'me' ? '我' : c.name;
-  const preview = m.type === 'text' ? m.content.slice(0, 20) : (m.type === 'image' ? '[图片]' : m.type === 'sticker' ? '[表情包]' : '[帮我选择]');
+  if (!box) return;
   box.dataset.replyto = msgId;
-  box.placeholder = `引用 ${prefix}：${preview}...`;
+  const bar = $('quote-bar');
+  if (bar) {
+    bar.classList.remove('hide');
+    const qt = $('quote-text');
+    const prefix = m.from === 'me' ? '我' : c.name;
+    const preview = m.type === 'text' ? m.content.slice(0, 30) : (m.type === 'image' ? '[图片]' : m.type === 'sticker' ? '[表情包]' : '[消息]');
+    if (qt) qt.textContent = `引用 ${prefix}：${preview}`;
+  }
   box.focus();
-  // 视觉提示
-  toast('已选引用，发送时将引用该消息');
+}
+export function clearQuoteReply() {
+  const box = $('chat-input-box'); if (box) delete box.dataset.replyto;
+  const bar = $('quote-bar'); if (bar) bar.classList.add('hide');
+  const qt = $('quote-text'); if (qt) qt.textContent = '';
 }
 export async function deleteMsg(msgId) {
   if (!confirm('确定删除这条消息吗？')) return;
@@ -275,8 +287,6 @@ export async function sendTextMessage() {
   const replyTo = box.dataset.replyto || null;
   if (!text) return;
   box.value = '';
-  delete box.dataset.replyto;
-  box.placeholder = '输入消息...';
   autoResize(box);
   await sendMessageCore({ type:'text', content:text, replyTo });
 }
@@ -354,6 +364,7 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   c.messages.push(msg);
   await saveContact(c);
   await renderChatMessages(cid, true);
+  clearQuoteReply();
 
   // 已读定时器（每条独立，不再按 rate 门槛跳过）
   const readKey = `r_${cid}_${msg.id}`;

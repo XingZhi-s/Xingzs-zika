@@ -1,7 +1,7 @@
 // 依赖：03-data.js
-import { state, uid } from './01-state.js';
+import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbGet, dbPut, escapeHtml, formatTime, now, pick, randInt, showModal, toast } from './02-core.js';
-import { getAllContacts, openPage } from './03-data.js';
+import { getAllContacts, getMe, openPage } from './03-data.js';
 
 /* ============ 心情日历 + 灵感随记 ============
    存储（meta store，keyPath 'k'）：
@@ -35,25 +35,49 @@ async function getMonthMoods(role, y, m) {
   return map;
 }
 
-// ---- 页面入口与角色切换 ----
-export function openMoodPage() {
+// ---- 页面入口与角色切换（抽屉式联系人菜单） ----
+export async function openMoodPage() {
   openPage('page-mood');
-  renderMoodRoleBar();
+  // 当前选中的联系人可能已被删除，回退到“我的心情”
+  if (state.moodRole !== 'me') {
+    const contacts = await getAllContacts();
+    if (!contacts.some(c => c.id === state.moodRole)) state.moodRole = 'me';
+  }
   renderMoodCalendar();
 }
-export async function renderMoodRoleBar() {
-  const bar = $('mood-role-bar'); if (!bar) return;
+// 抽屉：渲染“我的心情” + 全部联系人（头像 + 名字）
+export async function renderMoodDrawer() {
+  const list = $('mood-drawer-list'); if (!list) return;
+  const me = await getMe();
   const contacts = await getAllContacts();
-  const tabs = [{ id: 'me', name: '我的心情' }, ...contacts.map(c => ({ id: c.id, name: c.name }))];
-  // 当前选中的联系人可能已被删除，回退到“我的心情”
-  if (!tabs.some(t => t.id === state.moodRole)) state.moodRole = 'me';
-  bar.innerHTML = tabs.map(t =>
-    `<button class="mood-role-tab${state.moodRole === t.id ? ' sel' : ''}" onclick="switchMoodRole('${t.id}')">${escapeHtml(t.name)}</button>`
+  const items = [
+    { id: 'me', name: '我的心情', avatar: (me && me.avatar) || DEFAULT_AVATAR },
+    ...contacts.map(c => ({ id: c.id, name: c.name, avatar: c.avatar || DEFAULT_AVATAR }))
+  ];
+  if (!items.some(t => t.id === state.moodRole)) state.moodRole = 'me';
+  list.innerHTML = items.map(t =>
+    `<button class="mood-drawer-item${state.moodRole === t.id ? ' sel' : ''}" onclick="pickMoodRole('${t.id}')">` +
+    `<img src="${escapeHtml(t.avatar)}" alt=""><span class="md-name">${escapeHtml(t.name)}</span></button>`
   ).join('');
+}
+export function toggleMoodDrawer(open) {
+  const m = $('mood-drawer'); if (!m) return;
+  if (open) {
+    renderMoodDrawer();
+    m.classList.remove('hide');
+  } else {
+    m.classList.add('hide');
+  }
+}
+// 抽屉中点选某个人：关闭抽屉并切换日历数据
+export function pickMoodRole(role) {
+  state.moodRole = role;
+  toggleMoodDrawer(false);
+  renderMoodCalendar();
 }
 export function switchMoodRole(role) {
   state.moodRole = role;
-  renderMoodRoleBar();
+  renderMoodDrawer();
   renderMoodCalendar();
 }
 
