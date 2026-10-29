@@ -1,8 +1,8 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
-import { $, closeModal, compressImage, escapeHtml, inputDialog, now, randInt, showModal, toast } from './02-core.js';
+import { $, closeModal, compressImage, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
 import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getTheme, openChat, openPage, rateColor, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
-import { sendStickerMessage } from './04-chat.js';
+import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { enqueueTask, runCatchUp } from './08-main.js';
 
 // ============ ME 页功能 ============
@@ -121,6 +121,7 @@ export function backFromContactSetting() {
 export async function renderContactSetting(id) {
   const c = await getContact(id); if (!c) return;
   const box = $('cs-content'); if (!box) return;
+  const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
   const tiers = ['秒回','常回','看心情','很少回','不理人'];
   const statusRows = (c.statusList || []).map(s => {
     const rate = (typeof s.replyRate === 'number') ? s.replyRate : ({ '秒回': 97, '常回': 80, '看心情': 50, '很少回': 20, '不理人': 5 }[s.tier] || 50);
@@ -277,6 +278,23 @@ export async function renderContactSetting(id) {
             </div>
           </span>
         </div>
+        <div class="cs-row">
+          <span class="cs-label">显示位置</span>
+          <span class="cs-value">
+            <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+              <button class="bg-pos-btn${bgPos==='top'?' sel':''}" style="flex:0 0 auto;min-width:62px;" onclick="csSetBgPos('top')">靠上</button>
+              <button class="bg-pos-btn${bgPos==='center'?' sel':''}" style="flex:0 0 auto;min-width:62px;" onclick="csSetBgPos('center')">居中</button>
+              <button class="bg-pos-btn${bgPos==='bottom'?' sel':''}" style="flex:0 0 auto;min-width:62px;" onclick="csSetBgPos('bottom')">靠下</button>
+            </div>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cs-section">
+      <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-search"/></svg> 聊天记录</div>
+      <div class="cs-card">
+        <button class="btn btn-outline" style="width:100%;" onclick="csSearchChat()">🔍 搜索聊天记录</button>
       </div>
     </div>
 
@@ -304,6 +322,9 @@ export async function csUpdateAvatar(input) {
     c.avatar = d;
     await saveContact(c);
     renderContactSetting(state.currentContactSettingId);
+    // 刷新联系人列表 + 若正在与该联系人聊天，同步刷新聊天界面头像
+    renderContacts();
+    if (state.currentContactId === c.id) await renderChatMessages(c.id, false);
     toast('头像已更新');
   } catch(e) { toast('图片处理失败'); }
 }
@@ -316,7 +337,12 @@ export async function csEditName() {
   c.name = nm;
   await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
+  // 刷新联系人列表 + 聊天界面顶栏/头像
   renderContacts();
+  if (state.currentContactId === c.id) {
+    $('chat-header-name').textContent = nm;
+    await renderChatMessages(c.id, false);
+  }
 }
 export async function csDeleteContact() {
   if (!confirm('⚠️ 确定删除这个联系人？所有聊天记录、字卡、表情包都将永久删除！')) return;
@@ -484,6 +510,57 @@ export async function csResetBg() {
   await saveContact(c);
   toast('已清除');
   applyChatBg(c);
+}
+// 聊天背景显示位置：top / center / bottom
+export async function csSetBgPos(pos) {
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  c.settings.chatBgPos = pos;
+  await saveContact(c);
+  applyChatBg(c);
+  renderContactSetting(state.currentContactSettingId);
+}
+
+// ============ 聊天记录搜索 ============
+export async function csSearchChat() {
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  const body = `<input class="input" id="cs-search-input" placeholder="输入关键词搜索聊天内容..." oninput="csSearchChatRender(this.value)" style="width:100%;">
+    <div id="cs-search-results" style="margin-top:12px;max-height:320px;overflow-y:auto;">
+      <div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">输入关键词开始搜索</div>
+    </div>`;
+  showModal(`搜索 ${c.name} 的聊天记录`, body, [{ label: '关闭', cls: 'btn-outline', onClick: closeModal }]);
+  setTimeout(() => { const i = $('cs-search-input'); if (i) i.focus(); }, 50);
+}
+export async function csSearchChatRender(kw) {
+  const box = $('cs-search-results'); if (!box) return;
+  const q = (kw || '').trim().toLowerCase();
+  if (!q) {
+    box.innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">输入关键词开始搜索</div>`;
+    return;
+  }
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  const me = await getMe();
+  const myAvatar = (me && me.avatar) || DEFAULT_AVATAR;
+  const otAvatar = c.avatar || DEFAULT_AVATAR;
+  const hits = (c.messages || []).filter(m => (m.type || 'text') === 'text' && (m.content || '').toLowerCase().includes(q));
+  if (!hits.length) {
+    box.innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">没有找到包含「${escapeHtml(kw.trim())}」的消息</div>`;
+    return;
+  }
+  // 按时间倒序，最多显示 100 条
+  hits.sort((a, b) => b.time - a.time);
+  const shown = hits.slice(0, 100);
+  box.innerHTML = `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">找到 ${hits.length} 条${hits.length > 100 ? '（显示最近 100 条）' : ''}</div>` +
+    shown.map(m => {
+      const mine = m.from === 'me';
+      const av = mine ? myAvatar : otAvatar;
+      return `<div style="display:flex;gap:8px;align-items:flex-start;padding:10px;border-radius:10px;background:var(--card-bg);margin-bottom:8px;">
+        <img src="${escapeHtml(av)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:3px;">${mine ? '我' : escapeHtml(c.name)} · ${formatTime(m.time)}</div>
+          <div style="font-size:13px;line-height:1.5;word-break:break-word;">${escapeHtml(m.content)}</div>
+        </div>
+      </div>`;
+    }).join('');
 }
 
 // ============ 字卡库 ============
@@ -760,7 +837,21 @@ export function renderBgGrid(theme) {
       if (!cur && i === 0) isSel = true;
       return `<div class="bg-swatch ${isSel?'selected':''}" style="background:${b.css};" title="${escapeHtml(b.name)}" onclick="applyPresetBg(${i})"></div>`;
     }).join('');
+    // 同步背景位置按钮选中态
+    const pos = thm.backgroundPos || 'center';
+    for (const p of ['top', 'center', 'bottom']) {
+      const btn = $('bg-pos-' + p);
+      if (btn) btn.classList.toggle('sel', p === pos);
+    }
   });
+}
+// 全局背景图显示位置：top / center / bottom
+export async function setBgPos(pos) {
+  const thm = await getTheme();
+  thm.backgroundPos = pos;
+  await saveTheme(thm);
+  renderBgGrid(thm);
+  toast('背景位置已更新');
 }
 export async function applyPresetColor(c) {
   const thm = await getTheme();

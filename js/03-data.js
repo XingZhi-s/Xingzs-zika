@@ -71,21 +71,38 @@ export function createEmptyContact(name) {
 // ============ 主题应用 ============
 export function applyTheme(theme) {
   const r = document.documentElement;
-  r.style.setProperty('--theme-color', theme.themeColor);
+  const c = theme.themeColor || '#6b8aff';
+  r.style.setProperty('--theme-color', c);
   // 衍生浅色
-  const c = theme.themeColor;
   r.style.setProperty('--theme-light', hexToRgba(c, 0.12));
-  r.style.setProperty('--my-bubble', theme.themeColor);
-  // 背景
-  if (theme.background) {
-    const bg = theme.background;
-    let cssVal = '';
-    if (bg.type === 'color') cssVal = bg.value;
-    else if (bg.type === 'gradient') cssVal = bg.value;
-    else if (bg.type === 'image') cssVal = `url("${bg.value}") center/cover no-repeat fixed`;
-    document.body.style.background = cssVal;
-    // 背景可能深色，浅色模式下的一些面板用变量的 card-bg 保持白色即可
+  r.style.setProperty('--my-bubble', c);
+
+  const bg = theme.background;
+  const hasBgImage = !!(bg && bg.type === 'image');
+  const isDefaultBg = !bg || (bg.type === 'color' && bg.value === '#f5f6fa');
+  const bgPos = theme.backgroundPos || 'center';
+
+  // 背景（图片优先）
+  if (hasBgImage) {
+    document.body.style.background = `url("${bg.value}") ${bgPos}/cover no-repeat fixed`;
+  } else if (!isDefaultBg) {
+    document.body.style.background = bg.value;
+  } else {
+    // 无自定义背景 → 页面底色跟随主题色的浅色衍生
+    document.body.style.background = tintOnWhite(c, 0.10);
   }
+
+  // 主题色穿透：无全局背景图时，页面/顶栏/设置项等基础底色都跟随主题浅色
+  if (hasBgImage) {
+    r.style.removeProperty('--bg-color');
+    r.style.removeProperty('--card-bg');
+    r.style.removeProperty('--border-color');
+  } else {
+    r.style.setProperty('--bg-color', tintOnWhite(c, isDefaultBg ? 0.10 : 0.06));
+    r.style.setProperty('--card-bg', tintOnWhite(c, 0.04));
+    r.style.setProperty('--border-color', tintOnWhite(c, 0.16));
+  }
+
   // 自定义CSS
   const old = document.getElementById('user-css');
   if (old) old.remove();
@@ -95,6 +112,14 @@ export function applyTheme(theme) {
     s.textContent = theme.customCSS;
     document.head.appendChild(s);
   }
+}
+// 将主题色按透明度混合到白色上，得到不透明浅色（alpha 越大越接近主题色）
+export function tintOnWhite(hex, alpha) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(x => x + x).join('');
+  const rr = parseInt(h.slice(0, 2), 16), gg = parseInt(h.slice(2, 4), 16), bb = parseInt(h.slice(4, 6), 16);
+  const mix = v => Math.round(255 - (255 - v) * alpha);
+  return `rgb(${mix(rr)},${mix(gg)},${mix(bb)})`;
 }
 export function hexToRgba(hex, a) {
   let h = hex.replace('#','');
@@ -253,6 +278,8 @@ export async function openChat(contactId) {
     c.missedCalls = [];
   }
   await saveContact(c);
+  // 清红点后立刻刷新联系人列表（含手机端与电脑侧栏）
+  renderContacts();
   // 先激活聊天页（激活display:flex）
   openPage('page-chat');
   // 显示聊天内容，隐藏空态（电脑端）
@@ -279,7 +306,6 @@ export async function openChat(contactId) {
   renderStickerPanel();
   $('chat-input-box').value = '';
   autoResize($('chat-input-box'));
-  renderContacts();
 }
 export function tierColor(t) {
   // 旧 tierColor 兼容：将 tier 转换为概率后用 rateColor
@@ -291,10 +317,11 @@ export function applyChatBg(c) {
   const msgs = $('chat-messages');
   if (!msgs) return;
   const bg = c.settings && c.settings.chatBackground;
+  const pos = (c.settings && c.settings.chatBgPos) || 'center';
   let val = '';
   if (bg) {
     if (bg.type === 'color') val = bg.value;
-    else if (bg.type === 'image') val = `url("${bg.value}") center/cover no-repeat fixed`;
+    else if (bg.type === 'image') val = `url("${bg.value}") ${pos}/cover no-repeat fixed`;
   }
   // 防覆盖：联系人单独设置的聊天背景以行内 !important 写入，优先级高于全局主题背景 / 全局自定义 CSS
   if (val) msgs.style.setProperty('background', val, 'important');
@@ -340,6 +367,8 @@ export function backFromChat() {
     // 手机端：回到love页
     openPage('page-love');
   }
+  // 返回列表时刷新列表，确保红点/预览/时间是最新状态
+  renderContacts();
 }
 // 聊天设置按钮直接打开（避免onclick内async await无法等待的问题）
 export function openContactSettingsFromChatDirect() {

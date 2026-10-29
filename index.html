@@ -436,15 +436,18 @@ a { text-decoration:none; color:inherit; }
 .home-sticker-square {
   width: clamp(58px, 17vw, 76px);
   min-height: clamp(58px, 17vw, 76px);
-  background: #a9c7ea;
+  background: #f4f8ff;
+  border: 1.5px dashed #b8cee8;
   border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer;
   flex-shrink: 0;
   transition: transform .15s;
+  color: #9db4d1;
 }
 .home-sticker-square:active { transform: scale(0.96); }
-.home-sticker-square svg { width: 26px; height: 26px; stroke: #fff; }
+.home-sticker-square svg { width: 20px; height: 20px; stroke: #9db4d1; }
+.home-sticker-square .stk-label { font-size: 11px; line-height: 1; color: #9db4d1; }
 .home-row-divider {
   width: 3px;
   border-radius: 2px;
@@ -469,7 +472,7 @@ a { text-decoration:none; color:inherit; }
 .todo-more-btn:hover { color: var(--theme-color); }
 
 /* 便签待办 */
-.todo-mini-list { display: flex; flex-direction: column; gap: 5px; max-height: 76px; overflow-y: auto; }
+.todo-mini-list { display: flex; flex-direction: column; gap: 5px; height: 76px; max-height: 76px; overflow-y: auto; flex-shrink: 0; }
 .todo-mini-item {
   display:flex; align-items:center; gap: 8px;
   font-size: 13px; padding: 6px 9px; border-radius: 10px; background: #f2f7ff;
@@ -837,8 +840,8 @@ a { text-decoration:none; color:inherit; }
 .chat-header-actions { display:flex; gap:2px; position:relative; }
 .chat-header-actions .top-bar-btn { width:40px; height:40px; display:flex; align-items:center; justify-content:center; }
 
-.chat-messages { flex:1; overflow-y:auto; padding:16px 12px; display:flex; flex-direction:column; gap:10px; min-height:0; }
-.msg-row { display:flex; max-width:100%; align-items:flex-end; gap:8px; padding:6px 12px; }
+.chat-messages { flex:1; overflow-y:auto; padding:16px 12px; display:flex; flex-direction:column; gap:10px; min-height:0; position:relative; z-index:1; }
+.msg-row { display:flex; max-width:100%; align-items:flex-end; gap:8px; padding:6px 12px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
 .msg-row.me { justify-content:flex-end; }
 .msg-row.other { justify-content:flex-start; }
 .msg-wrap { max-width:calc(100% - 48px - 12px); display:flex; flex-direction:column; gap:4px; }
@@ -880,8 +883,16 @@ a { text-decoration:none; color:inherit; }
 .msg-choice-result { padding:10px 12px; background:var(--theme-color); color:#fff; border-radius:10px; font-weight:600; }
 
 /* 系统提示消息（单行紧凑胶囊） */
-.msg-system { display:flex; justify-content:center; padding:6px 12px; max-width:100%; }
-.msg-system .sys-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px; font-size:12px; color:#5a6e8f; background:#ffffff; border:1px solid #eef2f8; padding:6px 16px; border-radius:20px; max-width:90%; line-height:1.4; box-shadow:0 2px 8px rgba(140,160,210,0.08); }
+.msg-system { display:flex; justify-content:center; padding:4px 12px; max-width:100%; }
+.msg-system .sys-card {
+  display:inline-flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px;
+  font-size:12px; color:#5a6e8f;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border:1px solid rgba(255,255,255,0.6);
+  padding:4px 14px; border-radius:20px; max-width:90%; line-height:1.4;
+  box-shadow:0 2px 8px rgba(140,160,210,0.06);
+}
 .sys-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#eef3fb; color:#7c97bf; flex-shrink:0; }
 .sys-icon svg { width:10px; height:10px; stroke-width:2; }
 .sys-name { font-weight:700; color:#2a3a56; }
@@ -965,6 +976,9 @@ a { text-decoration:none; color:inherit; }
 .theme-color-swatch { aspect-ratio:1; border-radius:50%; cursor:pointer; border:3px solid transparent; position:relative; }
 .theme-color-swatch.selected { border-color:var(--text-primary); }
 .bg-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:12px 0; }
+.bg-pos-btns { display:flex; gap:8px; margin-top:10px; }
+.bg-pos-btn { flex:1; min-height:36px; padding:6px 10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-color); color:var(--text-secondary); font-size:13px; }
+.bg-pos-btn.sel { border-color:var(--theme-color); color:var(--theme-color); background:var(--theme-light); font-weight:600; }
 .bg-swatch { aspect-ratio:4/3; border-radius:8px; cursor:pointer; border:2px solid transparent; }
 .bg-swatch.selected { border-color:var(--text-primary); }
 
@@ -1140,6 +1154,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.04a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.04a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
     <symbol id="icon-menu" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
     <symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></symbol>
     <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
     <symbol id="icon-bulb" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></symbol>
     <symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"/></symbol>
@@ -1236,7 +1251,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <!-- 贴纸方块 | 待办区（白色横条） -->
               <div class="home-row-two">
                 <div class="home-sticker-square" onclick="openHomeStickerUploader()" title="上传装饰贴纸">
-                  <svg class="i"><use href="#icon-image"/></svg>
+                  <svg class="i"><use href="#icon-plus"/></svg>
+                  <span class="stk-label">贴纸</span>
                 </div>
                 <div class="home-row-divider"></div>
                 <div class="home-todo-panel" onclick="promptTodoAdd()" title="点击新增待办">
@@ -1293,8 +1309,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <span class="dot"></span>
         </div>
 
-        <!-- 右上角：更换手机桌面壁纸 -->
-        <button class="home-wallpaper-btn" onclick="uploadHomeBg()" title="更换壁纸">
+        <!-- 右上角：更换手机桌面壁纸（已隐藏） -->
+        <button class="home-wallpaper-btn hide" onclick="uploadHomeBg()" title="更换壁纸">
           <svg class="i"><use href="#icon-image"/></svg>
         </button>
       </div>
@@ -1648,6 +1664,12 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div class="cs-section" style="padding-top:14px;border-top:1px solid var(--border-color);">
             <div class="section-title">全局背景</div>
             <div class="bg-grid" id="bg-grid"></div>
+            <div class="bg-pos-btns">
+              <button class="bg-pos-btn" id="bg-pos-top" onclick="setBgPos('top')">靠上</button>
+              <button class="bg-pos-btn" id="bg-pos-center" onclick="setBgPos('center')">居中</button>
+              <button class="bg-pos-btn" id="bg-pos-bottom" onclick="setBgPos('bottom')">靠下</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">背景图显示位置（人像偏上时选「靠上」）</div>
             <div style="display:flex;gap:8px;margin-top:10px;">
               <button class="btn-outline btn" style="flex:1;" onclick="document.getElementById('bg-file').click()">📷 上传背景图</button>
               <input type="file" accept="image/*" id="bg-file" class="hide" onchange="uploadBg(this)">

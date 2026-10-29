@@ -85,14 +85,23 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
       isSys = true; sysText = stripped;
       sysVideo = /视频/.test(raw) || /🎥/.test(raw);
       sysIcon = sysVideo ? 'icon-video' : 'icon-phone';
-      // 1. 拒接类："（我拒接了XXX的来电）" → 第一行：我 拒接了XXX来电  第二行：无时长
+      // 1. 拒接类
       let m1 = stripped.match(/^我拒接了(.+?)的来电$/);
       if (m1) { sysName = '我'; sysAction = `拒接了${m1[1]}来电`; sysSub = ''; sysDuration = ''; }
-      // 2. 未接听 → 第一行：姓名 来电  第二行：未接听
+      // 2. 未接听
       let m2 = stripped.match(/^[（(]?(.+?)未接听[）)]?$/);
       if (!m2) m2 = stripped.match(/^(.+?)未接听/);
       if (m2) { sysName = m2[1]; sysAction = sysVideo ? '视频来电' : '来电'; sysSub = '未接听'; sysDuration = ''; }
-      // 3. 已通话 时长 → 第一行：姓名 来电  第二行：通话已挂断·时长 XX:XX
+      // 3. 未接来电（新增补全）：与“已通话”正则互斥，故不需再判 m3
+      let m5 = stripped.match(/^(.+?)[（(]未接来电[）)]$/);
+      if (!m5) m5 = stripped.match(/^(.+?)未接来电/);
+      if (m5 && !m1 && !m2 && !/已取消呼叫/.test(stripped)) {
+        sysName = m5[1].trim();
+        sysAction = sysVideo ? '视频来电' : '来电';
+        sysSub = '未接听';
+        sysDuration = '';
+      }
+      // 4. 已通话 时长
       let m3 = stripped.match(/^[（(]?(?:视频)?已通话\s*(\d{1,2}:\d{2})[）)]?$/);
       if (!m3) m3 = stripped.match(/(?:视频)?已通话\s*(\d{1,2}:\d{2})/);
       if (m3) {
@@ -100,7 +109,7 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
         sysSub = sysVideo ? '视频通话·已结束' : '通话已挂断';
         sysDuration = m3[1];
       }
-      // 4. 已取消呼叫
+      // 5. 已取消呼叫
       if (/已取消呼叫/.test(stripped)) {
         sysAction = sysVideo ? '视频呼叫' : '呼叫';
         sysSub = '已取消';
@@ -240,6 +249,7 @@ export function showLongpressMenu(row, x, y) {
   setTimeout(() => document.addEventListener('click', close), 0);
 }
 export async function quoteReply(msgId) {
+  const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
   const c = await getContact(state.currentContactId);
   const m = (c?.messages || []).find(x => x.id === msgId);
   if (!m) return;
@@ -262,6 +272,7 @@ export function clearQuoteReply() {
   const qt = $('quote-text'); if (qt) qt.textContent = '';
 }
 export async function deleteMsg(msgId) {
+  const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
   if (!confirm('确定删除这条消息吗？')) return;
   const c = await getContact(state.currentContactId);
   if (!c) return;

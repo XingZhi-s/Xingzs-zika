@@ -847,7 +847,8 @@ export async function doExport() {
     data.me.theme = theme;
     for (const c of contacts) {
       const co = { id: c.id, name: c.name, status: c.status, statusAuto: c.statusAuto,
-        nextStatusChangeAt: c.nextStatusChangeAt, statusList: c.statusList, settings: c.settings,
+        nextStatusChangeAt: c.nextStatusChangeAt, statusList: c.statusList,
+        settings: JSON.parse(JSON.stringify(c.settings || {})),
         anniversaries: c.anniversaries, letters: c.letters, missedCalls: c.missedCalls };
       if (!needImages) co.avatar = null; else co.avatar = c.avatar;
       if (needChat) {
