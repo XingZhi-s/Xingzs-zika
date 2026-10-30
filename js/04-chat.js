@@ -74,7 +74,7 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
   let sysVideo = false;
   if (m.type === 'text') {
     const raw = sysText;
-    const stripped = raw.replace(/^[\s📞🎥📴☎️✉️]/g,'').trim();
+    const stripped = raw.replace(/^[\s\uFE0F\u260E\u{1F4DE}\u{1F3A5}\u{1F4F4}]+/gu, '').trim();
     // 来信系统提示："✉️ Ta 寄来了一封信，快去信箱看看吧。"
     if (/寄来了一封信/.test(stripped)) {
       isSys = true; sysText = stripped;
@@ -120,14 +120,9 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
   let wrapClass = 'msg-row ';
   if (isSys) {
     wrapClass += 'msg-center';
-    // 单行紧凑结构：图标 + 姓名 + 动作 · 说明 · 时长
-    const sysCardHtml = `<div class="sys-card">
-      <span class="sys-icon"><svg class="i"><use href="#${sysIcon}"/></svg></span>
-      <span class="sys-name">${escapeHtml(sysName)}</span>
-      ${sysAction ? `<span class="sys-action">${escapeHtml(sysAction)}</span>` : ''}
-      ${sysSub ? `<span>· ${escapeHtml(sysSub)}</span>` : ''}
-      ${sysDuration ? `<span>· 时长<span class="sys-dur">${escapeHtml(sysDuration)}</span></span>` : ''}
-    </div>`;
+    // 单行紧凑结构：图标 + 名字 + 动作 + · + 状态
+    const sysStatus = sysSub ? (sysDuration ? `${sysSub} ${sysDuration}` : sysSub) : sysDuration;
+    const sysCardHtml = `<div class="sys-card"><span class="sys-icon"><svg class="i"><use href="#${sysIcon}"/></svg></span><span class="sys-name">${escapeHtml(sysName)}</span>${sysAction ? `<span class="sys-action">${escapeHtml(sysAction)}</span>` : ''}${sysStatus ? `<span class="sys-sep">·</span><span class="sys-sub">${escapeHtml(sysStatus)}</span>` : ''}</div>`;
     const wrapInner = `<div class="msg-system">${sysCardHtml}</div>`;
     return `<div class="${wrapClass}" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="${m.type}">${wrapInner}</div>`;
   }

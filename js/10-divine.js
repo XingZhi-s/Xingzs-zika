@@ -254,14 +254,27 @@ export function renderDivine() {
 }
 export function divineResultHtml(r) {
   const isTarot = r.dtype === 'tarot';
-  const cards = r.cards.map(c =>
-    `<button class="dv-card" onclick="flipDivineCard(this)"><div class="dv-card-inner">` +
-    `<div class="dv-face dv-front"><svg class="i" style="width:26px;height:26px;stroke:#fff;"><use href="#icon-sparkles"/></svg><span class="dv-front-pos">${escapeHtml(c.pos)}</span></div>` +
-    `<div class="dv-face dv-back"><div class="dv-pos">${escapeHtml(c.pos)}</div>` +
-    `<div class="dv-name">${escapeHtml(c.name)}${isTarot ? `<span class="dv-ori ${c.upright ? 'up' : 'rev'}">${c.upright ? '正位' : '逆位'}</span>` : ''}</div>` +
-    `<div class="dv-meaning">${escapeHtml(c.meaning)}</div></div>` +
-    `</div></button>`
-  ).join('');
+  const dir = isTarot ? 'tarot' : 'lenormand';
+  const sparkle = `<svg class="i" style="width:26px;height:26px;stroke:#fff;"><use href="#icon-sparkles"/></svg>`;
+  const cards = r.cards.map((c, i) => {
+    // 牌面图：直接用卡牌中文名匹配文件（webp → jpg → png → 隐藏后露出牌名）
+    const cardImg = `<img class="dv-card-img${isTarot && !c.upright ? ' is-rev' : ''}" src="./assets/divine/${dir}/${c.name}.webp" alt="${escapeHtml(c.name)}" onerror="dvImgError(this)">`;
+    // 牌背：雷诺曼用专属牌背图（失败退回星光背景），塔罗保持纯色星光
+    const frontCls = isTarot ? 'dv-face dv-front' : 'dv-face dv-front lenormand-front';
+    const frontInner = (isTarot ? '' : `<img class="dv-front-img" src="./assets/divine/lenormand/back.webp" alt="" onerror="dvImgError(this)">`) +
+      sparkle + `<span class="dv-front-pos">${escapeHtml(c.pos)}</span>`;
+    // 卡牌只负责 3D 翻转显示卡面图；释义移到卡外的 dv-card-mean-box
+    return `<div class="dv-card-wrap" data-index="${i}">` +
+      `<button class="dv-card" onclick="flipDivineCard(this)"><div class="dv-card-inner">` +
+      `<div class="${frontCls}">${frontInner}</div>` +
+      `<div class="dv-face dv-back"><span class="dv-back-name">${escapeHtml(c.name)}</span>${cardImg}</div>` +
+      `</div></button>` +
+      `<div class="dv-card-mean-box">` +
+      `<div class="dv-mean-pos">【${escapeHtml(c.pos)}】</div>` +
+      `<div class="dv-name">${escapeHtml(c.name)}${isTarot ? `<span class="dv-ori ${c.upright ? 'up' : 'rev'}">${c.upright ? '正位' : '逆位'}</span>` : ''}</div>` +
+      `<div class="dv-mean-text">${escapeHtml(c.meaning)}</div>` +
+      `</div></div>`;
+  }).join('');
   return `<div class="dv-cards">${cards}</div>` +
     `<div class="dv-hint">点击牌面翻转查看牌义</div>` +
     `<div class="dv-actions">` +
@@ -271,6 +284,19 @@ export function divineResultHtml(r) {
 }
 export function flipDivineCard(el) {
   el.classList.toggle('flipped');
+  // 释义盒与翻牌状态同步：翻开才显示，翻回则隐藏
+  const wrap = el.closest('.dv-card-wrap');
+  if (!wrap) return;
+  const box = wrap.querySelector('.dv-card-mean-box');
+  if (box) box.classList.toggle('show', el.classList.contains('flipped'));
+}
+// 卡牌图片加载容错：.webp 失败 → .jpg → .png → 隐藏（露出文字牌义 / 星光牌背）
+export function dvImgError(img) {
+  const src = img.currentSrc || img.src;
+  if (/\.webp$/i.test(src)) { img.src = src.replace(/\.webp$/i, '.jpg'); return; }
+  if (/\.jpe?g$/i.test(src)) { img.src = src.replace(/\.jpe?g$/i, '.png'); return; }
+  img.onerror = null;
+  img.style.display = 'none';
 }
 
 // ---- 历史记录（IndexedDB meta: divine_history） ----

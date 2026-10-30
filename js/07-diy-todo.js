@@ -1,6 +1,6 @@
 // 依赖：06-ui.js
 import { DEFAULT_AVATAR, DIY_SECTIONS, state, uid } from './01-state.js';
-import { $, compressImage, escapeAttr, escapeHtml, estimateSizeMB, hexWithAlpha, inputDialog, now, toast } from './02-core.js';
+import { $, compressImage, dbAll, dbPut, escapeAttr, escapeHtml, estimateSizeMB, hexWithAlpha, inputDialog, now, toast } from './02-core.js';
 import { createEmptyContact, getAllContacts, getMe, getTheme, openPage, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
 
 /* ============ 手机首页：自主文本 + 装饰贴纸 ============ */
@@ -225,6 +225,7 @@ export async function renderHomeAvatar() {
       bn.classList.remove('has-img');
     }
   }
+  renderHomeSquareImg(thm);
   renderHomeDecos(thm);
 }
 
@@ -417,6 +418,31 @@ export async function resetHomeBg() {
   applyDIYVariables(thm);
   renderDiyPage();
   toast('已恢复默认壁纸');
+}
+
+/* ============ 首页贴纸方块 → 图片展示框（theme.homeSquareImg） ============ */
+export async function uploadHomeSquareImg() {
+  const input = $('diy-image-file');
+  input.value = '';
+  input.onchange = async () => {
+    if (!input.files || !input.files[0]) return;
+    const data = await compressImage(input.files[0], 800, 0.85);
+    const thm = await getTheme();
+    thm.homeSquareImg = data;
+    await saveTheme(thm);
+    renderHomeSquareImg(thm);
+    toast('图片已更新');
+  };
+  input.click();
+}
+export function renderHomeSquareImg(thm) {
+  const sq = $('home-square-img');
+  if (!sq) return;
+  if (thm && thm.homeSquareImg) {
+    sq.innerHTML = `<img src="${thm.homeSquareImg}" alt="">`;
+  } else {
+    sq.innerHTML = '<svg class="i stk-icon"><use href="#icon-image"/></svg><span class="stk-label">图片</span>';
+  }
 }
 
 /* ============ 聊天气泡代码（属性写法自动包选择器，含选择器则直接追加） ============ */
@@ -867,6 +893,23 @@ export async function doExport() {
       }
       data.contacts.push(co);
     }
+    // 心情日历 + 灵感随记（meta store，按 k 键保留原始结构导出）
+    const allMeta = await dbAll('meta');
+    data.moodData = allMeta
+      .filter(m => m && typeof m.k === 'string' && m.k.indexOf('mood:') === 0)
+      .map(m => {
+        if (Array.isArray(m.records)) {
+          return { k: m.k, records: m.records.map(r => ({ emoji: r.emoji, text: r.text || '', ts: r.ts })) };
+        }
+        // 兼容旧结构 {emoji,text,ts}
+        if (m.emoji) return { k: m.k, records: [{ emoji: m.emoji, text: m.text || '', ts: m.ts || now() }] };
+        return null;
+      })
+      .filter(m => m && m.records.length);
+    const inspRec = allMeta.find(m => m && m.k === 'inspirations');
+    data.inspirations = inspRec
+      ? { k: 'inspirations', list: (inspRec.list || []).map(x => ({ id: x.id, text: x.text, ts: x.ts })) }
+      : null;
     // 导出：如果太大，用Blob而不是字符串直接下载
     let str = '';
     try { str = JSON.stringify(data); } catch(e) { return toast('序列化失败：' + e.message); }
@@ -934,6 +977,26 @@ export async function doImport(input) {
     if (data.me && data.me.theme) {
       await saveTheme(data.me.theme);
       summary.push('主题已恢复');
+    }
+    // 心情日历 + 灵感随记（兼容旧备份的 data.mood）：按数据内的 k 键直接写回 meta
+    const moodData = Array.isArray(data.moodData) ? data.moodData : (Array.isArray(data.mood) ? data.mood : []);
+    let needMoodRefresh = false;
+    let moodCnt = 0;
+    for (const item of moodData) {
+      if (!item || typeof item.k !== 'string' || item.k.indexOf('mood:') !== 0) continue;
+      await dbPut('meta', item);
+      moodCnt++;
+    }
+    if (moodCnt) { needMoodRefresh = true; summary.push(`心情记录已恢复（${moodCnt} 天）`); }
+    if (data.inspirations && data.inspirations.k === 'inspirations') {
+      await dbPut('meta', data.inspirations);
+      needMoodRefresh = true;
+      summary.push('灵感随记已恢复');
+    }
+    if (needMoodRefresh) {
+      const { renderMoodCalendar, renderInspirations } = await import('./09-mood.js');
+      await renderMoodCalendar();
+      renderInspirations();
     }
     // 联系人：串行处理
     let addContact = 0, updContact = 0;

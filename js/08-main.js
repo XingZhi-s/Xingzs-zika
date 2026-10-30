@@ -5,9 +5,9 @@ import { applyNickname, applyTheme, backFromChat, createNewContact, exitChatMode
 import { addAnni, addChoiceOpt, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, previewImg, quoteReply, renderChatMessages, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSetBgPos, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStickerPanel, updateMyAvatar, uploadBg } from './06-ui.js';
-import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, promptTodoAdd, renderHomeAvatar, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg } from './07-diy-todo.js';
+import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, promptTodoAdd, renderHomeAvatar, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
-import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, viewDivineHistory } from './10-divine.js';
+import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, viewDivineHistory } from './10-divine.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -442,6 +442,7 @@ window.editStatus = editStatus;
 window.escapeHtml = escapeHtml;
 window.exitChatMode = exitChatMode;
 window.flipDivineCard = flipDivineCard;
+window.dvImgError = dvImgError;
 window.jumpToMsg = jumpToMsg;
 window.makeCall = makeCall;
 window.moodNextMonth = moodNextMonth;
@@ -515,6 +516,7 @@ window.updateMyAvatar = updateMyAvatar;
 window.uploadBg = uploadBg;
 window.uploadHomeBanner = uploadHomeBanner;
 window.uploadHomeBg = uploadHomeBg;
+window.uploadHomeSquareImg = uploadHomeSquareImg;
 window.resetHomeBg = resetHomeBg;
 window.saveBubbleCSS = saveBubbleCSS;
 window.clearBubbleCSS = clearBubbleCSS;

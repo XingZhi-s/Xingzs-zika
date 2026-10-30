@@ -88,8 +88,15 @@ export function applyTheme(theme) {
   } else if (!isDefaultBg) {
     document.body.style.background = bg.value;
   } else {
-    // 无自定义背景 → 页面底色跟随主题色的浅色衍生
-    document.body.style.background = tintOnWhite(c, 0.10);
+    // 无自定义背景 → 交给 :root 的 --theme-bg-light 与主题色联动
+    document.body.style.removeProperty('background');
+  }
+
+  // 全局主题色穿透：没有全局背景图时，底层背景跟随主题色极浅色（rgba 8%）
+  if (hasBgImage) {
+    r.style.removeProperty('--theme-bg-light');
+  } else {
+    r.style.setProperty('--theme-bg-light', hexToRgba(c, 0.08));
   }
 
   // 主题色穿透：无全局背景图时，页面/顶栏/设置项等基础底色都跟随主题浅色

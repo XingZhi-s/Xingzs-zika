@@ -21,16 +21,38 @@ function dateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function moodKey(role, ds) { return `mood:${role}:${ds}`; }
+// 兼容旧结构：{emoji,text,ts} → {records:[{emoji,text,ts}]}，返回统一结构，无有效记录返回 null
+function normMood(r) {
+  if (!r || r.skip) return null;
+  if (Array.isArray(r.records)) {
+    const recs = r.records
+      .filter(x => x && x.emoji)
+      .map(x => ({ emoji: x.emoji, text: x.text || '', ts: x.ts || r.ts || now() }));
+    return recs.length ? { k: r.k, records: recs } : null;
+  }
+  if (r.emoji) return { k: r.k, records: [{ emoji: r.emoji, text: r.text || '', ts: r.ts || now() }] };
+  return null;
+}
+// 取最新一条记录（日历格子展示用）
+function lastRecord(m) {
+  return (m && m.records && m.records.length) ? m.records[m.records.length - 1] : null;
+}
+function timeHM(ts) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 async function getMood(role, ds) {
-  const r = await dbGet('meta', moodKey(role, ds));
-  return (r && !r.skip) ? r : null;
+  return normMood(await dbGet('meta', moodKey(role, ds)));
 }
 async function getMonthMoods(role, y, m) {
   const prefix = `mood:${role}:${y}-${String(m + 1).padStart(2, '0')}-`;
   const all = await dbAll('meta');
   const map = {};
   for (const r of all) {
-    if (r.k && r.k.startsWith(prefix) && !r.skip) map[r.k.slice(prefix.length)] = r;
+    if (r.k && r.k.startsWith(prefix) && !r.skip) {
+      const n = normMood(r);
+      if (n) map[r.k.slice(prefix.length)] = n;
+    }
   }
   return map;
 }
@@ -105,38 +127,57 @@ export async function renderMoodCalendar() {
     const dStr = String(d).padStart(2, '0');
     const ds = `${y}-${String(m + 1).padStart(2, '0')}-${dStr}`;
     const rec = records[dStr];
+    const last = lastRecord(rec);
     html += `<button class="mood-day${ds === todayDs ? ' today' : ''}" onclick="openMoodDay('${ds}')">` +
-      `<span class="d-num">${d}</span><span class="d-emoji">${rec ? rec.emoji : ''}</span></button>`;
+      `<span class="d-num">${d}</span><span class="d-emoji">${last ? last.emoji : ''}</span></button>`;
   }
   grid.innerHTML = html;
 }
 
-// ---- 点击日期：我 → 写心情面板；联系人 → 只读卡片 ----
-export async function openMoodDay(ds) {
-  const role = state.moodRole || 'me';
-  const rec = await getMood(role, ds);
-  if (role === 'me') {
-    state._moodEdit = { date: ds, emoji: rec ? rec.emoji : null };
-    const body = MOOD_GROUPS.map(g =>
+// ---- 点击日期：我 → 时间线 + 追加面板；联系人 → 只读时间线 ----
+// 今日心情时间线（升序）
+function moodTimelineHtml(mood, who) {
+  const recs = mood && mood.records ? mood.records.slice().sort((a, b) => a.ts - b.ts) : [];
+  if (!recs.length) {
+    return `<div class="mood-tl-empty">今天还没有记录哦</div>`;
+  }
+  const title = who ? `${who} 的心情时间线` : '今日心情时间线';
+  return `<div class="mood-tl-title">${escapeHtml(title)} · ${recs.length} 条</div>` +
+    `<div class="mood-timeline">` +
+    recs.map(r =>
+      `<div class="mood-tl-item">` +
+      `<span class="tl-time">${timeHM(r.ts)}</span>` +
+      `<span class="tl-emoji">${r.emoji}</span>` +
+      `<span class="tl-text">${escapeHtml(r.text || '')}</span>` +
+      `</div>`
+    ).join('') +
+    `</div>`;
+}
+// 追加新心情面板
+function moodAppendHtml() {
+  return `<div class="mood-tl-title" style="margin-top:18px;">追加新心情</div>` +
+    MOOD_GROUPS.map(g =>
       `<div class="mood-emoji-group"><div class="g-label">${g.label}</div><div class="mood-emoji-row">` +
       g.emojis.map(e =>
-        `<button class="mood-emoji-btn${rec && rec.emoji === e ? ' sel' : ''}" data-e="${e}" onclick="pickMoodEmoji('${e}')">${e}</button>`
+        `<button class="mood-emoji-btn" data-e="${e}" onclick="pickMoodEmoji('${e}')">${e}</button>`
       ).join('') + `</div></div>`
     ).join('') +
-    `<textarea class="textarea" id="mood-edit-text" placeholder="写一句当时的想法…" style="min-height:70px;width:100%;">${rec ? escapeHtml(rec.text || '') : ''}</textarea>`;
-    showModal(`${ds} 的心情`, body, [
-      { label: '取消', cls: 'btn-outline', onClick: closeModal },
-      { label: '保存', onClick: saveMyMood }
+    `<textarea class="textarea" id="mood-edit-text" placeholder="写一句当时的想法…" style="min-height:70px;width:100%;margin-top:8px;"></textarea>`;
+}
+export async function openMoodDay(ds) {
+  const role = state.moodRole || 'me';
+  const mood = await getMood(role, ds);
+  if (role === 'me') {
+    state._moodEdit = { date: ds, emoji: null };
+    showModal(`${ds} 心情记录`, moodTimelineHtml(mood) + moodAppendHtml(), [
+      { label: '关闭', cls: 'btn-outline', onClick: closeModal },
+      { label: '保存新增', onClick: saveMyMood }
     ]);
   } else {
-    if (!rec) { toast('Ta 这一天没有留下心情'); return; }
+    if (!mood) { toast('Ta 这一天没有留下心情'); return; }
     const contacts = await getAllContacts();
     const c = contacts.find(x => x.id === role);
-    const body = `<div class="mood-view-card">` +
-      `<div class="mv-emoji">${rec.emoji}</div>` +
-      `<div class="mv-text">Ta 今天的心情 ${rec.emoji}，随记：${escapeHtml(rec.text || '')}</div>` +
-      `<div class="mv-time">${formatTime(rec.ts)}</div></div>`;
-    showModal(`${c ? escapeHtml(c.name) : 'Ta'} · ${ds}`, body);
+    showModal(`${c ? escapeHtml(c.name) : 'Ta'} · ${ds}`, moodTimelineHtml(mood, c ? c.name : 'Ta'));
   }
 }
 export function pickMoodEmoji(e) {
@@ -144,17 +185,22 @@ export function pickMoodEmoji(e) {
   state._moodEdit.emoji = e;
   document.querySelectorAll('.mood-emoji-btn').forEach(b => b.classList.toggle('sel', b.dataset.e === e));
 }
+// 追加保存：在 records 末尾 push 一条，历史不覆盖
 export async function saveMyMood() {
   const ed = state._moodEdit; if (!ed) return;
   if (!ed.emoji) { toast('先选一个心情 Emoji'); return; }
   const textEl = $('mood-edit-text');
   const text = (textEl ? textEl.value : '').trim();
-  const old = await dbGet('meta', moodKey('me', ed.date));
-  await dbPut('meta', { k: moodKey('me', ed.date), emoji: ed.emoji, text, ts: (old && old.ts) || now() });
+  const key = moodKey('me', ed.date);
+  const cur = normMood(await dbGet('meta', key)) || { k: key, records: [] };
+  const recs = cur.records.slice();
+  recs.push({ emoji: ed.emoji, text, ts: now() });
+  await dbPut('meta', { k: key, records: recs });
   state._moodEdit = null;
-  closeModal();
   renderMoodCalendar();
-  toast('心情已保存');
+  toast('心情已记录');
+  // 重新打开弹窗，让新记录出现在时间线里
+  await openMoodDay(ed.date);
 }
 
 // ---- 联系人每日随机心情补算（由 08-main.js 的 runCatchUp 调用） ----
@@ -174,7 +220,7 @@ export async function ensureDailyMoods(c, t) {
   // 时间戳：当天 8:00 ~ 23:00 之间的随机时间（不超过当前时刻）
   let ts = startOfDay + randInt(8 * 3600, 23 * 3600) * 1000 + randInt(0, 59999);
   if (ts > t) ts = t;
-  await dbPut('meta', { k: key, emoji: pick(ALL_MOOD_EMOJIS), text, ts });
+  await dbPut('meta', { k: key, records: [{ emoji: pick(ALL_MOOD_EMOJIS), text, ts }] });
 }
 
 /* ============ 灵感随记 ============ */
