@@ -620,7 +620,13 @@ a { text-decoration:none; color:inherit; }
 .dv-card.flipped .dv-card-inner { transform:rotateY(180deg); }
 .dv-face { position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; display:flex; flex-direction:column; align-items:center; }
 .dv-front { background:linear-gradient(135deg,#8b9cf0,#6b8aff); justify-content:center; gap:6px; box-shadow:var(--shadow); }
-.dv-front-pos { color:#fff; font-size:12px; }
+/* 位置文字：绝对定位固定在牌背底部，深色半透明底色防止被图片盖住看不清 */
+.dv-front-pos {
+  position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+  z-index:2; color:#fff; font-size:12px; font-weight:bold;
+  background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:4px;
+  white-space:nowrap;
+}
 .dv-back { background:var(--card-bg); border:1px solid var(--border-color); transform:rotateY(180deg); padding:0; justify-content:center; overflow:hidden; }
 .dv-back-name { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:8px; font-size:13px; font-weight:600; text-align:center; }
 .dv-pos { font-size:11px; color:var(--text-secondary); }
@@ -641,9 +647,12 @@ a { text-decoration:none; color:inherit; }
 .dv-card-mean-box { width:100%; font-size:12px; color:var(--text-secondary); line-height:1.5; text-align:left; max-height:0; overflow:hidden; transition:max-height .3s ease; }
 .dv-card-mean-box.open { max-height:500px; margin-top:8px; }
 /* 雷诺曼专属牌背图（铺满卡牌；加载失败隐藏后露出原星光背景） */
-.dv-front.lenormand-front { position:relative; overflow:hidden; }
-.dv-front.lenormand-front .dv-front-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:10px; z-index:0; }
-.dv-front.lenormand-front > svg, .dv-front.lenormand-front .dv-front-pos { position:relative; z-index:1; }
+/* 牌面/牌背必须是绝对定位撑满整张卡牌（不可改成 relative，否则高度塌缩、图片被拉扁） */
+.dv-card .dv-front, .dv-card .lenormand-front { position:absolute; inset:0; overflow:hidden; border-radius:10px; }
+/* 牌背图绝对铺满、cover 不拉伸，层级垫在最底 */
+.dv-card .dv-front img, .dv-card .lenormand-front img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:10px; z-index:0; }
+/* 星光图标浮在牌背图之上 */
+.dv-front.lenormand-front > svg { position:relative; z-index:1; }
 .dv-hint { text-align:center; font-size:12px; color:var(--text-secondary); margin-top:10px; }
 .dv-actions { display:flex; gap:8px; margin-top:12px; }
 .dv-actions .btn { flex:1; font-size:13px; padding:0 6px; }
