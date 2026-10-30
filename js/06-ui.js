@@ -8,9 +8,10 @@ import { enqueueTask, runCatchUp } from './08-main.js';
 // ============ ME 页功能 ============
 export async function updateMyAvatar(input) {
   if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = ''; // 立刻清空，保证下次选同一文件也能触发 onchange
   try {
-    const d = await compressImage(input.files[0]);
-    input.value = '';
+    const d = await compressImage(file);
     const m = await getMe();
     m.avatar = d;
     await saveMe(m);
@@ -315,16 +316,19 @@ export async function renderContactSetting(id) {
 }
 export async function csUpdateAvatar(input) {
   if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = ''; // 立刻清空，保证下次选同一文件也能触发 onchange
   try {
-    const d = await compressImage(input.files[0]);
-    input.value = '';
-    const c = await getContact(state.currentContactSettingId);
-    c.avatar = d;
-    await saveContact(c);
+    const d = await compressImage(file);
+    // 压缩完成后重新读取最新联系人数据再改，避免拿旧对象覆盖掉期间的其它写入
+    const latestC = await getContact(state.currentContactSettingId);
+    if (!latestC) return;
+    latestC.avatar = d;
+    await saveContact(latestC);
     renderContactSetting(state.currentContactSettingId);
     // 刷新联系人列表 + 若正在与该联系人聊天，同步刷新聊天界面头像
     renderContacts();
-    if (state.currentContactId === c.id) await renderChatMessages(c.id, false);
+    if (state.currentContactId === latestC.id) await renderChatMessages(latestC.id, false);
     toast('头像已更新');
   } catch(e) { toast('图片处理失败'); }
 }
@@ -494,14 +498,17 @@ export async function csToggleLetter() {
 }
 export async function csUploadBg(input) {
   if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = ''; // 立刻清空，保证下次选同一文件也能触发 onchange
   try {
-    const d = await compressImage(input.files[0], 1600, 0.82);
-    input.value = '';
-    const c = await getContact(state.currentContactSettingId);
-    c.settings.chatBackground = { type:'image', value: d };
-    await saveContact(c);
+    const d = await compressImage(file, 1600, 0.82);
+    // 压缩完成后重新读取最新联系人数据再改，避免拿旧对象覆盖掉期间的其它写入
+    const latestC = await getContact(state.currentContactSettingId);
+    if (!latestC) return;
+    latestC.settings.chatBackground = { type:'image', value: d };
+    await saveContact(latestC);
     toast('背景已更新');
-    applyChatBg(c);
+    applyChatBg(latestC);
   } catch(e) { toast('图片处理失败'); }
 }
 export async function csResetBg() {
@@ -874,9 +881,10 @@ export async function applyPresetBg(i) {
 }
 export async function uploadBg(input) {
   if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = ''; // 立刻清空，保证下次选同一文件也能触发 onchange
   try {
-    const d = await compressImage(input.files[0], 1600, 0.82);
-    input.value = '';
+    const d = await compressImage(file, 1600, 0.82);
     const thm = await getTheme();
     thm.background = { type:'image', value: d };
     await saveTheme(thm);

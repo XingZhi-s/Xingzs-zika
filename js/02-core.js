@@ -21,8 +21,10 @@ export function dbPut(store, val) {
   return new Promise((resolve, reject) => {
     const tx = state.db.transaction(store, 'readwrite');
     const r = tx.objectStore(store).put(val);
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
+    // 必须等整个事务提交完成再 resolve（r.onsuccess 时事务可能尚未落盘，连续写入会互相覆盖/丢失）
+    tx.oncomplete = () => resolve(r.result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 }
 export function dbGet(store, key) {
