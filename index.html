@@ -913,18 +913,22 @@ a { text-decoration:none; color:inherit; }
 .msg-choice-option.choice-picked .choice-letter { background:#fff; color:var(--theme-color); }
 .msg-choice-result { padding:10px 12px; background:var(--theme-color); color:#fff; border-radius:10px; font-weight:600; }
 
-/* 系统提示消息（28px 单行药丸 + 毛玻璃） */
+/* 系统提示消息（28px 单行药丸 + 毛玻璃）：强制单行，超长横向滚动，绝不折行 */
 .msg-system { display:flex; justify-content:center; padding:2px 12px; max-width:100%; }
 .msg-system .sys-card {
-  display:inline-flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:2px 4px;
-  min-height:28px; padding:4px 12px 4px 4px;
-  font-size:11px; line-height:1.4; color:#6b7a94; text-align:center;
+  display:inline-flex; flex-wrap:nowrap; align-items:center; justify-content:center; gap:4px;
+  min-height:28px; padding:4px 14px;
+  font-size:11px; line-height:1.4; color:#6b7a94; text-align:center; white-space:nowrap;
   background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border:1px solid rgba(255,255,255,0.55);
-  border-radius:999px; max-width:96%;
+  border-radius:999px; max-width:95%; overflow-x:auto;
+  scrollbar-width:none; -ms-overflow-style:none;
   box-shadow:0 1px 6px rgba(140,160,210,0.05);
 }
+.msg-system .sys-card::-webkit-scrollbar { display:none; }
+.msg-system .sys-card span, .msg-system .sys-card .sys-icon,
+.sys-name, .sys-action, .sys-sep, .sys-sub { white-space:nowrap; flex-shrink:0; }
 .sys-icon { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:rgba(255,255,255,0.75); color:#7c97bf; flex-shrink:0; }
 .sys-icon svg { width:10px; height:10px; stroke-width:2; }
 .sys-name { font-weight:600; color:#2a3a56; }
