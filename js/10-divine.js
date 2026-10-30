@@ -263,20 +263,19 @@ export function divineResultHtml(r) {
     const frontCls = isTarot ? 'dv-face dv-front' : 'dv-face dv-front lenormand-front';
     const frontInner = (isTarot ? '' : `<img class="dv-front-img" src="./assets/divine/lenormand/back.webp" alt="" onerror="dvImgError(this)">`) +
       sparkle + `<span class="dv-front-pos">${escapeHtml(c.pos)}</span>`;
-    // 卡牌只负责 3D 翻转显示卡面图；释义移到卡外的 dv-card-mean-box
+    // 卡牌只负责 3D 翻转显示卡面图；翻开后显示加粗标题，点标题展开/收起完整释义
+    const oriText = isTarot ? `（${c.upright ? '正位' : '逆位'}）` : '';
     return `<div class="dv-card-wrap" data-index="${i}">` +
       `<button class="dv-card" onclick="flipDivineCard(this)"><div class="dv-card-inner">` +
       `<div class="${frontCls}">${frontInner}</div>` +
       `<div class="dv-face dv-back"><span class="dv-back-name">${escapeHtml(c.name)}</span>${cardImg}</div>` +
       `</div></button>` +
-      `<div class="dv-card-mean-box">` +
-      `<div class="dv-mean-pos">【${escapeHtml(c.pos)}】</div>` +
-      `<div class="dv-name">${escapeHtml(c.name)}${isTarot ? `<span class="dv-ori ${c.upright ? 'up' : 'rev'}">${c.upright ? '正位' : '逆位'}</span>` : ''}</div>` +
-      `<div class="dv-mean-text">${escapeHtml(c.meaning)}</div>` +
-      `</div></div>`;
+      `<button class="dv-card-title" onclick="toggleDivineMeaning(this)">【${escapeHtml(c.pos)}】 ${escapeHtml(c.name)}${oriText}<span class="dv-arr"></span></button>` +
+      `<div class="dv-card-mean-box"><div class="dv-mean-text">${escapeHtml(c.meaning)}</div></div>` +
+      `</div>`;
   }).join('');
-  return `<div class="dv-cards">${cards}</div>` +
-    `<div class="dv-hint">点击牌面翻转查看牌义</div>` +
+  return `<div class="dv-cards${r.cards.length >= 5 ? ' dv-cards-5' : ''}">${cards}</div>` +
+    `<div class="dv-hint">点击牌面翻转，点击牌名展开详细牌义</div>` +
     `<div class="dv-actions">` +
     `<button class="btn btn-outline" onclick="copyDivineResult()">复制结果</button>` +
     `<button class="btn btn-outline" onclick="sendDivineToChat()">发送到聊天</button>` +
@@ -284,11 +283,26 @@ export function divineResultHtml(r) {
 }
 export function flipDivineCard(el) {
   el.classList.toggle('flipped');
-  // 释义盒与翻牌状态同步：翻开才显示，翻回则隐藏
+  // 翻开后只显示加粗标题（释义仍折叠）；翻回则标题与释义一起收起
+  const wrap = el.closest('.dv-card-wrap');
+  if (!wrap) return;
+  const flipped = el.classList.contains('flipped');
+  const title = wrap.querySelector('.dv-card-title');
+  const box = wrap.querySelector('.dv-card-mean-box');
+  if (title) {
+    title.classList.toggle('show', flipped);
+    if (!flipped) title.classList.remove('open');
+  }
+  if (box && !flipped) box.classList.remove('open');
+}
+// 点击牌名标题：展开 / 收起详细释义（箭头 ↓↑ 随动）
+export function toggleDivineMeaning(el) {
   const wrap = el.closest('.dv-card-wrap');
   if (!wrap) return;
   const box = wrap.querySelector('.dv-card-mean-box');
-  if (box) box.classList.toggle('show', el.classList.contains('flipped'));
+  if (!box) return;
+  box.classList.toggle('open');
+  el.classList.toggle('open', box.classList.contains('open'));
 }
 // 卡牌图片加载容错：.webp 失败 → .jpg → .png → 隐藏（露出文字牌义 / 星光牌背）
 export function dvImgError(img) {
