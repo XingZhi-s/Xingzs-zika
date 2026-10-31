@@ -611,10 +611,14 @@ a { text-decoration:none; color:inherit; }
 .divine-restart-wrap { padding:18px 14px 8px; display:flex; justify-content:center; }
 .divine-restart-wrap .btn { min-width:160px; }
 .divine-spread-bar { display:flex; gap:8px; padding:10px 14px; flex-wrap:wrap; }
-.dv-cards { display:flex; flex-wrap:nowrap; justify-content:flex-start; gap:10px; overflow-x:auto; padding:10px 0; width:100%; }
-.dv-cards::before, .dv-cards::after { content:''; margin:auto; }
-.dv-card-wrap { width:100px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; }
-.dv-cards.dv-cards-5 .dv-card-wrap { width:80px; }
+.dv-cards { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; padding:10px; width:100%; box-sizing:border-box; }
+.dv-card-wrap { width:calc(30% - 8px); max-width:110px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; }
+/* 五张牌阵：上 2 下 3（前两张稍大居中，后三张折行居中） */
+.dv-cards.has-5-cards .dv-card-wrap:nth-child(-n+2) { width:calc(40% - 8px); max-width:140px; }
+.dv-cards.has-5-cards .dv-card-wrap:nth-child(n+3) { width:calc(30% - 8px); max-width:110px; }
+/* 牌义列表：统一放在整个牌阵下方 */
+.dv-mean-list { display:flex; flex-direction:column; gap:2px; width:100%; box-sizing:border-box; padding:0 14px; }
+.dv-mean-item { width:100%; }
 .dv-card { width:100%; perspective:700px; background:transparent; border:none; padding:0; min-height:0; min-width:0; }
 .dv-card-inner { position:relative; width:100%; aspect-ratio:1 / 1.6; transition:transform .5s; transform-style:preserve-3d; }
 .dv-card.flipped .dv-card-inner { transform:rotateY(180deg); }
@@ -656,6 +660,29 @@ a { text-decoration:none; color:inherit; }
 .dv-hint { text-align:center; font-size:12px; color:var(--text-secondary); margin-top:10px; }
 .dv-actions { display:flex; gap:8px; margin-top:12px; }
 .dv-actions .btn { flex:1; font-size:13px; padding:0 6px; }
+
+/* ========== 阅读器（本地 TXT 分页渲染 + 划词笔记） ========== */
+.reader-shelf { flex:1; min-height:0; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.reader-book-card { display:flex; align-items:center; gap:12px; background:var(--card-bg); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; cursor:pointer; }
+.reader-book-cover { width:44px; height:58px; border-radius:6px; background:linear-gradient(135deg,#a8c0a0,#7fae9b); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; box-shadow:0 2px 6px rgba(127,174,155,0.3); }
+.reader-book-info { flex:1; min-width:0; }
+.reader-book-title { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.reader-book-meta { font-size:12px; color:var(--text-secondary); margin-top:4px; }
+.reader-book-del { width:36px; height:36px; min-width:36px; min-height:36px; border-radius:8px; background:#fee2e2; flex-shrink:0; }
+/* 阅读视图：护眼底色 + 宽松行距，内容区独立滚动 */
+.reader-reading { flex:1; min-height:0; display:flex; flex-direction:column; }
+.reader-content { flex:1; min-height:0; overflow-y:auto; padding:20px 18px; background:#f7f5ee; color:#3d3a32; font-size:16px; line-height:1.9; white-space:pre-wrap; word-break:break-word; user-select:text; -webkit-user-select:text; }
+.reader-pager { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--card-bg); border-top:1px solid var(--border-color); }
+.reader-pager .btn { min-height:38px; padding:6px 18px; font-size:13px; flex:0 0 auto; }
+.reader-pager .btn[disabled] { opacity:0.35; pointer-events:none; }
+.reader-page-info { font-size:13px; color:var(--text-secondary); }
+/* 护眼下划线高亮（划词笔记标记，点击查看） */
+.reader-highlight { border-bottom:2px dashed #7fae9b; cursor:pointer; background:transparent; color:inherit; padding:0; }
+/* 划词浮出小菜单 */
+.reader-sel-menu { position:fixed; z-index:9500; background:#2a3a56; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.25); }
+.reader-sel-menu button { color:#fff; font-size:13px; padding:8px 14px; min-height:36px; min-width:0; white-space:nowrap; }
+/* 笔记弹窗里的原文引用块 */
+.reader-quote-box { background:#f7f5ee; border-left:3px solid #7fae9b; padding:10px 12px; border-radius:6px; font-size:13px; line-height:1.7; color:#4a463c; margin-bottom:12px; max-height:140px; overflow-y:auto; white-space:pre-wrap; }
 
 /* love页（联系人列表页）联系人卡片继承全局contact-card样式，仅容器微调 */
 .love-contacts-body .contact-card-time { color: #b3c2d8; font-size: 11px; }
@@ -946,7 +973,14 @@ a { text-decoration:none; color:inherit; }
 .sys-sub { color:#5a6e8f; }
 .msg-row.msg-center { justify-content:center; padding:6px 12px; gap:0; }
 .msg-row.msg-center .msg-wrap { max-width:100%; align-items:center; }
-.msg-typing { font-size:12px; color:var(--text-secondary); padding:4px 0; display:flex; align-items:center; gap:4px; }
+/* 发消息滑入动画：新发出的消息自然出现 */
+@keyframes slideInRight {
+  from { opacity:0; transform:translateX(20px); }
+  to { opacity:1; transform:translateX(0); }
+}
+.msg-row.me { animation: slideInRight 0.25s ease-out; }
+/* 「正在输入」包在真实对方气泡内（padding 交给 .msg-bubble） */
+.msg-typing { font-size:12px; color:var(--text-secondary); display:inline-flex; align-items:center; gap:4px; }
 .typing-dots span { display:inline-block; width:5px; height:5px; background:var(--text-secondary); border-radius:50%; margin:0 1px; animation:typing 1.4s infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
@@ -1333,12 +1367,12 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <!-- 上方留白区（预留做展示卡牌/大装饰） -->
               <div class="page-2-top-area" style="height: 26vh;"></div>
 
-              <!-- 中下方应用网格（后续扩展入口放这里，目前两个占位） -->
+              <!-- 中下方应用网格（扩展入口：阅读 + 预留占位） -->
               <div class="home-apps-grid">
-                <div class="app-cell placeholder">
-                  <span class="app-tile"><svg class="i"><use href="#icon-plus"/></svg></span>
-                  <span class="app-name">待添加</span>
-                </div>
+                <button class="app-cell" onclick="openReaderPage()" title="阅读">
+                  <span class="app-tile" style="font-size:26px;">📖</span>
+                  <span class="app-name">阅读</span>
+                </button>
                 <div class="app-cell placeholder">
                   <span class="app-tile"><svg class="i"><use href="#icon-plus"/></svg></span>
                   <span class="app-name">待添加</span>
@@ -1441,6 +1475,33 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ========== 阅读页（本地 TXT 沉浸式阅读 + 划词手写笔记，书籍只存浏览器 IndexedDB） ========== -->
+      <div class="page" id="page-reader">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="readerBack()"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow" id="reader-title">阅读</div>
+          <button class="top-bar-btn" id="reader-upload-btn" onclick="document.getElementById('reader-file').click()" title="上传 TXT">
+            <svg class="i"><use href="#icon-upload"/></svg>
+          </button>
+        </div>
+        <input type="file" accept=".txt" id="reader-file" class="hide" onchange="readerPickFile(this)">
+        <!-- 书架视图 -->
+        <div class="reader-shelf" id="reader-shelf"></div>
+        <!-- 阅读视图（每次只渲染当前页，防大文件卡死） -->
+        <div class="reader-reading hide" id="reader-reading">
+          <div class="reader-content" id="reader-content"></div>
+          <div class="reader-pager">
+            <button class="btn btn-outline" id="reader-prev" onclick="readerPrevPage()">上一页</button>
+            <span class="reader-page-info" id="reader-page-info"></span>
+            <button class="btn btn-outline" id="reader-next" onclick="readerNextPage()">下一页</button>
+          </div>
+        </div>
+      </div>
+      <!-- 划词后浮出的极简小菜单 -->
+      <div class="reader-sel-menu hide" id="reader-sel-menu">
+        <button onclick="readerOpenNote()">✍️ 写笔记</button>
       </div>
 
       <!-- ========== 联系人列表页（手机：点击底部导航 love 进入；点联系人进入聊天） ========== -->

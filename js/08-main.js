@@ -8,6 +8,7 @@ import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, promptTodoAdd, renderHomeAvatar, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
+import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -524,3 +525,14 @@ window.clearBubbleCSS = clearBubbleCSS;
 window.applyCustomCSS = applyCustomCSS;
 window.clearCustomCSS = clearCustomCSS;
 window.viewDivineHistory = viewDivineHistory;
+window.openReaderPage = openReaderPage;
+window.readerBack = readerBack;
+window.renderReaderShelf = renderReaderShelf;
+window.openReaderBook = openReaderBook;
+window.readerDeleteBook = readerDeleteBook;
+window.readerPickFile = readerPickFile;
+window.readerPrevPage = readerPrevPage;
+window.readerNextPage = readerNextPage;
+window.renderReaderPage = renderReaderPage;
+window.readerOpenNote = readerOpenNote;
+window.openReaderNoteView = openReaderNoteView;

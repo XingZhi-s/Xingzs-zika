@@ -975,7 +975,14 @@ export async function doImport(input) {
       summary.push('我的资料/表情包已恢复');
     }
     if (data.me && data.me.theme) {
-      await saveTheme(data.me.theme);
+      // 合并而非整体覆盖：保留新版默认结构，旧数据只补字段；
+      // 桌面壁纸(homeBg)不被旧数据覆盖，只恢复按键颜色/导航栏与四个页面背景等
+      const currentTheme = await getTheme();
+      const mergedTheme = { ...currentTheme, ...data.me.theme };
+      if (currentTheme.homeBg) mergedTheme.homeBg = currentTheme.homeBg;
+      else delete mergedTheme.homeBg;
+      await saveTheme(mergedTheme); // saveTheme 内部已调用 applyTheme
+      applyDIYVariables(mergedTheme);
       summary.push('主题已恢复');
     }
     // 心情日历 + 灵感随记（兼容旧备份的 data.mood）：按数据内的 k 键直接写回 meta

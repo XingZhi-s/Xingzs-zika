@@ -38,10 +38,10 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
   const otherAvatar = c.avatar || DEFAULT_AVATAR;
   const html = slice.map(m => renderMsg(m, contactName, msgs, myAvatar, otherAvatar)).join('');
-  // 输入中提示气泡（对方正在输入）
+  // 输入中提示（对方正在输入）：typing-dots 包裹在真实的对方气泡里
   let typingHtml = '';
   if (state.chatTypingState[contactId]) {
-    typingHtml = `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar)}" alt=""><div class="msg-wrap"><div class="msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div></div></div>`;
+    typingHtml = `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div></div></div>`;
   }
   box.innerHTML = html + typingHtml;
   // 加载更多按钮
@@ -168,7 +168,7 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
       ${questionHtml}${optsHtml}${resultHtml}
     </div></div>`;
   }
-  const typingHtml = (m.type === '_typing') ? `<div class="msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
+  const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
   if (typingHtml) return `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar||DEFAULT_AVATAR)}" alt=""><div class="msg-wrap">${typingHtml}</div></div>`;
   // 时间戳和已读
   const timeHtml = `<div class="msg-time">${formatTime(m.time)}</div>`;
@@ -355,10 +355,11 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   const maxSec = Math.max(fastSec, slowMin * 60); // 统一转为秒
 
   const nowT = now();
-  const delaySec = randInt(fastSec, maxSec);
-  // 已读时间：落在回复延迟的 10%~50% 处（任何概率都会正常已读）
-  const readAt = nowT + Math.floor(delaySec * 1000 * randInt(10, 50) / 100);
-  const replyAt = nowT + delaySec * 1000;
+  // 时间轴推演：replyDelay = 本次回复延迟（严格落在设置区间内）；readDelay = 已读时间（固定 1~3 秒）
+  const replyDelay = randInt(fastSec, maxSec);
+  const readDelay = randInt(1, 3);
+  const readAt = nowT + readDelay * 1000;
+  const replyAt = nowT + replyDelay * 1000;
 
   // 保存消息
   const msg = {
@@ -415,20 +416,20 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   // 取消旧定时器（每次新消息都重新排程一次）
   cancelRoundTimers(cid);
 
-  // 「正在输入」只跟本轮是否回复绑定（不再受 rate 门槛限制）
-  const showTyping = round.willReply;
-
-  // 回复严格落在设置区间内；「正在输入」按同一延迟比例（60% 处）出现
-  const replyStartAt = replyAt;
-  const typingStartAt = showTyping ? (nowT + Math.floor(delaySec * 1000 * 0.6)) : 0;
-
-  // 排程：输入中提示（若要显示）
-  if (typingStartAt > nowT) {
-    state.chatTimers['rt_'+cid] = setTimeout(() => {
-      state.chatTypingState[cid] = true;
-      if (state.currentContactId === cid) renderChatMessages(cid, false);
-    }, Math.max(500, typingStartAt - nowT));
-  }
+  // 时间轴：readDelay 秒后消息被已读 → 同一时刻立刻显示「正在输入」气泡；
+  // 本轮要回复：动画持续到 replyDelay 到点（剩余等待 = replyDelay - readDelay）再关动画、发回复；
+  // 已读不回：动画持续 4 秒后自动消失（对方看到了，打了一半字又删了）
+  state.chatTimers['rt_'+cid] = setTimeout(() => {
+    state.chatTypingState[cid] = true;
+    if (state.currentContactId === cid) renderChatMessages(cid, false);
+    if (!round.willReply) {
+      state.chatTimers['rm_'+cid] = setTimeout(() => {
+        state.chatTypingState[cid] = false;
+        if (state.currentContactId === cid) renderChatMessages(cid, false);
+        delete state.chatTimers['rm_'+cid];
+      }, 4000);
+    }
+  }, Math.max(0, readAt - nowT));
 
   // 排程：最终回复/已读不回
   state.chatTimers['rr_'+cid] = setTimeout(async () => {
@@ -462,7 +463,7 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
     cancelRoundTimers(cid);
     delete state.replyRounds[cid];
     renderContacts();
-  }, Math.max(800, replyStartAt - nowT));
+  }, Math.max(800, replyAt - nowT));
 }
 
 // 帮我选择流程：先发提问消息 → 10s~3min 后对方回复选择

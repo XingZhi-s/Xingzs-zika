@@ -263,19 +263,25 @@ export function divineResultHtml(r) {
     const frontCls = isTarot ? 'dv-face dv-front' : 'dv-face dv-front lenormand-front';
     const frontInner = (isTarot ? '' : `<img class="dv-front-img" src="./assets/divine/lenormand/back.webp" alt="" onerror="dvImgError(this)">`) +
       sparkle + `<span class="dv-front-pos">${escapeHtml(c.pos)}</span>`;
-    // 卡牌只负责 3D 翻转显示卡面图；翻开后显示加粗标题，点标题展开/收起完整释义
-    const oriText = isTarot ? `（${c.upright ? '正位' : '逆位'}）` : '';
+    // 卡牌只负责 3D 翻转显示卡面图；释义统一放在整个牌阵下方的列表里
     return `<div class="dv-card-wrap" data-index="${i}">` +
       `<button class="dv-card" onclick="flipDivineCard(this)"><div class="dv-card-inner">` +
       `<div class="${frontCls}">${frontInner}</div>` +
       `<div class="dv-face dv-back"><span class="dv-back-name">${escapeHtml(c.name)}</span>${cardImg}</div>` +
       `</div></button>` +
+      `</div>`;
+  }).join('');
+  // 牌义列表：统一放在牌阵下方，翻牌后才显示对应标题，点标题展开/收起完整释义
+  const means = r.cards.map((c, i) => {
+    const oriText = isTarot ? `（${c.upright ? '正位' : '逆位'}）` : '';
+    return `<div class="dv-mean-item" data-index="${i}">` +
       `<button class="dv-card-title" onclick="toggleDivineMeaning(this)">【${escapeHtml(c.pos)}】 ${escapeHtml(c.name)}${oriText}<span class="dv-arr"></span></button>` +
       `<div class="dv-card-mean-box"><div class="dv-mean-text">${escapeHtml(c.meaning)}</div></div>` +
       `</div>`;
   }).join('');
-  return `<div class="dv-cards${r.cards.length >= 5 ? ' dv-cards-5' : ''}">${cards}</div>` +
-    `<div class="dv-hint">点击牌面翻转，点击牌名展开详细牌义</div>` +
+  return `<div class="dv-cards${r.cards.length >= 5 ? ' has-5-cards' : ''}">${cards}</div>` +
+    `<div class="dv-mean-list">${means}</div>` +
+    `<div class="dv-hint">点击牌面翻转，点击下方牌名展开详细牌义</div>` +
     `<div class="dv-actions">` +
     `<button class="btn btn-outline" onclick="copyDivineResult()">复制结果</button>` +
     `<button class="btn btn-outline" onclick="sendDivineToChat()">发送到聊天</button>` +
@@ -283,12 +289,15 @@ export function divineResultHtml(r) {
 }
 export function flipDivineCard(el) {
   el.classList.toggle('flipped');
-  // 翻开后只显示加粗标题（释义仍折叠）；翻回则标题与释义一起收起
+  // 释义在牌阵下方列表里：按 data-index 找到对应条目，翻开后显示加粗标题，翻回则标题与释义一起收起
   const wrap = el.closest('.dv-card-wrap');
   if (!wrap) return;
   const flipped = el.classList.contains('flipped');
-  const title = wrap.querySelector('.dv-card-title');
-  const box = wrap.querySelector('.dv-card-mean-box');
+  const result = el.closest('#divine-result');
+  const item = result && result.querySelector(`.dv-mean-item[data-index="${wrap.dataset.index}"]`);
+  if (!item) return;
+  const title = item.querySelector('.dv-card-title');
+  const box = item.querySelector('.dv-card-mean-box');
   if (title) {
     title.classList.toggle('show', flipped);
     if (!flipped) title.classList.remove('open');
@@ -297,9 +306,9 @@ export function flipDivineCard(el) {
 }
 // 点击牌名标题：展开 / 收起详细释义（箭头 ↓↑ 随动）
 export function toggleDivineMeaning(el) {
-  const wrap = el.closest('.dv-card-wrap');
-  if (!wrap) return;
-  const box = wrap.querySelector('.dv-card-mean-box');
+  const item = el.closest('.dv-mean-item');
+  if (!item) return;
+  const box = item.querySelector('.dv-card-mean-box');
   if (!box) return;
   box.classList.toggle('open');
   el.classList.toggle('open', box.classList.contains('open'));
