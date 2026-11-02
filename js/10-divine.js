@@ -239,7 +239,7 @@ function buildDivineText(r) {
     ? `【${c.pos}】${c.name}（${c.upright ? '正位' : '逆位'}）\n${c.meaning}`
     : `【${c.pos}】${c.name}\n${c.meaning}`);
   const qLine = r.question ? `问题：${r.question}\n` : '';
-  return `${qLine}🔮 ${title} · ${r.spread}\n${lines.join('\n')}`;
+  return `${qLine}${title} · ${r.spread}\n${lines.join('\n')}`;
 }
 
 // ---- 结果渲染（牌面卡片 + 翻转牌义） ----

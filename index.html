@@ -241,7 +241,7 @@ a { text-decoration:none; color:inherit; }
   width: clamp(40px, 11.5vw, 46px);
   height: clamp(40px, 11.5vw, 46px);
   border-radius: 15px;
-  background: #a9c7ea; /* 图3 浅蓝圆角方块 */
+  background: var(--theme-color); /* 跟随主题色联动 */
   box-shadow: none;
   transition: transform .18s ease, background .18s ease;
 }
@@ -276,10 +276,10 @@ a { text-decoration:none; color:inherit; }
     background: transparent; box-shadow:none; border:none;
     padding: 14px clamp(16px, 5vw, 22px) 8px;
   }
-  #page-love .top-bar-title { font-size: 17px; font-weight: 700; color: #5f7fb2; letter-spacing: 2px; }
+  #page-love .top-bar-title { font-size: 17px; font-weight: 700; color: var(--theme-color); letter-spacing: 2px; }
   #page-love .top-bar-btn {
     width: 36px; height: 36px; border-radius: 50%;
-    background: #a9c7ea; border:none;
+    background: var(--theme-color); border:none;
     display:flex; align-items:center; justify-content:center;
     box-shadow: 0 3px 10px rgba(150,180,225,0.35);
   }
@@ -368,12 +368,12 @@ a { text-decoration:none; color:inherit; }
   max-height: 49vh;
   overflow: hidden;
   margin-top: 4px;
-  box-shadow: 0 6px 20px rgba(170,195,235,0.25);
+  box-shadow: 0 6px 20px var(--theme-light);
   flex-shrink: 0;
 }
 .home-banner {
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, #b5cfe9 0%, #aec8e6 100%);
+  background: linear-gradient(180deg, var(--theme-light) 0%, color-mix(in srgb, var(--theme-color) 28%, #ffffff) 100%);
   background-size: cover; background-position: center;
   cursor: pointer;
 }
@@ -437,20 +437,20 @@ a { text-decoration:none; color:inherit; }
 .home-sticker-square {
   width: clamp(58px, 17vw, 76px);
   min-height: clamp(58px, 17vw, 76px);
-  background: #f4f8ff;
-  border: 1.5px dashed #b8cee8;
+  background: var(--theme-color);
+  border: 1.5px dashed rgba(255,255,255,0.55);
   border-radius: 16px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   cursor: pointer;
   flex-shrink: 0;
   transition: transform .15s;
-  color: #9db4d1;
+  color: #fff;
   overflow: hidden;
   position: relative;
 }
 .home-sticker-square:active { transform: scale(0.96); }
-.home-sticker-square svg { width: 20px; height: 20px; stroke: #9db4d1; }
-.home-sticker-square .stk-label { font-size: 11px; line-height: 1; color: #9db4d1; }
+.home-sticker-square svg { width: 20px; height: 20px; stroke: #fff; }
+.home-sticker-square .stk-label { font-size: 11px; line-height: 1; color: #fff; }
 .home-sticker-square img { width: 100%; height: 100%; object-fit: cover; border-radius: 16px; }
 .home-row-divider {
   width: 3px;
@@ -517,11 +517,11 @@ a { text-decoration:none; color:inherit; }
   height: clamp(54px, 14.5vw, 70px);
 }
 .app-name {
-  font-size: 11px; color: #5f7fb2; letter-spacing: 0.3px;
+  font-size: 11px; color: var(--theme-color); letter-spacing: 0.3px;
   white-space: nowrap;
 }
 .app-tile {
-  background: #a9c7ea;
+  background: var(--theme-color);
   border-radius: 26%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
@@ -623,7 +623,7 @@ a { text-decoration:none; color:inherit; }
 .dv-card-inner { position:relative; width:100%; aspect-ratio:1 / 1.6; transition:transform .5s; transform-style:preserve-3d; }
 .dv-card.flipped .dv-card-inner { transform:rotateY(180deg); }
 .dv-face { position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; display:flex; flex-direction:column; align-items:center; }
-.dv-front { background:linear-gradient(135deg,#8b9cf0,#6b8aff); justify-content:center; gap:6px; box-shadow:var(--shadow); }
+.dv-front { background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); justify-content:center; gap:6px; box-shadow:var(--shadow); }
 /* 位置文字：绝对定位固定在牌背底部，深色半透明底色防止被图片盖住看不清 */
 .dv-front-pos {
   position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
@@ -1160,7 +1160,7 @@ a { text-decoration:none; color:inherit; }
 .call-avatar { width:120px; height:120px; border-radius:50%; object-fit:cover; margin:30px 0 20px; border:4px solid rgba(255,255,255,0.2); }
 .call-avatar-mini { width:88px; height:88px; margin:12px 0; border-width:2px; }
 .call-video-placeholder { width:min(92vw, 420px); height:min(60vh, 500px); background:#0f172a; border-radius:20px; margin:20px 0; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
-.call-video-placeholder::after { content:'📹 画面模拟'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.5); font-size:14px; letter-spacing:1px; }
+.call-video-placeholder::after { content:'画面模拟'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.5); font-size:14px; letter-spacing:1px; }
 .call-video-remote { position:absolute; inset:0; background:radial-gradient(ellipse at 30% 20%, rgba(107,138,255,0.5), rgba(0,0,0,0) 60%), radial-gradient(ellipse at 70% 80%, rgba(236,72,153,0.45), rgba(0,0,0,0) 55%), #0b1026; }
 .call-video-self { position:absolute; right:16px; bottom:16px; width:80px; height:110px; border-radius:10px; background:linear-gradient(135deg, rgba(56,189,248,0.55), rgba(168,85,247,0.55)); box-shadow:0 4px 16px rgba(0,0,0,0.4); border:2px solid rgba(255,255,255,0.5); }
 .call-name { font-size:24px; font-weight:600; margin-bottom:8px; }
@@ -1268,6 +1268,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-mic-off" viewBox="0 0 24 24" fill="none"><line x1="1" y1="1" x2="23" y2="23"/><rect x="9" y="4" width="6" height="10" rx="3"/><path d="M5 10a7 7 0 0 0 10.2 6.2"/><line x1="12" y1="19" x2="12" y2="22"/></symbol>
     <symbol id="icon-minimize" viewBox="0 0 24 24" fill="none"><line x1="4" y1="12" x2="20" y2="12" stroke-width="3"/></symbol>
     <symbol id="icon-maximize" viewBox="0 0 24 24" fill="none"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+    <symbol id="icon-crystal" viewBox="0 0 24 24"><circle cx="12" cy="10" r="7"/><path d="M9 7.5a4.5 4.5 0 0 1 4-2.5"/><path d="M8.5 21l1-3h5l1 3"/><path d="M6 21h12"/></symbol>
+    <symbol id="icon-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="16" rx="2"/><path d="M8 2h11a2 2 0 0 1 2 2v12"/></symbol>
+    <symbol id="icon-warning" viewBox="0 0 24 24"><path d="M12 3L2 21h20L12 3z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -1370,7 +1374,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <!-- 中下方应用网格（扩展入口：阅读 + 预留占位） -->
               <div class="home-apps-grid">
                 <button class="app-cell" onclick="openReaderPage()" title="阅读">
-                  <span class="app-tile" style="font-size:26px;">📖</span>
+                  <span class="app-tile"><svg class="i"><use href="#icon-book"/></svg></span>
                   <span class="app-name">阅读</span>
                 </button>
                 <div class="app-cell placeholder">
@@ -1448,12 +1452,12 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <div class="dv-step-title">静心默念所问之事，选择牌种</div>
             <div class="dv-kind-grid">
               <button class="dv-kind-card" onclick="divinePickKind('tarot')">
-                <span class="dv-kind-emoji">🔮</span>
+                <span class="dv-kind-emoji"><svg class="i i-xl"><use href="#icon-crystal"/></svg></span>
                 <span class="dv-kind-name">塔罗牌</span>
                 <span class="dv-kind-desc">78 张 · 正逆位 · 深层洞察</span>
               </button>
               <button class="dv-kind-card" onclick="divinePickKind('lenormand')">
-                <span class="dv-kind-emoji">🃏</span>
+                <span class="dv-kind-emoji"><svg class="i i-xl"><use href="#icon-cards"/></svg></span>
                 <span class="dv-kind-name">雷诺曼</span>
                 <span class="dv-kind-desc">36 张 · 直截了当 · 日常指引</span>
               </button>
@@ -1464,7 +1468,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <div class="dv-step-title" id="divine-step2-title">选择牌阵</div>
             <div class="divine-spread-bar" id="divine-spread-list"></div>
             <textarea class="input" id="divine-question" rows="3" placeholder="输入你想问的问题（可不填）..." style="resize:none;line-height:1.5;"></textarea>
-            <button class="btn divine-draw-btn" onclick="startDivineDraw()">✨ 开始抽牌</button>
+            <button class="btn divine-draw-btn" onclick="startDivineDraw()"><svg class="i i-sm"><use href="#icon-sparkles"/></svg> 开始抽牌</button>
             <button class="dv-back-link" onclick="divineRestart()">← 重新选择牌种</button>
           </div>
           <!-- 第三步：展示结果 -->
@@ -1501,7 +1505,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
       </div>
       <!-- 划词后浮出的极简小菜单 -->
       <div class="reader-sel-menu hide" id="reader-sel-menu">
-        <button onclick="readerOpenNote()">✍️ 写笔记</button>
+        <button onclick="readerOpenNote()"><svg class="i i-sm"><use href="#icon-pencil"/></svg> 写笔记</button>
       </div>
 
       <!-- ========== 联系人列表页（手机：点击底部导航 love 进入；点联系人进入聊天） ========== -->
@@ -1586,7 +1590,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             </div>
             <div class="quote-bar hide" id="quote-bar">
               <span class="quote-text" id="quote-text"></span>
-              <button class="quote-clear" onclick="clearQuoteReply()" title="取消引用">✕</button>
+              <button class="quote-clear" onclick="clearQuoteReply()" title="取消引用"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
             </div>
             <div class="chat-input">
               <button class="chat-input-btn" title="图片" onclick="document.getElementById('chat-img-file').click()">
@@ -1726,7 +1730,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <button class="btn btn-ghost" style="width:100%;margin-bottom:16px;" onclick="createCardGroup()">
             <svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg> 新建分组
           </button>
-          <input class="input" id="card-search-input" placeholder="🔍 搜索字卡关键词..." oninput="filterCardLib(this.value)" style="margin-bottom:12px;">
+          <input class="input" id="card-search-input" placeholder="搜索字卡关键词..." oninput="filterCardLib(this.value)" style="margin-bottom:12px;">
           <div id="card-groups"></div>
         </div>
       </div>
@@ -1778,7 +1782,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             </div>
             <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">背景图显示位置（人像偏上时选「靠上」）</div>
             <div style="display:flex;gap:8px;margin-top:10px;">
-              <button class="btn-outline btn" style="flex:1;" onclick="document.getElementById('bg-file').click()">📷 上传背景图</button>
+              <button class="btn-outline btn" style="flex:1;" onclick="document.getElementById('bg-file').click()"><svg class="i i-sm"><use href="#icon-image"/></svg> 上传背景图</button>
               <input type="file" accept="image/*" id="bg-file" class="hide" onchange="uploadBg(this)">
               <button class="btn-outline btn" onclick="resetBg()">重置</button>
             </div>
@@ -1801,7 +1805,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <div class="storage-stat"><div class="storage-stat-val" id="ss-size">0</div><div class="storage-stat-label">数据约(MB)</div></div>
           </div>
           <div style="font-size:12px;color:var(--text-secondary);">存储方式：IndexedDB（本地浏览器存储）</div>
-          <div class="storage-warning">⚠️ 数据过大时导出可能卡顿，请耐心等待或按范围分开导出。</div>
+          <div class="storage-warning"><svg class="i i-sm"><use href="#icon-warning"/></svg> 数据过大时导出可能卡顿，请耐心等待或按范围分开导出。</div>
         </div>
 
         <div class="cs-card" style="margin:0 16px 16px;">
@@ -1879,7 +1883,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 
 <!-- ========== 图片预览 ========== -->
 <div class="img-preview hide" id="img-preview" onclick="closeImgPreview()">
-  <button class="img-preview-close" onclick="closeImgPreview()">✕</button>
+  <button class="img-preview-close" onclick="closeImgPreview()"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
   <img id="img-preview-img" src="" alt="">
 </div>
 

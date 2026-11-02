@@ -192,7 +192,7 @@ export function showModal(title, bodyHtml, buttons) {
     `<button class="btn ${b.cls||''}" onclick="window._modalBtns[${i}] && window._modalBtns[${i}]()">${escapeHtml(b.label)}</button>`
   ).join('');
   m.innerHTML = `<div class="modal">
-    <div class="modal-header"><span>${escapeHtml(title||'')}</span><button class="close-btn" onclick="closeModal()">✕</button></div>
+    <div class="modal-header"><span>${escapeHtml(title||'')}</span><button class="close-btn" onclick="closeModal()"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>
     <div class="modal-body">${bodyHtml||''}</div>
     <div class="modal-footer">${btns}</div>
   </div>`;

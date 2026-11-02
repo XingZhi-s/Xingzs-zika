@@ -329,7 +329,7 @@ export async function restoreCallState() {
           cc.missedCalls = cc.missedCalls || [];
           cc.missedCalls.push(now());
           cc.messages.push({
-            id: uid(), from:'other', type:'text', content: `📞 ${name}（未接来电）`,
+            id: uid(), from:'other', type:'text', content: `${name}（未接来电）`,
             time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
           });
           cc.unread = (cc.unread||0)+1;
@@ -455,7 +455,7 @@ export async function showIncomingCall(c, type='voice') {
     c.missedCalls = c.missedCalls || [];
     c.missedCalls.push(now());
     c.messages.push({
-      id: uid(), from:'other', type:'text', content: `📞 ${c.name}（未接来电）`,
+      id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
       time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
     });
     c.unread = (c.unread||0)+1;
@@ -487,7 +487,7 @@ export async function showIncomingCall(c, type='voice') {
         cc.missedCalls = cc.missedCalls || [];
         cc.missedCalls.push(now());
         cc.messages.push({
-          id: uid(), from:'other', type:'text', content: `📞 ${c.name}（未接来电）`,
+          id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
           time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
         });
         cc.unread = (cc.unread||0)+1;

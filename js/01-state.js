@@ -93,7 +93,7 @@ export const DIY_SECTIONS = {
       { key: 'img_send',     label: '发送按钮图标', type: 'image' },
       { key: 'img_smile',    label: '表情按钮图标', type: 'image' },
       { key: 'img_image',    label: '图片按钮图标', type: 'image' },
-      { key: 'img_menu',     label: '聊天菜单(☰)图标', type: 'image' },
+      { key: 'img_menu',     label: '聊天菜单图标', type: 'image' },
       { key: 'img_phone',    label: '电话按钮图标', type: 'image' },
       { key: 'img_video',    label: '视频按钮图标', type: 'image' },
     ]

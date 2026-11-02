@@ -575,8 +575,8 @@ export function openChoice() {
     <div class="form-row">
       <label class="form-label">选项（至少2个）</label>
       <div id="cw-opts">
-        <div class="choice-opt"><input class="input" type="text" placeholder="A"><button onclick="this.parentNode.remove()">✕</button></div>
-        <div class="choice-opt"><input class="input" type="text" placeholder="B"><button onclick="this.parentNode.remove()">✕</button></div>
+        <div class="choice-opt"><input class="input" type="text" placeholder="A"><button onclick="this.parentNode.remove()"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>
+        <div class="choice-opt"><input class="input" type="text" placeholder="B"><button onclick="this.parentNode.remove()"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>
       </div>
       <button class="btn-outline btn" style="width:100%;margin-top:8px;" onclick="addChoiceOpt()">＋ 添加选项</button>
     </div>
@@ -596,7 +596,7 @@ export function openChoice() {
 export function addChoiceOpt() {
   const div = document.createElement('div');
   div.className = 'choice-opt';
-  div.innerHTML = `<input class="input" type="text"><button onclick="this.parentNode.remove()">✕</button>`;
+  div.innerHTML = `<input class="input" type="text"><button onclick="this.parentNode.remove()"><svg class="i i-sm"><use href="#icon-close"/></svg></button>`;
   $('cw-opts').appendChild(div);
 }
 
@@ -613,7 +613,7 @@ export async function renderAnniversaryPanel(cid) {
     const r = countdownAnniversary(a.date);
     let cls = 'anni-countdown', txt = '';
     if (r) {
-      if (r.todayIsOrigin) { cls += ' anni-today'; txt = '🎉 就是今天'; }
+      if (r.todayIsOrigin) { cls += ' anni-today'; txt = '就是今天'; }
       else if (r.diff > 0) txt = `还有${r.diff}天`;
       else { cls += ' anni-past'; txt = `已过${Math.abs(r.diff)}天`; }
     }

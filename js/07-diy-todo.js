@@ -248,7 +248,7 @@ export function diyItemHTML(it, thm) {
     const val = thm[it.key];
     const isImage = val && /^data:image|^https?:/.test(String(val));
     html += `<div class="diy-img-row" style="margin-top:10px;">`;
-    if (isImage) html += `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(val)}')"><button class="x" onclick="resetDIYItem('${it.key}')" title="清除">✕</button></div>`;
+    if (isImage) html += `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(val)}')"><button class="x" onclick="resetDIYItem('${it.key}')" title="清除"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>`;
     html += `<button class="btn-outline btn" onclick="pickDIYImage('${it.key}')"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-upload"/></svg> ${isImage ? '更换图片' : '上传图片'}</button>`;
     if (isImage) html += `<button class="btn-outline btn" onclick="resetDIYItem('${it.key}')"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-trash"/></svg> 清除当前</button>`;
     if (it.type === 'image+color') html += `<div style="font-size:12px;color:#8696b1;margin-left:6px;">支持纯色或图片，两者同时存在时以图片为准</div>`;
@@ -365,13 +365,13 @@ export async function renderDiyPage() {
         ${decoCount ? `<button class="btn-outline btn" onclick="openDecoEditor()"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-maximize"/></svg> 编辑位置与大小</button>
         <button class="btn-outline btn" onclick="clearHomeDecos()"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-trash"/></svg> 全部清除</button>` : ''}
       </div>
-      ${decoCount ? `<div class="deco-thumbs">${(thm.homeDecos || []).map(d => `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(d.src)}')"><button class="x" onclick="deleteHomeDeco('${d.id}')" title="删除">✕</button></div>`).join('')}</div>` : ''}
-      <div class="deco-edit-tip">上传后点「<b>编辑位置与大小</b>」进入全屏编辑：拖动调整位置 · 双指（或滚轮）缩放大小 · <b>双击固定/取消固定</b>；缩略图右上 ✕ 删除单张。</div>
+      ${decoCount ? `<div class="deco-thumbs">${(thm.homeDecos || []).map(d => `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(d.src)}')"><button class="x" onclick="deleteHomeDeco('${d.id}')" title="删除"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>`).join('')}</div>` : ''}
+      <div class="deco-edit-tip">上传后点「<b>编辑位置与大小</b>」进入全屏编辑：拖动调整位置 · 双指（或滚轮）缩放大小 · <b>双击固定/取消固定</b>；缩略图右上角可删除单张。</div>
     </div>
     <div class="diy-block">
       <div class="diy-block-title"><span>头部卡图片（首页顶部横幅，也可直接点首页顶部区域上传）</span></div>
       <div class="diy-img-row">
-        ${hasBanner ? `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(thm.homeBanner)}')"><button class="x" onclick="resetDIYItem('homeBanner')" title="清除">✕</button></div>` : ''}
+        ${hasBanner ? `<div class="diy-preview-chip" style="background-image:url('${escapeAttr(thm.homeBanner)}')"><button class="x" onclick="resetDIYItem('homeBanner')" title="清除"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>` : ''}
         <button class="btn-outline btn" onclick="uploadHomeBanner()"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-upload"/></svg> ${hasBanner ? '更换图片' : '上传图片'}</button>
       </div>
     </div>`, '仅手机端');
@@ -921,7 +921,7 @@ export async function doExport() {
     a.download = `字卡传讯备份_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${scopes.join('-')}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast(`✅ 已导出 (${estimateSizeMB(str)} MB)`);
+    toast(`已导出 (${estimateSizeMB(str)} MB)`);
   } catch(e) {
     console.error(e);
     toast('导出失败：' + e.message);
@@ -933,7 +933,7 @@ export async function doImport(input) {
   if (!input.files || !input.files.length) return;
   const file = input.files[0];
   input.value = '';
-  if (!confirm(`⚠️ 即将从「${file.name}」恢复数据。\n导入将按文件实际包含的范围，覆盖现有对应数据（联系人的字卡、表情包、聊天记录，我的表情包、主题等）。\n是否继续？`)) return;
+  if (!confirm(`即将从「${file.name}」恢复数据。\n导入将按文件实际包含的范围，覆盖现有对应数据（联系人的字卡、表情包、聊天记录，我的表情包、主题等）。\n是否继续？`)) return;
   toast('正在解析，请稍候…');
   try {
     // 分片读：用FileReader读为text，然后用setTimeout切片解析（虽然大部分情况一次性即可，但按需求实现分片）
@@ -1048,7 +1048,7 @@ export async function doImport(input) {
       if (isNew) addContact++; else updContact++;
     }
     summary.push(`联系人：新增${addContact}个，更新${updContact}个`);
-    toast('✅ 导入成功：' + summary.join('；'));
+    toast('导入成功：' + summary.join('；'));
     renderMeBrief();
     renderContacts();
     renderStorageStats();

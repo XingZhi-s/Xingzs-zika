@@ -158,7 +158,7 @@ export async function runCatchUp() {
                 c.missedCalls = c.missedCalls || [];
                 c.missedCalls.push(slot.time);
                 c.messages.push({
-                  id: uid(), from:'other', type:'text', content: `📞 ${c.name}（未接来电）`,
+                  id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
                   time: slot.time, replyTo: null, snapshot: null,
                   read: true, readAt: slot.time, replyAt: 0, replied: true
                 });
@@ -184,7 +184,7 @@ export async function runCatchUp() {
           c.letters.push(letter);
           c.settings.nextLetterAt = null;
           c.messages.push({
-            id: uid(), from: 'other', type: 'text', content: '✉️ Ta 寄来了一封信，快去信箱看看吧。',
+            id: uid(), from: 'other', type: 'text', content: 'Ta 寄来了一封信，快去信箱看看吧。',
             time: t, replyTo: null, snapshot: null, read: true, readAt: t, replyAt: 0, replied: true
           });
           c.unread = (c.unread || 0) + 1;

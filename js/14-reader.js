@@ -61,7 +61,7 @@ export async function renderReaderShelf() {
     const pct = b.pages.length > 1 ? Math.round(p / (b.pages.length - 1) * 100) : 0;
     const noteCnt = notes.filter(n => n.bookId === b.id).length;
     return `<div class="reader-book-card" onclick="openReaderBook('${b.id}')">` +
-      `<div class="reader-book-cover">📖</div>` +
+      `<div class="reader-book-cover"><svg class="i" style="width:22px;height:22px;stroke:#fff;"><use href="#icon-book"/></svg></div>` +
       `<div class="reader-book-info">` +
       `<div class="reader-book-title">${escapeHtml(b.title)}</div>` +
       `<div class="reader-book-meta">共 ${b.pages.length} 页 · 读到 ${pct}%${noteCnt ? ` · ${noteCnt} 条笔记` : ''}</div>` +
@@ -200,7 +200,7 @@ export function readerOpenNote() {
   hideSelMenu();
   const quote = _selQuote;
   if (!quote || !_book) return;
-  showModal('✍️ 写笔记',
+  showModal('写笔记',
     `<div class="reader-quote-box">${escapeHtml(quote)}</div>` +
     `<textarea class="textarea" id="reader-note-input" rows="4" placeholder="写下你的想法…" style="resize:none;line-height:1.6;"></textarea>`,
     [

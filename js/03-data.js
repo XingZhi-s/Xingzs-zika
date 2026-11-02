@@ -221,7 +221,7 @@ export function getNearestAnniversary(list) {
     if (r.diff < min) { min = r.diff; nearest = { ...a, diff: r.diff, today: r.todayIsOrigin }; }
   }
   if (!nearest) return null;
-  const t = nearest.today ? '🎉 就是今天' : (nearest.diff === 0 ? '🎉 就是今天' : (nearest.diff > 0 ? `还有${nearest.diff}天` : `已过${Math.abs(nearest.diff)}天`));
+  const t = nearest.today ? '就是今天' : (nearest.diff === 0 ? '就是今天' : (nearest.diff > 0 ? `还有${nearest.diff}天` : `已过${Math.abs(nearest.diff)}天`));
   return { name: nearest.name, text: `${escapeHtml(nearest.name)} · ${t}` };
 }
 

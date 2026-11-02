@@ -38,7 +38,7 @@ export async function renderMyStickersGrid() {
   if (!list.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有表情包，点击右上角 ＋ 添加</div>`; return; }
   grid.innerHTML = list.map(s => `<div class="sticker-mgr-item">
     <img src="${escapeHtml(s.data)}" alt="">
-    <button class="del" onclick="deleteMySticker('${escapeHtml(s.id)}')">✕</button>
+    <button class="del" onclick="deleteMySticker('${escapeHtml(s.id)}')"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
     ${s.name ? `<div class="name">${escapeHtml(s.name)}</div>` : ''}
   </div>`).join('');
 }
@@ -295,7 +295,7 @@ export async function renderContactSetting(id) {
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-search"/></svg> 聊天记录</div>
       <div class="cs-card">
-        <button class="btn btn-outline" style="width:100%;" onclick="csSearchChat()">🔍 搜索聊天记录</button>
+        <button class="btn btn-outline" style="width:100%;" onclick="csSearchChat()"><svg class="i i-sm"><use href="#icon-search"/></svg> 搜索聊天记录</button>
       </div>
     </div>
 
@@ -349,7 +349,7 @@ export async function csEditName() {
   }
 }
 export async function csDeleteContact() {
-  if (!confirm('⚠️ 确定删除这个联系人？所有聊天记录、字卡、表情包都将永久删除！')) return;
+  if (!confirm('确定删除这个联系人？所有聊天记录、字卡、表情包都将永久删除！')) return;
   await deleteContact(state.currentContactSettingId);
   toast('已删除');
   state.currentContactSettingId = null;
@@ -588,7 +588,7 @@ export async function renderCardLib() {
   box.innerHTML = groups.map(g => {
     const count = (g.cards||[]).length;
     const cardsHtml = (g.cards||[]).map(card => `<div class="card-item" onclick="editCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')">
-      <button class="del" onclick="event.stopPropagation();deleteCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')">✕</button>
+      <button class="del" onclick="event.stopPropagation();deleteCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
       <div class="multi-ellipsis">${escapeHtml(card.content)}</div>
     </div>`).join('');
     return `<div class="group-block" id="grp-${escapeHtml(g.id)}">
@@ -764,7 +764,7 @@ export async function renderStkLibGrid() {
   if (!list.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有表情包</div>`; return; }
   grid.innerHTML = list.map(s => `<div class="sticker-mgr-item">
     <img src="${escapeHtml(s.data)}" alt="">
-    <button class="del" onclick="deleteLibSticker('${escapeHtml(s.id)}','${s._owner}')">✕</button>
+    <button class="del" onclick="deleteLibSticker('${escapeHtml(s.id)}','${s._owner}')"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
     ${s.name ? `<div class="name">${escapeHtml(s.name)}</div>` : ''}
   </div>`).join('');
 }
