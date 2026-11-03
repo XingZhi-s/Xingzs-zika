@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>字卡传讯</title>
+<title>星之匙</title>
 <style>
 /* ========== 全局变量与重置 ========== */
 :root {
@@ -37,14 +37,11 @@ a { text-decoration:none; color:inherit; }
 /* ========== 工具类 ========== */
 .hide { display:none !important; }
 .flex { display:flex; }
-.flex-col { display:flex; flex-direction:column; }
 .center { display:flex; align-items:center; justify-content:center; }
 .between { display:flex; align-items:center; justify-content:space-between; }
 .grow { flex:1; min-height:0; min-width:0; }
 .ellipsis { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .multi-ellipsis { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.pad-16 { padding:16px; }
-.mb-12 { margin-bottom:12px; }
 .btn { background:var(--theme-color); color:#fff; border-radius:8px; padding:10px 20px; font-weight:500; min-height:44px; }
 .btn-ghost { background:var(--theme-light); color:var(--theme-color); }
 .btn-danger { background:var(--danger); color:#fff; }
@@ -57,7 +54,6 @@ a { text-decoration:none; color:inherit; }
 .section-title { font-size:13px; color:var(--text-secondary); margin-bottom:8px; font-weight:500; }
 .empty { text-align:center; padding:60px 20px; color:var(--text-secondary); }
 .avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; background:#e5e7eb; flex-shrink:0; }
-.avatar-lg { width:80px; height:80px; border-radius:50%; object-fit:cover; }
 .badge { display:inline-block; min-width:8px; height:8px; border-radius:50%; background:var(--danger); margin-left:4px; }
 .status-dot { width:8px; height:8px; border-radius:50%; background:var(--success); margin-right:4px; display:inline-block; }
 .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -198,8 +194,6 @@ a { text-decoration:none; color:inherit; }
 .i-lg { width:24px; height:24px; }
 .i-xl { width:28px; height:28px; }
 .i-sm { width:16px; height:16px; }
-.i-solid { fill:currentColor; stroke:none; }
-
 /* ========== 主体布局：手机版 ========== */
 .app { height:100vh; display:flex; flex-direction:column; background:var(--theme-bg-light); }
 /* 内容包装容器约束（手机端也生效）：让 .main 的 flex:1 生效，长页面在 .page 内部滚动而非撑破布局 */
@@ -272,21 +266,9 @@ a { text-decoration:none; color:inherit; }
     min-height: 100dvh;
     box-sizing: border-box;
   }
-  #page-love .top-bar {
-    background: transparent; box-shadow:none; border:none;
-    padding: 14px clamp(16px, 5vw, 22px) 8px;
-  }
-  #page-love .top-bar-title { font-size: 17px; font-weight: 700; color: var(--theme-color); letter-spacing: 2px; }
-  #page-love .top-bar-btn {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--theme-color); border:none;
-    display:flex; align-items:center; justify-content:center;
-    box-shadow: 0 3px 10px rgba(150,180,225,0.35);
-  }
-  #page-love .top-bar-btn svg { width:17px; height:17px; stroke:#fff; }
   .love-contacts-body { padding: 4px clamp(12px, 4vw, 20px); display:flex; flex-direction:column; gap:10px; }
-  .love-contacts-body .contact-card { background:#fff; border-radius:18px; box-shadow:0 3px 14px rgba(160,185,225,0.14); }
-  .love-contacts-body .empty { padding: 40px 0; text-align:center; color:#9db0cc; font-size:13px; }
+  .love-contacts-body .contact-card { background:var(--card-bg); border-radius:18px; box-shadow:var(--shadow); }
+  .love-contacts-body .empty { padding: 40px 0; text-align:center; color:var(--text-secondary); font-size:13px; }
 }
 .home-deco-layer { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index: 5; }
 .home-deco-layer .deco-sticker { position:absolute; user-select:none; touch-action:none; pointer-events:auto; }
@@ -325,7 +307,7 @@ a { text-decoration:none; color:inherit; }
 }
 /* 第二页占位图标（淡灰底，无交互） */
 .app-cell.placeholder { cursor: default; opacity: .55; }
-.app-cell.placeholder .app-tile { background: rgba(0,0,0,0.06); box-shadow: none; }
+.app-cell.placeholder .app-tile { background: var(--theme-light); box-shadow: none; }
 .page-2-top-area { flex-shrink: 0; }
 
 /* 底部分页小圆点 */
@@ -355,7 +337,7 @@ a { text-decoration:none; color:inherit; }
 
 /* 美化页区块三：气泡预览区（复用真实 .msg-row / .msg-bubble 结构，让自定义代码实时生效） */
 .bubble-preview {
-  background: #f7fafd; border: 1px dashed #cfdff2; border-radius: 16px;
+  background: var(--theme-bg-light); border: 1px dashed var(--border-color); border-radius: 16px;
   padding: 8px 2px; margin-bottom: 4px; overflow: hidden;
 }
 .bubble-preview .msg-row { padding: 5px 10px; }
@@ -532,11 +514,13 @@ a { text-decoration:none; color:inherit; }
 }
 .app-tile:active { transform: scale(0.92); }
 .app-tile svg { width: 44%; height: 44%; stroke: #fff; }
-.app-tile.ph { cursor: default; background: #d3e1f3; box-shadow: none; }
+.app-tile.ph { cursor: default; background: var(--theme-light); box-shadow: none; }
 .app-tile.ph::before {
   content: ''; display:block;
   width: 44%; height: 44%;
-  background: repeating-linear-gradient(45deg, #eaf2ff 0 6px, #dfeafb 6px 12px);
+  background: repeating-linear-gradient(45deg,
+    color-mix(in srgb, var(--theme-color) 22%, #ffffff) 0 6px,
+    color-mix(in srgb, var(--theme-color) 34%, #ffffff) 6px 12px);
   border-radius: 12%;
 }
 .app-tile.ph:active { transform: none; }
@@ -562,10 +546,6 @@ a { text-decoration:none; color:inherit; }
 .mood-emoji-row { display:flex; flex-wrap:wrap; gap:8px; }
 .mood-emoji-btn { font-size:22px; min-height:40px; min-width:40px; border-radius:10px; border:2px solid transparent; background:var(--bg-color); }
 .mood-emoji-btn.sel { border-color:var(--theme-color); background:var(--theme-light); }
-.mood-view-card { text-align:center; padding:8px 0; }
-.mood-view-card .mv-emoji { font-size:44px; }
-.mood-view-card .mv-text { margin-top:10px; font-size:14px; line-height:1.6; }
-.mood-view-card .mv-time { margin-top:8px; font-size:12px; color:var(--text-secondary); }
 /* 心情时间线 */
 .mood-tl-title { font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:8px; }
 .mood-tl-empty { font-size:13px; color:var(--text-secondary); text-align:center; padding:18px 0; }
@@ -576,14 +556,14 @@ a { text-decoration:none; color:inherit; }
 .mood-tl-item .tl-text { font-size:13px; line-height:1.5; color:var(--text-primary); word-break:break-word; }
 /* 心情日历 · 抽屉式联系人菜单 */
 .mood-drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:960; }
-.mood-drawer-panel { position:absolute; top:0; right:0; bottom:0; width:250px; background:var(--card-bg); box-shadow:-4px 0 18px rgba(0,0,0,.14); display:flex; flex-direction:column; padding:16px 10px; overflow-y:auto; animation:moodDrawerIn .25s ease; }
-@keyframes moodDrawerIn { from { transform:translateX(100%); } to { transform:translateX(0); } }
+.mood-drawer-panel { position:absolute; top:0; left:0; right:auto; bottom:0; width:250px; background:var(--card-bg); box-shadow:4px 0 18px rgba(0,0,0,.14); display:flex; flex-direction:column; padding:16px 10px; overflow-y:auto; animation:moodDrawerInLeft .25s ease; }
+@keyframes moodDrawerInLeft { from { transform:translateX(-100%); } to { transform:translateX(0); } }
 .mood-drawer-title { font-size:13px; color:var(--text-secondary); padding:2px 10px 10px; flex-shrink:0; }
 .mood-drawer-item { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border-radius:12px; border:none; background:transparent; text-align:left; min-height:0; }
 .mood-drawer-item:active { background:var(--bg-color); }
 .mood-drawer-item.sel { background:var(--theme-light); }
 .mood-drawer-item img { width:36px; height:36px; border-radius:50%; object-fit:cover; flex-shrink:0; }
-.mood-drawer-item .md-name { font-size:14px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mood-drawer-item .md-name { flex:1; min-width:0; font-size:14px; color:var(--text-primary); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mood-drawer-item.sel .md-name { color:var(--theme-color); font-weight:600; }
 .insp-input-bar { display:flex; gap:8px; padding:12px 14px; background:var(--card-bg); border-bottom:1px solid var(--border-color); flex-shrink:0; }
 .insp-input-bar .input { flex:1; }
@@ -633,11 +613,6 @@ a { text-decoration:none; color:inherit; }
 }
 .dv-back { background:var(--card-bg); border:1px solid var(--border-color); transform:rotateY(180deg); padding:0; justify-content:center; overflow:hidden; }
 .dv-back-name { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:8px; font-size:13px; font-weight:600; text-align:center; }
-.dv-pos { font-size:11px; color:var(--text-secondary); }
-.dv-name { font-size:13px; font-weight:600; margin-top:2px; display:flex; align-items:center; gap:4px; }
-.dv-ori { font-size:10px; padding:1px 5px; border-radius:6px; font-weight:400; }
-.dv-ori.up { background:#e8f8ef; color:#0f9d58; }
-.dv-ori.rev { background:#fdeaea; color:#ef4444; }
 /* 牌面图片（翻转后卡面只显示图片，强制铺满统一尺寸；塔罗逆位只旋转图片） */
 .dv-card-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:10px; z-index:1; }
 .dv-card-img.is-rev { transform:rotate(180deg); }
@@ -664,25 +639,25 @@ a { text-decoration:none; color:inherit; }
 /* ========== 阅读器（本地 TXT 分页渲染 + 划词笔记） ========== */
 .reader-shelf { flex:1; min-height:0; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
 .reader-book-card { display:flex; align-items:center; gap:12px; background:var(--card-bg); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; cursor:pointer; }
-.reader-book-cover { width:44px; height:58px; border-radius:6px; background:linear-gradient(135deg,#a8c0a0,#7fae9b); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; box-shadow:0 2px 6px rgba(127,174,155,0.3); }
+.reader-book-cover { width:44px; height:58px; border-radius:6px; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 62%, #ffffff), var(--theme-color)); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; box-shadow:var(--shadow); }
 .reader-book-info { flex:1; min-width:0; }
 .reader-book-title { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .reader-book-meta { font-size:12px; color:var(--text-secondary); margin-top:4px; }
 .reader-book-del { width:36px; height:36px; min-width:36px; min-height:36px; border-radius:8px; background:#fee2e2; flex-shrink:0; }
 /* 阅读视图：护眼底色 + 宽松行距，内容区独立滚动 */
 .reader-reading { flex:1; min-height:0; display:flex; flex-direction:column; }
-.reader-content { flex:1; min-height:0; overflow-y:auto; padding:20px 18px; background:#f7f5ee; color:#3d3a32; font-size:16px; line-height:1.9; white-space:pre-wrap; word-break:break-word; user-select:text; -webkit-user-select:text; }
+.reader-content { flex:1; min-height:0; overflow-y:auto; padding:20px 18px; background:var(--theme-bg-light); color:var(--text-primary); font-size:16px; line-height:1.9; white-space:pre-wrap; word-break:break-word; user-select:text; -webkit-user-select:text; }
 .reader-pager { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--card-bg); border-top:1px solid var(--border-color); }
 .reader-pager .btn { min-height:38px; padding:6px 18px; font-size:13px; flex:0 0 auto; }
 .reader-pager .btn[disabled] { opacity:0.35; pointer-events:none; }
 .reader-page-info { font-size:13px; color:var(--text-secondary); }
 /* 护眼下划线高亮（划词笔记标记，点击查看） */
-.reader-highlight { border-bottom:2px dashed #7fae9b; cursor:pointer; background:transparent; color:inherit; padding:0; }
+.reader-highlight { border-bottom:2px dashed var(--theme-color); cursor:pointer; background:transparent; color:inherit; padding:0; }
 /* 划词浮出小菜单 */
 .reader-sel-menu { position:fixed; z-index:9500; background:#2a3a56; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.25); }
 .reader-sel-menu button { color:#fff; font-size:13px; padding:8px 14px; min-height:36px; min-width:0; white-space:nowrap; }
 /* 笔记弹窗里的原文引用块 */
-.reader-quote-box { background:#f7f5ee; border-left:3px solid #7fae9b; padding:10px 12px; border-radius:6px; font-size:13px; line-height:1.7; color:#4a463c; margin-bottom:12px; max-height:140px; overflow-y:auto; white-space:pre-wrap; }
+.reader-quote-box { background:var(--theme-light); border-left:3px solid var(--theme-color); padding:10px 12px; border-radius:6px; font-size:13px; line-height:1.7; color:var(--text-primary); margin-bottom:12px; max-height:140px; overflow-y:auto; white-space:pre-wrap; }
 
 /* love页（联系人列表页）联系人卡片继承全局contact-card样式，仅容器微调 */
 .love-contacts-body .contact-card-time { color: #b3c2d8; font-size: 11px; }
@@ -692,6 +667,10 @@ a { text-decoration:none; color:inherit; }
 .diy-page-section { margin-bottom: 20px; }
 .diy-page-sec-title { font-size: 13px; font-weight: 700; color: #7f96b8; margin: 4px 2px 8px; letter-spacing: 1px; }
 .diy-page-desc { font-size: 12px; color: #9db0cc; margin-bottom: 10px; line-height: 1.6; }
+/* 全局字号滑块 */
+.diy-range { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; background:var(--theme-light); outline:none; margin:10px 0 6px; }
+.diy-range::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:var(--theme-color); box-shadow:0 1px 5px rgba(0,0,0,.25); cursor:pointer; }
+.diy-range::-moz-range-thumb { width:22px; height:22px; border:none; border-radius:50%; background:var(--theme-color); box-shadow:0 1px 5px rgba(0,0,0,.25); cursor:pointer; }
 /* 美化页 pc/mobile 模式切换Pill */
 .diy-mode-switch {
   display: flex; align-items: center;
@@ -727,7 +706,7 @@ a { text-decoration:none; color:inherit; }
 }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不再写死浅蓝渐变，改为透明以继承全局背景（聊天背景由 applyChatBg 行内 !important 独占） */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-contact-setting-list, #page-diy {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search {
     background: transparent;
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -854,7 +833,6 @@ a { text-decoration:none; color:inherit; }
   }
   .bottom-nav { display:none; }
   .main { padding-bottom:0; flex:1; min-height:0; overflow:hidden; }
-  .bottom-nav-pages { display:flex; flex-direction:column; height:100%; }
   .content-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
   .page { padding-bottom:0; }
   .chat-header-back { display:none; }
@@ -872,11 +850,6 @@ a { text-decoration:none; color:inherit; }
 .empty-chat.show { display:flex; }
 .empty-chat svg { width:72px; height:72px; opacity:0.3; }
 .empty-chat p { font-size:15px; }
-@media (min-width: 900px) {
-  .page-chat-only { display:none; }
-  .page-chat-only.show { display:flex; }
-}
-
 /* ========== 顶部栏 ========== */
 .top-bar { position:sticky; top:0; background:var(--card-bg); border-bottom:1px solid var(--border-color); padding:0 12px; height:54px; display:flex; align-items:center; z-index:10; }
 .top-bar-title { font-weight:600; font-size:16px; }
@@ -885,16 +858,13 @@ a { text-decoration:none; color:inherit; }
 
 /* ========== LOVE 页 - 联系人列表 ========== */
 .contact-card { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; position:relative; border-bottom:1px solid var(--border-color); background:var(--card-bg); }
-.contact-card:hover { background:#f9fafb; }
+.contact-card:hover { background:var(--theme-light); }
 .contact-card-info { flex:1; min-width:0; }
 .contact-card-name { font-weight:600; font-size:15px; display:flex; align-items:center; gap:6px; }
 .contact-card-status { font-size:12px; color:var(--text-secondary); display:flex; align-items:center; }
 .contact-card-preview { font-size:13px; color:var(--text-secondary); margin-top:2px; }
 .contact-card-time { font-size:11px; color:var(--text-secondary); }
 .contact-card-anni { font-size:11px; color:var(--theme-color); margin-top:2px; }
-.contact-card .badge-pos { position:absolute; top:12px; right:16px; }
-
-.new-contact-btn { margin:16px; }
 
 /* ========== 聊天界面 ========== */
 .chat-page { display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
@@ -908,7 +878,7 @@ a { text-decoration:none; color:inherit; }
 .chat-header-actions .top-bar-btn { width:40px; height:40px; display:flex; align-items:center; justify-content:center; }
 
 .chat-messages { flex:1; overflow-y:auto; padding:16px 12px; display:flex; flex-direction:column; gap:10px; min-height:0; position:relative; z-index:1; }
-.msg-row { display:flex; max-width:100%; align-items:flex-end; gap:8px; padding:6px 12px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.msg-row { display:flex; max-width:100%; align-items:flex-start; gap:8px; padding:6px 12px; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
 .msg-row.me { justify-content:flex-end; }
 .msg-row.other { justify-content:flex-start; }
 .msg-wrap { max-width:calc(100% - 48px - 12px); display:flex; flex-direction:column; gap:4px; }
@@ -1023,7 +993,6 @@ a { text-decoration:none; color:inherit; }
 .letter-time { position:absolute; top:16px; right:16px; font-size:11px; color:var(--text-secondary); }
 
 .letter-compose { padding:16px; display:flex; flex-direction:column; gap:14px; }
-.recipient-select { background:#f9fafb; border:1px solid var(--border-color); border-radius:8px; padding:12px; }
 
 .letter-detail { padding:0; background:transparent; line-height:1.8; font-size:15px; }
 /* 精美信纸 */
@@ -1037,11 +1006,6 @@ a { text-decoration:none; color:inherit; }
 .letter-paper .lp-sign { margin-top:18px; text-align:right; font-size:14px; }
 
 /* ========== ME 页 ========== */
-.me-header { padding:24px 20px; background:linear-gradient(135deg, var(--theme-color), var(--theme-light)); color:#fff; display:flex; align-items:center; gap:16px; }
-.me-info { flex:1; }
-.me-name { font-size:20px; font-weight:700; margin-bottom:4px; }
-.me-subtitle { opacity:0.9; font-size:13px; }
-
 .setting-list { padding:10px 0; }
 .setting-item { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; cursor:pointer; background:var(--card-bg); border-bottom:1px solid var(--border-color); }
 .setting-item:hover { background:#f9fafb; }
@@ -1062,8 +1026,6 @@ a { text-decoration:none; color:inherit; }
 .bg-swatch { aspect-ratio:4/3; border-radius:8px; cursor:pointer; border:2px solid transparent; }
 .bg-swatch.selected { border-color:var(--text-primary); }
 
-.storage-bar { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin:8px 0; }
-.storage-fill { height:100%; background:var(--theme-color); border-radius:4px; }
 .storage-warning { background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:10px 12px; color:#92400e; font-size:13px; margin-top:10px; }
 .storage-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; }
 .storage-stat { background:#f9fafb; border-radius:8px; padding:10px; text-align:center; }
@@ -1076,12 +1038,40 @@ a { text-decoration:none; color:inherit; }
 .export-opt input { width:18px; height:18px; }
 
 /* ========== 联系人设置页 ========== */
-.cs-section { margin-bottom:20px; }
+.cs-section { margin-bottom:20px; border-radius:12px; transition:box-shadow .2s; }
+.cs-section.cs-flash { animation:csFlash .9s ease; }
+@keyframes csFlash {
+  0%, 100% { box-shadow:0 0 0 0 rgba(0,0,0,0); }
+  25%, 75% { box-shadow:0 0 0 3px var(--theme-color); }
+}
+.cs-search-bar { display:flex; align-items:center; gap:8px; margin:-6px 0 18px; padding:8px 12px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; box-shadow:var(--shadow); }
+.cs-search-input { flex:1; min-width:0; border:none; background:transparent; font-size:14px; color:var(--text-primary); }
 .cs-card { background:var(--card-bg); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
 .cs-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; }
 .cs-row + .cs-row { border-top:1px solid var(--border-color); }
 .cs-label { color:var(--text-secondary); flex-shrink:0; }
 .cs-value { flex:1; text-align:right; word-break:break-all; }
+
+/* ========== 独立聊天记录查询页 ========== */
+.chat-search-input {
+  flex:1; min-width:0; margin-left:8px; height:36px; padding:0 12px;
+  border:1px solid var(--border-color); border-radius:10px;
+  background:var(--bg-color); color:var(--text-primary);
+  font-size:13px; outline:none; -webkit-appearance:none; appearance:none;
+}
+.chat-search-input::-webkit-search-cancel-button { cursor:pointer; }
+.chat-search-body { flex:1; min-height:0; overflow-y:auto; padding:12px 14px calc(var(--nav-height) + 24px); }
+.chat-search-tip { font-size:12px; color:var(--text-secondary); margin-bottom:8px; line-height:1.5; }
+.chat-search-empty { text-align:center; color:var(--text-secondary); font-size:13px; padding:36px 0; }
+.chat-search-row {
+  background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px;
+  padding:10px 12px; margin-bottom:8px;
+}
+.chat-search-row.me { border-left:3px solid var(--theme-color); }
+.chat-search-row .csr-meta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--text-secondary); margin-bottom:4px; }
+.chat-search-row .csr-name { font-weight:600; color:var(--text-primary); }
+.chat-search-row.me .csr-name { color:var(--theme-color); }
+.chat-search-row .csr-text { font-size:13px; line-height:1.6; color:var(--text-primary); word-break:break-word; white-space:pre-wrap; }
 
 .status-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; }
 .status-item + .status-item { border-top:1px solid var(--border-color); }
@@ -1114,7 +1104,7 @@ a { text-decoration:none; color:inherit; }
 .sticker-mgr-item .del { position:absolute; top:4px; right:4px; background:rgba(239,68,68,0.9); color:#fff; width:24px; height:24px; border-radius:50%; font-size:14px; display:flex; align-items:center; justify-content:center; min-width:24px; min-height:24px; }
 .sticker-mgr-item .name { position:absolute; bottom:0; left:0; right:0; padding:4px 6px; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; }
 
-/* ========== 帮我选择 ========== */
+/* ========== 选择 ========== */
 .choice-opt { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .choice-opt input { flex:1; }
 .choice-opt button { width:36px; height:36px; min-width:36px; min-height:36px; border-radius:8px; background:#fee2e2; color:var(--danger); font-size:16px; }
@@ -1132,18 +1122,17 @@ a { text-decoration:none; color:inherit; }
 /* ========== 通话界面 ========== */
 .call-screen { position:fixed; inset:0; z-index:500; background:linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color:#fff; display:flex; flex-direction:column; align-items:center; padding:40px 20px; }
 @media (max-width: 899px) {
-  .call-screen.mini { width: auto; min-width: 0; max-width: calc(100vw - 24px); height: 44px; border-radius: 999px; inset: auto; left: 14px; right: auto; bottom: 96px; top: auto; padding: 4px 6px 4px 4px; touch-action: none; box-shadow: 0 8px 24px rgba(110,140,195,0.38), 0 0 0 1px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.3); cursor: grab; display: flex !important; flex-direction: row; align-items: center; gap: 3px; background: linear-gradient(135deg, #9fc0ea 0%, #88b2df 100%); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: callMiniIn .3s ease; }
+  .call-screen.mini { width: auto; min-width: 0; max-width: calc(100vw - 24px); height: 44px; border-radius: 999px; inset: auto; left: 14px; right: auto; bottom: 96px; top: auto; padding: 4px 6px 4px 4px; touch-action: none; box-shadow: 0 8px 24px rgba(110,140,195,0.38), 0 0 0 1px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.3); cursor: grab; display: flex !important; flex-direction: row; align-items: center; gap: 3px; background: linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, transparent) 0%, color-mix(in srgb, var(--theme-color) 88%, transparent) 100%); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: callMiniIn .3s ease; }
   .call-screen.mini:active { cursor: grabbing; }
-  .call-screen.mini .call-top-bar, .call-screen.mini .call-video-placeholder, .call-screen.mini .call-top-row, .call-screen.mini .call-extra-actions, .call-screen.mini .call-name, .call-screen.mini .call-status, .call-screen.mini .call-actions { display: none !important; }
+  .call-screen.mini .call-top-bar, .call-screen.mini .call-video-placeholder, .call-screen.mini .call-extra-actions, .call-screen.mini .call-name, .call-screen.mini .call-status, .call-screen.mini .call-actions { display: none !important; }
   .call-screen.mini .call-avatar-mini { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; border-radius: 50% !important; border: 2px solid #ffffff !important; background: #ffffff; box-shadow: 0 2px 8px rgba(70,110,160,0.28); object-fit: cover; margin: 0 !important; flex-shrink: 0; animation: none !important; }
   .call-screen.mini .call-timer { display: flex !important; align-items: center; justify-content: flex-start; color: #ffffff; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; margin: 0 !important; padding: 0 !important; font-variant-numeric: tabular-nums; line-height: 1 !important; text-shadow: 0 1px 3px rgba(70,110,160,0.25); white-space: nowrap; flex: 0 1 auto; overflow: hidden; }
   .call-screen.mini .call-mic-mini { width: 28px; height: 28px; min-width: 28px; min-height: 28px; border-radius: 50%; background: rgba(255,255,255,0.95); display: flex; align-items: center; justify-content: center; padding: 0; gap: 0; box-shadow: 0 2px 6px rgba(70,110,160,0.2); cursor: pointer; z-index: 2; flex-shrink: 0; }
   .call-screen.mini .call-mic-mini svg { width: 14px; height: 14px; stroke: #7e9bc2; stroke-width: 2.2; flex-shrink: 0; }
   .call-screen.mini .call-mic-mini.off svg { stroke: #e77; }
-  .call-screen.mini .call-mic-mini .mic-lines { display: none !important; }
 }
 @media (min-width: 900px) {
-  .call-screen.mini { width: auto; min-width: 260px; max-width: 420px; height: 58px; border-radius: 999px; inset: auto; right: 24px; bottom: 24px; left: auto; top: auto; padding: 4px 8px 4px 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); cursor: grab; flex-direction: row; align-items: center; gap: 10px; background: linear-gradient(135deg, #22304a 0%, #1a2338 100%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); animation: callMiniIn .3s ease; }
+  .call-screen.mini { width: auto; min-width: 260px; max-width: 420px; height: 58px; border-radius: 999px; inset: auto; right: 24px; bottom: 24px; left: auto; top: auto; padding: 4px 8px 4px 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); cursor: grab; flex-direction: row; align-items: center; gap: 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 78%, transparent) 0%, color-mix(in srgb, var(--theme-color) 92%, transparent) 100%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); animation: callMiniIn .3s ease; }
   .call-screen.mini:active { cursor: grabbing; }
   .call-screen.mini .call-top-bar, .call-screen.mini .call-video-placeholder, .call-screen.mini .call-name, .call-screen.mini .call-extra-actions, .call-screen.mini .call-timer { display: none !important; }
   .call-screen.mini .call-avatar-mini { width: 50px; height: 50px; min-width: 50px; min-height: 50px; margin: 0; border-width: 2px; border-color: #fff; background: #eaf2ff; box-shadow: 0 2px 8px rgba(0,0,0,0.35), 0 0 0 2px rgba(234,242,255,0.5); animation: callAvatarPulse 2s ease-in-out infinite; }
@@ -1224,6 +1213,104 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 ::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.15); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,0.3); }
 
+/* ========== 聊天输入区「＋」工具抽屉（条目由数组驱动） ========== */
+.chat-tool-drawer { position:fixed; inset:0; z-index:700; display:flex; align-items:flex-end; }
+.chat-tool-mask { position:absolute; inset:0; background:rgba(30,50,80,0.32); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+.chat-tool-panel {
+  position:relative; width:100%; max-width:520px; margin:0 auto;
+  border-radius:18px 18px 0 0; padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+  background:color-mix(in srgb, var(--card-bg) 88%, transparent);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 -8px 28px rgba(80,110,170,0.18);
+  animation:chatToolUp .22s ease;
+}
+@keyframes chatToolUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+.chat-tool-title { font-size:12px; color:var(--text-secondary); margin:0 4px 10px; }
+.chat-tool-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.chat-tool-item {
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:12px 4px 8px; border-radius:14px;
+  background:color-mix(in srgb, var(--theme-light) 70%, transparent);
+}
+.chat-tool-item:active { transform:scale(0.96); }
+.chat-tool-item .ct-icon {
+  width:40px; height:40px; border-radius:12px; background:var(--theme-color);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 12px color-mix(in srgb, var(--theme-color) 25%, transparent);
+}
+.chat-tool-item .ct-icon svg { width:18px; height:18px; stroke:#fff; }
+.chat-tool-item .ct-name { font-size:12px; color:var(--text-primary); }
+
+/* ========== 提醒卡片消息（复用聊天卡片容器 .msg-choice） ========== */
+.msg-reminder { border-left:3px solid var(--theme-color); }
+.msg-reminder-head { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--theme-color); }
+.msg-reminder-head svg { width:14px; height:14px; }
+.msg-reminder-text { font-size:14px; line-height:1.55; color:var(--text-primary); white-space:pre-wrap; word-break:break-word; }
+.msg-reminder-meta { font-size:11px; color:var(--text-secondary); }
+.msg-reminder.missed { border-left-color:var(--warning); }
+.msg-reminder.missed .msg-reminder-head { color:var(--warning); }
+.reminder-row { display:flex; align-items:flex-start; gap:10px; padding:12px 12px; border-radius:12px; background:var(--card-bg); border:1px solid var(--border-color); margin-bottom:8px; }
+.reminder-row.done { opacity:0.62; }
+.reminder-row-body { flex:1; min-width:0; }
+.reminder-row-text { font-size:14px; font-weight:600; line-height:1.45; word-break:break-word; }
+.reminder-row-meta { font-size:11px; color:var(--text-secondary); margin-top:4px; }
+.reminder-row-actions { display:flex; gap:6px; flex-shrink:0; }
+.reminder-icon-btn { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:var(--theme-light); color:var(--theme-color); }
+.reminder-icon-btn.del { background:#fee2e2; color:#991b1b; }
+
+/* ========== 音乐页（第二页伪应用入口 → 独立二级界面） ========== */
+.music-body { flex:1; min-height:0; display:flex; flex-direction:column; }
+.music-shelf { flex:1; min-height:0; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+.music-empty { text-align:center; padding:46px 20px; color:var(--text-secondary); font-size:13px; line-height:1.9; }
+.music-empty svg { width:46px; height:46px; opacity:0.4; margin:0 auto 10px; display:block; }
+.music-track {
+  display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer;
+  border-radius:14px; border:1px solid var(--border-color);
+  background:color-mix(in srgb, var(--card-bg) 82%, transparent);
+}
+.music-track.playing { border-color:var(--theme-color); box-shadow:0 0 0 2px color-mix(in srgb, var(--theme-color) 18%, transparent); }
+.music-track-cover {
+  width:42px; height:42px; min-width:42px; border-radius:10px; flex-shrink:0;
+  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, #ffffff), var(--theme-color));
+  display:flex; align-items:center; justify-content:center;
+}
+.music-track-cover svg { width:18px; height:18px; stroke:#fff; }
+.music-track-info { flex:1; min-width:0; }
+.music-track-name { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.music-track-meta { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+.music-track-del { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:#fee2e2; color:#991b1b; flex-shrink:0; }
+.music-player {
+  flex-shrink:0; border-top:1px solid var(--border-color);
+  padding:14px 16px calc(16px + env(safe-area-inset-bottom));
+  background:color-mix(in srgb, var(--card-bg) 86%, transparent);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+.music-now { display:flex; align-items:center; gap:12px; }
+.music-cover {
+  width:54px; height:54px; min-width:54px; border-radius:14px;
+  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, #ffffff), var(--theme-color));
+  display:flex; align-items:center; justify-content:center;
+}
+.music-cover svg { width:22px; height:22px; stroke:#fff; }
+.music-now-info { flex:1; min-width:0; }
+.music-now-title { font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.music-now-sub { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+.music-progress { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:11px; color:var(--text-secondary); }
+.music-progress input { flex:1; }
+.music-progress span { width:38px; text-align:center; font-variant-numeric:tabular-nums; }
+.music-controls { display:flex; align-items:center; justify-content:center; gap:16px; margin-top:4px; position:relative; }
+.music-ctrl { width:44px; height:44px; border-radius:50%; background:var(--theme-light); color:var(--theme-color); }
+.music-ctrl svg { stroke:var(--theme-color); }
+.music-play { width:54px; height:54px; min-width:54px; min-height:54px; border-radius:50%; background:var(--theme-color); box-shadow:0 6px 16px color-mix(in srgb, var(--theme-color) 30%, transparent); }
+.music-play svg { stroke:#fff; width:24px; height:24px; }
+.music-ctrl.on { background:var(--theme-color); }
+.music-ctrl.on svg { stroke:#fff; }
+.music-side { position:absolute; display:flex; align-items:center; gap:6px; }
+.music-side.left { left:0; }
+.music-side.right { right:0; }
+.music-side input[type=range] { width:64px; }
+.music-track.playing .music-track-name { color:var(--theme-color); }
+
 </style>
 </head>
 <body>
@@ -1272,6 +1359,14 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-crystal" viewBox="0 0 24 24"><circle cx="12" cy="10" r="7"/><path d="M9 7.5a4.5 4.5 0 0 1 4-2.5"/><path d="M8.5 21l1-3h5l1 3"/><path d="M6 21h12"/></symbol>
     <symbol id="icon-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="16" rx="2"/><path d="M8 2h11a2 2 0 0 1 2 2v12"/></symbol>
     <symbol id="icon-warning" viewBox="0 0 24 24"><path d="M12 3L2 21h20L12 3z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/></symbol>
+    <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="4"/></symbol>
+    <symbol id="icon-music" viewBox="0 0 24 24"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><line x1="9" y1="18" x2="9" y2="5"/><line x1="21" y1="16" x2="21" y2="3"/><path d="M9 5l12-2"/></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><polygon points="7 4 19 12 7 20 7 4"/></symbol>
+    <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7" y="4" width="4" height="16" rx="1"/><rect x="13" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="icon-prev" viewBox="0 0 24 24"><polygon points="18 4 8 12 18 20 18 4"/><line x1="5" y1="4" x2="5" y2="20"/></symbol>
+    <symbol id="icon-next" viewBox="0 0 24 24"><polygon points="6 4 16 12 6 20 6 4"/><line x1="19" y1="4" x2="19" y2="20"/></symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="icon-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -1371,16 +1466,16 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <!-- 上方留白区（预留做展示卡牌/大装饰） -->
               <div class="page-2-top-area" style="height: 26vh;"></div>
 
-              <!-- 中下方应用网格（扩展入口：阅读 + 预留占位） -->
+              <!-- 中下方应用网格（扩展入口：阅读 + 音乐） -->
               <div class="home-apps-grid">
                 <button class="app-cell" onclick="openReaderPage()" title="阅读">
                   <span class="app-tile"><svg class="i"><use href="#icon-book"/></svg></span>
                   <span class="app-name">阅读</span>
                 </button>
-                <div class="app-cell placeholder">
-                  <span class="app-tile"><svg class="i"><use href="#icon-plus"/></svg></span>
-                  <span class="app-name">待添加</span>
-                </div>
+                <button class="app-cell" onclick="openMusicPage()" title="音乐">
+                  <span class="app-tile"><svg class="i"><use href="#icon-music"/></svg></span>
+                  <span class="app-name">音乐</span>
+                </button>
               </div>
             </div>
 
@@ -1486,11 +1581,11 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <div class="top-bar">
           <button class="chat-header-back" onclick="readerBack()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow" id="reader-title">阅读</div>
-          <button class="top-bar-btn" id="reader-upload-btn" onclick="document.getElementById('reader-file').click()" title="上传 TXT">
+          <button class="top-bar-btn" id="reader-upload-btn" onclick="document.getElementById('reader-file').click()" title="上传 TXT / DOCX">
             <svg class="i"><use href="#icon-upload"/></svg>
           </button>
         </div>
-        <input type="file" accept=".txt" id="reader-file" class="hide" onchange="readerPickFile(this)">
+        <input type="file" accept=".txt,.docx" id="reader-file" class="hide" onchange="readerPickFile(this)">
         <!-- 书架视图 -->
         <div class="reader-shelf" id="reader-shelf"></div>
         <!-- 阅读视图（每次只渲染当前页，防大文件卡死） -->
@@ -1506,6 +1601,48 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
       <!-- 划词后浮出的极简小菜单 -->
       <div class="reader-sel-menu hide" id="reader-sel-menu">
         <button onclick="readerOpenNote()"><svg class="i i-sm"><use href="#icon-pencil"/></svg> 写笔记</button>
+      </div>
+
+      <!-- ========== 音乐页（第二页伪应用入口 → 独立二级界面；纯本地文件，不内置任何歌曲） ========== -->
+      <div class="page" id="page-music">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="musicBack()"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow">音乐</div>
+          <button class="top-bar-btn" onclick="document.getElementById('music-file').click()" title="导入本地音频">
+            <svg class="i"><use href="#icon-upload"/></svg>
+          </button>
+        </div>
+        <div class="music-body">
+          <div class="music-shelf" id="music-shelf"></div>
+          <div class="music-player">
+            <div class="music-now">
+              <div class="music-cover"><svg class="i"><use href="#icon-music"/></svg></div>
+              <div class="music-now-info">
+                <div class="music-now-title" id="music-now-title">未播放</div>
+                <div class="music-now-sub" id="music-now-sub">从本地导入音频开始播放</div>
+              </div>
+            </div>
+            <div class="music-progress">
+              <span id="music-cur">00:00</span>
+              <input type="range" id="music-seek" min="0" max="1000" value="0" oninput="musicSeek(this.value)">
+              <span id="music-dur">00:00</span>
+            </div>
+            <div class="music-controls">
+              <button class="music-ctrl" onclick="musicPrev()" title="上一首"><svg class="i"><use href="#icon-prev"/></svg></button>
+              <button class="music-play" id="music-play-btn" onclick="musicTogglePlay()" title="播放/暂停"><svg class="i"><use href="#icon-play"/></svg></button>
+              <button class="music-ctrl" onclick="musicNext()" title="下一首"><svg class="i"><use href="#icon-next"/></svg></button>
+              <div class="music-side left">
+                <button class="music-ctrl" id="music-loop-btn" onclick="musicToggleLoop()" title="单曲循环"><svg class="i"><use href="#icon-repeat"/></svg></button>
+              </div>
+              <div class="music-side right">
+                <svg class="i i-sm" style="stroke:var(--text-secondary);opacity:.8;"><use href="#icon-volume"/></svg>
+                <input type="range" id="music-volume" min="0" max="100" value="70" oninput="musicSetVolume(this.value)">
+              </div>
+            </div>
+          </div>
+        </div>
+        <audio id="music-audio" preload="metadata"></audio>
+        <input type="file" accept="audio/*" multiple id="music-file" class="hide" onchange="musicPickFiles(this)">
       </div>
 
       <!-- ========== 联系人列表页（手机：点击底部导航 love 进入；点联系人进入聊天） ========== -->
@@ -1564,18 +1701,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <button class="top-bar-btn" title="联系人设置" onclick="openContactSettingsFromChatDirect()">
                 <svg class="i"><use href="#icon-settings"/></svg>
               </button>
-              <button class="top-bar-btn" title="更多" onclick="toggleChatMenu(event)">
-                <svg class="i"><use href="#icon-menu"/></svg>
-              </button>
             </div>
           </div>
-          <div id="chat-menu" class="popup-menu hide" style="top:54px;">
-            <div class="popup-menu-item" onclick="composeLetterToCurrent()"><svg class="i"><use href="#icon-mail"/></svg> 写封信给ta</div>
-            <div class="popup-menu-item" onclick="openChoice()"><svg class="i"><use href="#icon-target"/></svg> 帮我选择</div>
-            <div class="popup-menu-item" onclick="openAnniversary()"><svg class="i"><use href="#icon-calendar"/></svg> 纪念日</div>
-            <div class="popup-menu-item" onclick="makeCall('voice')"><svg class="i"><use href="#icon-phone"/></svg> 电话</div>
-            <div class="popup-menu-item" onclick="makeCall('video')"><svg class="i"><use href="#icon-video"/></svg> 视频</div>
-          </div>
+          <!-- 折叠栏仅保留聊天相关内容；功能入口统一迁入底部「＋」工具抽屉 -->
+          <div id="chat-menu" class="popup-menu hide" style="top:54px;"></div>
           <div class="chat-messages" id="chat-messages"></div>
           <div class="chat-input-wrap" style="flex-shrink:0;">
             <div class="sticker-panel hide" id="sticker-panel">
@@ -1593,18 +1722,25 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <button class="quote-clear" onclick="clearQuoteReply()" title="取消引用"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
             </div>
             <div class="chat-input">
-              <button class="chat-input-btn" title="图片" onclick="document.getElementById('chat-img-file').click()">
-                <svg class="i"><use href="#icon-image"/></svg>
+              <!-- 左侧唯一入口：＋ 工具抽屉（图片/表情/写信/选择/纪念日/电话/视频/提醒 全在这里） -->
+              <button class="chat-input-btn" title="更多工具" onclick="toggleChatToolDrawer()">
+                <svg class="i"><use href="#icon-plus"/></svg>
               </button>
               <input type="file" accept="image/*" id="chat-img-file" class="hide" onchange="sendImageMessage(this)">
-              <button class="chat-input-btn" title="表情包" onclick="toggleStickerPanel()">
-                <svg class="i"><use href="#icon-smile"/></svg>
-              </button>
               <textarea class="chat-input-box" id="chat-input-box" placeholder="输入消息..." rows="1" onkeydown="onChatKeydown(event)" oninput="autoResize(this)"></textarea>
               <button class="chat-send-btn" title="发送" onclick="sendTextMessage()">
                 <svg class="i i-sm"><use href="#icon-send"/></svg>
               </button>
             </div>
+          </div>
+          <!-- 从底部升起的工具抽屉：条目由 CHAT_TOOLS 数组驱动 -->
+          <div id="chat-tool-drawer" class="chat-tool-drawer hide">
+            <div class="chat-tool-mask" onclick="closeChatToolDrawer()"></div>
+            <div class="chat-tool-panel">
+              <div class="chat-tool-title">聊天工具</div>
+              <div class="chat-tool-grid" id="chat-tool-grid"></div>
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -1661,6 +1797,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
       <!-- ========== ME 页 ========== -->
       <div class="page" id="page-me">
         <input type="file" accept="image/*" id="me-avatar-file" class="hide" onchange="updateMyAvatar(this)">
+        <!-- 顶部栏与写信页保持一致的极简头部 -->
+        <div class="top-bar between">
+          <div class="top-bar-title">我的</div>
+        </div>
         <div class="list-section-title">账号</div>
         <div class="setting-list">
           <div class="setting-item" onclick="editMyName()">
@@ -1717,6 +1857,18 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div class="top-bar-title grow">联系人设置</div>
         </div>
         <div style="padding:16px;" id="cs-content"></div>
+      </div>
+
+      <!-- ========== 独立聊天记录查询页 ========== -->
+      <div class="page" id="page-chat-search">
+        <div class="top-bar">
+          <button class="top-bar-btn" onclick="backFromChatSearch()" title="返回"><svg class="i"><use href="#icon-back"/></svg></button>
+          <input class="chat-search-input" id="chat-search-input" type="search" autocomplete="off" placeholder="搜索聊天记录关键词…" oninput="csSearchChatRender(this.value)">
+        </div>
+        <div class="chat-search-body">
+          <div class="chat-search-tip" id="chat-search-tip"></div>
+          <div id="chat-search-list"></div>
+        </div>
       </div>
 
       <!-- ========== 字卡库管理页 ========== -->

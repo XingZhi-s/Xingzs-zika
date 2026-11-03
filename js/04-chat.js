@@ -1,8 +1,7 @@
 // 依赖：03-data.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, closeModal, compressImage, countdownAnniversary, escapeHtml, formatTime, now, pick, randInt, showModal, toast } from './02-core.js';
+import { $, closeModal, compressImage, confirmDialog, countdownAnniversary, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, getContact, getCurrentReplyRate, getMe, getReplyRateOf, renderContacts, saveContact } from './03-data.js';
-import { runCatchUp } from './08-main.js';
 
 // 给联系人c的消息做级联已读：把最新一条"我发出的消息"及其之前所有我发出的都标已读
 export function cascadeReadFromMe(cc, upToMsgId) {
@@ -138,6 +137,7 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
       else if (ref.type === 'image') refContent = `<img class="msg-quote-img" src="${escapeHtml(ref.content)}" alt="" onclick="event.stopPropagation();previewImg('${escapeHtml(ref.content)}')">`;
       else if (ref.type === 'sticker') refContent = `<img class="msg-quote-img" src="${escapeHtml(ref.content)}" alt="" onclick="event.stopPropagation();previewImg('${escapeHtml(ref.content)}')">`;
       else if (ref.type === 'choice') refContent = `<span><svg class="i i-sm"><use href="#icon-target"/></svg> ${escapeHtml(ref.choice.question)}</span>`;
+      else if (ref.type === 'reminder') refContent = `<span><svg class="i i-sm"><use href="#icon-bell"/></svg> ${escapeHtml((ref.reminder && ref.reminder.text) || ref.content)}</span>`;
       quoteHtml = `<div class="msg-quote" onclick="jumpToMsg('${ref.id}')"><strong style="font-size:11px;">${refMe?'我':escapeHtml(contactName)}：</strong>${refContent}</div>`;
     }
   }
@@ -153,19 +153,29 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
     const questionHtml = question ? `<div class="msg-choice-question"><svg class="i i-sm"><use href="#icon-target"/></svg> ${escapeHtml(question)}</div>` : '';
     const optsHtml = opts.map((o, i) => {
       const letter = String.fromCharCode(65 + i);
-      const picked = (ch.result && ch.result === letter) ? ' choice-picked' : '';
+      const picked = (ch.result && String(ch.result).split('、').includes(letter)) ? ' choice-picked' : '';
       return `<div class="msg-choice-option${picked}"><span class="choice-letter">${letter}</span>. ${escapeHtml(o)}</div>`;
     }).join('');
-    // 已出结果时：末尾再加结果行（"X帮你选了：字母·选项"），但选项+问题依然保留问卷形式显示
+    // 已出结果时：末尾再加结果行（"X帮你选了：字母·选项"），多选时合并展示
     let resultHtml = '';
     if (ch.result) {
-      const resultIndex = ch.result.charCodeAt(0) - 65;
-      const resultText = opts[resultIndex] || ch.result;
+      const pickedLetters = String(ch.result).split('、');
+      const texts = pickedLetters.map(L => opts[L.charCodeAt(0) - 65] || L);
       const who = (m.from === 'other') ? escapeHtml(contactName) : '你';
-      resultHtml = `<div class="msg-choice-result">${who}帮你选了：${escapeHtml(String(ch.result))} · ${escapeHtml(resultText)}</div>`;
+      resultHtml = `<div class="msg-choice-result">${who}帮你选了：${escapeHtml(String(ch.result))} · ${escapeHtml(texts.join('、'))}</div>`;
     }
     contentHtml = `<div class="msg-bubble"><div class="msg-choice">
       ${questionHtml}${optsHtml}${resultHtml}
+    </div></div>`;
+  }
+  else if (m.type === 'reminder') {
+    // 提醒卡片：由该联系人在聊天中发出，显示「联系人名字 提醒你 …」
+    const r = m.reminder || {};
+    const head = r.missed ? '补发的提醒（错过的提醒）' : '提醒';
+    contentHtml = `<div class="msg-bubble"><div class="msg-choice msg-reminder${r.missed ? ' missed' : ''}">
+      <div class="msg-reminder-head"><svg class="i"><use href="#icon-bell"/></svg> ${head}</div>
+      <div class="msg-reminder-text">${escapeHtml(r.text || m.content)}</div>
+      <div class="msg-reminder-meta">${escapeHtml(contactName)} 提醒你${r.at ? ' · ' + escapeHtml(new Date(r.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : ''}${r.missed ? ' · 应用未打开，已补发' : ''}</div>
     </div></div>`;
   }
   const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
@@ -268,7 +278,7 @@ export function clearQuoteReply() {
 }
 export async function deleteMsg(msgId) {
   const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
-  if (!confirm('确定删除这条消息吗？')) return;
+  if (!await confirmDialog('确定删除这条消息吗？')) return;
   const c = await getContact(state.currentContactId);
   if (!c) return;
   c.messages = (c.messages || []).filter(m => m.id !== msgId);
@@ -308,8 +318,8 @@ export async function sendImageMessage(input) {
 export async function sendStickerMessage(data) {
   await sendMessageCore({ type:'sticker', content:data, replyTo: null });
 }
-export async function sendChoiceMessage(question, options, result) {
-  await sendMessageCore({ type:'choice', choice:{ question, options, result }, content: '', replyTo: null });
+export async function sendChoiceMessage(question, options, result, allowMulti) {
+  await sendMessageCore({ type:'choice', choice:{ question, options, result, allowMulti: !!allowMulti }, content: '', replyTo: null });
 }
 
 // 取消联系人当前的回复定时器（取消合并窗口排程）
@@ -466,7 +476,7 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   }, Math.max(800, replyAt - nowT));
 }
 
-// 帮我选择流程：先发提问消息 → 10s~3min 后对方回复选择
+// 选择流程：先发提问消息 → 10s~3min 后对方回复选择
 export async function sendChoiceResponseFlow(c, choice) {
   const cid = c.id;
   // 我的消息
@@ -491,23 +501,30 @@ export async function sendChoiceResponseFlow(c, choice) {
   state.chatTimers[repKey] = setTimeout(async () => {
     const cc = await getContact(cid);
     if (!cc) { delete state.chatTimers[repKey]; return; }
-    // 选择一个选项（随机）
-    const i = randInt(0, choice.options.length-1);
-    const letter = String.fromCharCode(65+i);
+    // 选择结果：允许对方多选时随机勾 2~N 项，否则单选一项
+    let letters;
+    if (choice.allowMulti && choice.options.length >= 2) {
+      const arr = choice.options.map((_, i) => i);
+      for (let k = arr.length - 1; k > 0; k--) { const j = randInt(0, k); const t = arr[k]; arr[k] = arr[j]; arr[j] = t; }
+      const n = randInt(2, choice.options.length);
+      letters = arr.slice(0, n).sort((a, b) => a - b).map(i => String.fromCharCode(65 + i)).join('、');
+    } else {
+      letters = String.fromCharCode(65 + randInt(0, choice.options.length-1));
+    }
     // 回复：choice 类型特殊消息
     const all = cc.cardGroups.flatMap(g => g.cards);
     let lead = '';
     if (all.length) lead = pick(all).content + ' ';
     const resultMsg = {
       id: uid(), from:'other', type:'choice',
-      choice: { question: choice.question, options: choice.options, result: letter, leadText: lead },
+      choice: { question: choice.question, options: choice.options, result: letters, allowMulti: !!choice.allowMulti, leadText: lead },
       content: '',
       time: replyAt, replyTo: qMsg.id, snapshot: null,
       read: true, readAt: replyAt, replyAt: 0, replied: true
     };
     cc.messages.push(resultMsg);
     const qm = cc.messages.find(x => x.id === qMsg.id);
-    if (qm) { qm.replied = true; qm.choice.result = letter; }
+    if (qm) { qm.replied = true; qm.choice.result = letters; }
     await saveContact(cc);
     if (state.currentContactId === cid) renderChatMessages(cid, true);
     else { cc.unread = (cc.unread||0)+1; await saveContact(cc); }
@@ -559,6 +576,8 @@ export async function triggerReply(c, triggerMsg) {
 export function toggleChatMenu(e) {
   if (e) e.stopPropagation();
   const m = $('chat-menu');
+  // 功能入口已迁入「＋」工具抽屉，折叠栏不再承载功能仓库；为空时直接不展开
+  if (!m || !m.children.length) return;
   m.classList.toggle('hide');
   if (!m.classList.contains('hide')) {
     const close = (ev) => { if (!m.contains(ev.target) && !(ev.target.closest && ev.target.closest('[title="更多"]'))) { m.classList.add('hide'); document.removeEventListener('click', close); } };
@@ -580,16 +599,21 @@ export function openChoice() {
       </div>
       <button class="btn-outline btn" style="width:100%;margin-top:8px;" onclick="addChoiceOpt()">＋ 添加选项</button>
     </div>
+    <div class="form-row" style="display:flex;align-items:center;justify-content:space-between;">
+      <label class="form-label" style="margin:0;">允许对方多选</label>
+      <div class="switch" id="cw-multi" onclick="this.classList.toggle('on')"></div>
+    </div>
   `;
-  showModal('帮我选择', html, [
+  showModal('选择', html, [
     { label:'取消', cls:'btn-outline', onClick: closeModal },
     { label:'发送请对方选择', cls:'btn', onClick: async () => {
       const q = $('cw-q').value.trim();
       const opts = Array.from(document.querySelectorAll('#cw-opts input')).map(x=>x.value.trim()).filter(Boolean);
+      const allowMulti = !!($('cw-multi') && $('cw-multi').classList.contains('on'));
       if (!q) return toast('请输入问题');
       if (opts.length < 2) return toast('至少2个选项');
       closeModal();
-      await sendChoiceMessage(q, opts, null);
+      await sendChoiceMessage(q, opts, null, allowMulti);
     }}
   ]);
 }
@@ -638,10 +662,14 @@ export async function renderAnniversaryPanel(cid) {
 export async function addAnni() {
   const cid = state.currentContactId;
   const c = await getContact(cid);
-  const name = prompt('纪念日名称：', '纪念日');
-  if (!name) return;
-  const date = prompt('日期（YYYY-MM-DD）：', new Date().toISOString().slice(0,10));
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式错误');
+  const r = await inputDialog('添加纪念日', [
+    { key: 'name', label: '纪念日名称', value: '纪念日', required: true },
+    { key: 'date', label: '日期', type: 'date', value: new Date().toISOString().slice(0,10), required: true }
+  ], '保存');
+  if (!r) return;
+  const name = (r.name || '').trim() || '纪念日';
+  const date = r.date || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式错误');
   c.anniversaries = c.anniversaries || [];
   c.anniversaries.push({ id: uid(), name, date });
   await saveContact(c);
@@ -653,18 +681,20 @@ export async function editAnni(id) {
   const c = await getContact(cid);
   const a = (c.anniversaries || []).find(x => x.id === id);
   if (!a) return;
-  const name = prompt('纪念日名称：', a.name);
-  if (name == null) return;
-  const date = prompt('日期（YYYY-MM-DD）：', a.date);
-  if (date == null) return;
+  const r = await inputDialog('编辑纪念日', [
+    { key: 'name', label: '纪念日名称', value: a.name, required: true },
+    { key: 'date', label: '日期', type: 'date', value: a.date, required: true }
+  ], '保存');
+  if (!r) return;
+  const date = r.date || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式错误');
-  a.name = name; a.date = date;
+  a.name = (r.name || '').trim() || a.name; a.date = date;
   await saveContact(c);
   renderAnniversaryPanel(cid);
   renderContacts();
 }
 export async function delAnni(id) {
-  if (!confirm('确定删除这个纪念日吗？')) return;
+  if (!await confirmDialog('确定删除这个纪念日吗？')) return;
   const cid = state.currentContactId;
   const c = await getContact(cid);
   c.anniversaries = (c.anniversaries || []).filter(x => x.id !== id);

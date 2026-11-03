@@ -1,6 +1,6 @@
 // 依赖：03-data.js
 import { uid } from './01-state.js';
-import { $, closeModal, dbGet, dbPut, escapeHtml, now, showModal, toast } from './02-core.js';
+import { $, closeModal, confirmDialog, dbGet, dbPut, escapeHtml, now, showModal, toast } from './02-core.js';
 import { openPage } from './03-data.js';
 
 /* ============ 本地沉浸式阅读与手写笔记 ============
@@ -11,6 +11,21 @@ import { openPage } from './03-data.js';
 
 const READER_MAX_FILE = 10 * 1024 * 1024; // 单文件最大 10MB
 const READER_PAGE_SIZE = 3000;            // 每页约 3000 字符（尽量在换行处断开）
+// DOCX 解析库：仅在需要时按需从 CDN 加载，避免拖慢首屏
+const MAMMOTH_CDN = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+let _mammothLoading = null;
+function loadMammoth() {
+  if (window.mammoth) return Promise.resolve(window.mammoth);
+  if (_mammothLoading) return _mammothLoading;
+  _mammothLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = MAMMOTH_CDN; s.async = true;
+    s.onload = () => window.mammoth ? resolve(window.mammoth) : reject(new Error('mammoth 未就绪'));
+    s.onerror = () => { _mammothLoading = null; reject(new Error('mammoth 加载失败')); };
+    document.head.appendChild(s);
+  });
+  return _mammothLoading;
+}
 
 let _book = null;      // 当前打开的书对象
 let _pageIdx = 0;      // 当前页码
@@ -53,7 +68,7 @@ export async function renderReaderShelf() {
   const prog = await getProgressMap();
   const notes = await getNotes();
   if (!books.length) {
-    box.innerHTML = `<div class="empty">还没有书籍<br><span style="font-size:12px;">点右上角上传本地 TXT 文件，开始沉浸式阅读</span></div>`;
+    box.innerHTML = `<div class="empty">还没有书籍<br><span style="font-size:12px;">点右上角上传本地 TXT / DOCX 文件，开始沉浸式阅读</span></div>`;
     return;
   }
   box.innerHTML = books.map(b => {
@@ -71,7 +86,7 @@ export async function renderReaderShelf() {
   }).join('');
 }
 export async function readerDeleteBook(id) {
-  if (!confirm('删除这本书？相关笔记与阅读进度将一并删除！')) return;
+  if (!await confirmDialog('删除这本书？相关笔记与阅读进度将一并删除！')) return;
   await saveBooks((await getBooks()).filter(b => b.id !== id));
   await saveNotes((await getNotes()).filter(n => n.bookId !== id));
   const prog = await getProgressMap(); delete prog[id]; await saveProgressMap(prog);
@@ -79,7 +94,18 @@ export async function readerDeleteBook(id) {
   renderReaderShelf();
 }
 
-// ---- 上传 TXT 并分页 ----
+// ---- 上传 TXT / DOCX 并分页 ----
+async function addReaderBook(title, text) {
+  const clean = String(text || '').replace(/\r\n?/g, '\n').trim();
+  if (!clean) { toast('文档内容为空'); return; }
+  const pages = splitReaderPages(clean);
+  const t = title || '未命名';
+  const books = await getBooks();
+  books.unshift({ id: uid(), title: t, pages, addTime: now() });
+  await saveBooks(books);
+  toast(`《${t}》已加入书架（共 ${pages.length} 页）`);
+  renderReaderShelf();
+}
 export function readerPickFile(input) {
   if (!input.files || !input.files.length) return;
   const file = input.files[0];
@@ -88,17 +114,28 @@ export function readerPickFile(input) {
     showModal('无法上传', `<div style="padding:8px 0;font-size:14px;line-height:1.7;">文件过大（${(file.size / 1024 / 1024).toFixed(1)}MB），请拆分后上传。<br>单文件最大支持 10MB。</div>`);
     return;
   }
+  const isDocx = /\.docx$/i.test(file.name) || /wordprocessingml/i.test(file.type || '');
+  if (isDocx) {
+    const rd = new FileReader();
+    rd.onload = async () => {
+      try {
+        toast('正在解析 DOCX…', 1200);
+        const mammoth = await loadMammoth();
+        // 只提取纯文本，不解析图片，避免大文档内存爆掉
+        const res = await mammoth.extractRawText({ arrayBuffer: rd.result });
+        await addReaderBook((file.name || '未命名').replace(/\.docx$/i, ''), res.value);
+      } catch (e) {
+        showModal('文档解析失败', `<div style="padding:8px 0;font-size:14px;line-height:1.7;">无法解析该 DOCX 文件，可能是解析库未能从 CDN 加载（需要联网）。<br>可另存为 TXT 后再上传。</div>`);
+      }
+    };
+    rd.onerror = () => toast('文件读取失败');
+    rd.readAsArrayBuffer(file);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = async () => {
     try {
-      const text = String(reader.result || '').replace(/\r\n?/g, '\n');
-      const pages = splitReaderPages(text);
-      const title = (file.name || '未命名').replace(/\.txt$/i, '');
-      const books = await getBooks();
-      books.unshift({ id: uid(), title, pages, addTime: now() });
-      await saveBooks(books);
-      toast(`《${title}》已加入书架（共 ${pages.length} 页）`);
-      renderReaderShelf();
+      await addReaderBook((file.name || '未命名').replace(/\.txt$/i, ''), reader.result);
     } catch (e) { toast('书籍保存失败'); }
   };
   reader.onerror = () => toast('文件读取失败');

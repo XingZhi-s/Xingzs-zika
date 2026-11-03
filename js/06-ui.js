@@ -1,6 +1,6 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
-import { $, closeModal, compressImage, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
+import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
 import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getTheme, openChat, openPage, rateColor, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { enqueueTask, runCatchUp } from './08-main.js';
@@ -43,7 +43,7 @@ export async function renderMyStickersGrid() {
   </div>`).join('');
 }
 export async function deleteMySticker(id) {
-  if (!confirm('删除这张表情包？')) return;
+  if (!await confirmDialog('删除这张表情包？')) return;
   const m = await getMe();
   m.stickers = (m.stickers || []).filter(x => x.id !== id);
   await saveMe(m);
@@ -175,6 +175,11 @@ export async function renderContactSetting(id) {
       </div>
     </div>
 
+    <div class="cs-search-bar">
+      <svg class="i i-sm" style="stroke:var(--text-secondary);"><use href="#icon-search"/></svg>
+      <input class="cs-search-input" id="cs-search-input" placeholder="搜索设置项，如：回复、背景、字卡、来电" oninput="csSearchJump(this.value)">
+    </div>
+
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-cog"/></svg> 生活状态</div>
       <div class="cs-card">
@@ -295,7 +300,7 @@ export async function renderContactSetting(id) {
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-search"/></svg> 聊天记录</div>
       <div class="cs-card">
-        <button class="btn btn-outline" style="width:100%;" onclick="csSearchChat()"><svg class="i i-sm"><use href="#icon-search"/></svg> 搜索聊天记录</button>
+        <button class="btn btn-outline" style="width:100%;" onclick="csSearchChat()"><svg class="i i-sm"><use href="#icon-search"/></svg> 聊天记录查询</button>
       </div>
     </div>
 
@@ -334,9 +339,9 @@ export async function csUpdateAvatar(input) {
 }
 export async function csEditName() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const name = prompt('修改名字：', c.name);
-  if (name == null) return;
-  const nm = name.trim();
+  const r = await inputDialog('修改名字', [{ key: 'name', label: '联系人名字', value: c.name, required: true }], '保存');
+  if (!r) return;
+  const nm = (r.name || '').trim();
   if (!nm) return toast('名字不能为空');
   c.name = nm;
   await saveContact(c);
@@ -349,7 +354,7 @@ export async function csEditName() {
   }
 }
 export async function csDeleteContact() {
-  if (!confirm('确定删除这个联系人？所有聊天记录、字卡、表情包都将永久删除！')) return;
+  if (!await confirmDialog('确定删除这个联系人？所有聊天记录、字卡、表情包都将永久删除！')) return;
   await deleteContact(state.currentContactSettingId);
   toast('已删除');
   state.currentContactSettingId = null;
@@ -378,13 +383,14 @@ export async function editStatus(sid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const s = (c.statusList||[]).find(x => x.id === sid); if (!s) return;
   const oldRate = (typeof s.replyRate === 'number') ? s.replyRate : ({ '秒回': 97, '常回': 80, '看心情': 50, '很少回': 20, '不理人': 5 }[s.tier] || 50);
-  const name = prompt('状态名称：', s.name);
-  if (name == null) return;
-  const rrRaw = prompt('回复概率（0 到 100 的整数，单位%）：', String(oldRate));
-  if (rrRaw == null) return;
-  const rr = parseInt(rrRaw);
+  const r = await inputDialog('编辑状态', [
+    { key: 'name', label: '状态名称', value: s.name, required: true },
+    { key: 'rate', label: '回复概率（0-100，95=秒回 80=常回 50=看心情 15=很少回 3=不理人）', type: 'number', value: String(oldRate), required: true }
+  ], '保存');
+  if (!r) return;
+  const rr = parseInt(r.rate);
   if (isNaN(rr) || rr < 0 || rr > 100) return toast('概率无效，请填 0-100 的整数');
-  s.name = name.trim() || s.name;
+  s.name = (r.name || '').trim() || s.name;
   s.replyRate = rr;
   delete s.tier;
   await saveContact(c);
@@ -393,7 +399,7 @@ export async function editStatus(sid) {
   renderContacts();
 }
 export async function deleteStatus(sid) {
-  if (!confirm('删除这个状态？')) return;
+  if (!await confirmDialog('删除这个状态？')) return;
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const s = (c.statusList||[]).find(x => x.id === sid);
   c.statusList = (c.statusList||[]).filter(x => x.id !== sid);
@@ -404,13 +410,14 @@ export async function deleteStatus(sid) {
 }
 export async function csAddStatus() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const name = prompt('新状态名（如：读书、追剧、睡觉）：', '');
-  if (name == null) return;
-  const nm = name.trim();
+  const r = await inputDialog('添加状态', [
+    { key: 'name', label: '状态名称（如：读书、追剧、睡觉）', placeholder: '读书', required: true },
+    { key: 'rate', label: '回复概率（0-100，95=秒回 80=常回 50=看心情 15=很少回 3=不理人）', type: 'number', value: '80', required: true }
+  ], '保存');
+  if (!r) return;
+  const nm = (r.name || '').trim();
   if (!nm) return toast('请输入状态名');
-  const rrRaw = prompt('回复概率（0 到 100 的整数，建议：95=秒回 80=常回 50=看心情 15=很少回 3=不理人）：', '80');
-  if (rrRaw == null) return;
-  const rr = parseInt(rrRaw);
+  const rr = parseInt(r.rate);
   if (isNaN(rr) || rr < 0 || rr > 100) return toast('概率无效，请填 0-100 的整数');
   c.statusList = c.statusList || [];
   c.statusList.push({ id: uid(), name: nm, replyRate: rr });
@@ -527,47 +534,59 @@ export async function csSetBgPos(pos) {
   renderContactSetting(state.currentContactSettingId);
 }
 
-// ============ 聊天记录搜索 ============
-export async function csSearchChat() {
-  const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const body = `<input class="input" id="cs-search-input" placeholder="输入关键词搜索聊天内容..." oninput="csSearchChatRender(this.value)" style="width:100%;">
-    <div id="cs-search-results" style="margin-top:12px;max-height:320px;overflow-y:auto;">
-      <div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">输入关键词开始搜索</div>
-    </div>`;
-  showModal(`搜索 ${c.name} 的聊天记录`, body, [{ label: '关闭', cls: 'btn-outline', onClick: closeModal }]);
-  setTimeout(() => { const i = $('cs-search-input'); if (i) i.focus(); }, 50);
+// ============ 聊天记录查询（独立页面，纯文本渲染防卡顿） ============
+const CHAT_SEARCH_MAX = 500; // 单次最多渲染条数，避免海量历史撑爆 DOM
+// 转为纯文本摘要：图片/表情包绝不渲染 Base64，长文本截断 50 字
+function chatSearchDisplay(m) {
+  const t = m.type || 'text';
+  if (t === 'image') return { text: '[图片]', full: '[图片]' };
+  if (t === 'sticker') return { text: '[表情包]', full: '[表情包]' };
+  if (t === 'choice') {
+    const q = String((m.choice && m.choice.question) || '').replace(/\s+/g, ' ').trim();
+    return { text: '[选择] ' + (q.length > 50 ? q.slice(0, 50) + '...' : q), full: '[选择] ' + q };
+  }
+  const raw = String(m.content || '').replace(/\s+/g, ' ').trim();
+  return { text: raw ? (raw.length > 50 ? raw.slice(0, 50) + '...' : raw) : '（空消息）', full: raw };
 }
+export function csSearchChat() {
+  if (!state.currentContactSettingId) return;
+  state.chatSearchContactId = state.currentContactSettingId;
+  openPage('page-chat-search');
+  const i = $('chat-search-input'); if (i) i.value = '';
+  csSearchChatRender('');
+  setTimeout(() => { if (i) i.focus(); }, 80);
+}
+export function backFromChatSearch() { openPage('page-contact-setting'); }
 export async function csSearchChatRender(kw) {
-  const box = $('cs-search-results'); if (!box) return;
+  const box = $('chat-search-list'); if (!box) return;
+  const c = await getContact(state.chatSearchContactId || state.currentContactSettingId); if (!c) { box.innerHTML = ''; return; }
   const q = (kw || '').trim().toLowerCase();
+  const all = c.messages || [];
+  const hits = q ? all.filter(m => chatSearchDisplay(m).full.toLowerCase().includes(q)) : all;
+  const shown = hits.slice(-CHAT_SEARCH_MAX);
+  const tip = $('chat-search-tip');
+  if (tip) {
+    tip.textContent = q
+      ? `找到 ${hits.length} 条${hits.length > CHAT_SEARCH_MAX ? `（仅显示最近 ${CHAT_SEARCH_MAX} 条）` : ''}`
+      : `共 ${all.length} 条聊天记录${all.length > CHAT_SEARCH_MAX ? `（仅显示最近 ${CHAT_SEARCH_MAX} 条）` : ''}`;
+  }
+  if (!shown.length) {
+    box.innerHTML = `<div class="chat-search-empty">${q ? '没有找到匹配的记录' : '暂无聊天记录'}</div>`;
+    return;
+  }
+  box.innerHTML = shown.map(m => {
+    const mine = m.from === 'me';
+    const d = chatSearchDisplay(m);
+    return `<div class="chat-search-row${mine ? ' me' : ''}">
+      <div class="csr-meta"><span class="csr-name">${mine ? '我' : escapeHtml(c.name)}</span><span class="csr-time">${formatTime(m.time)}</span></div>
+      <div class="csr-text">${escapeHtml(d.text)}</div>
+    </div>`;
+  }).join('');
+  // 未搜索时定位到最新一条（列表底部）
   if (!q) {
-    box.innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">输入关键词开始搜索</div>`;
-    return;
+    const body = box.closest('.chat-search-body');
+    if (body) body.scrollTop = body.scrollHeight;
   }
-  const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const me = await getMe();
-  const myAvatar = (me && me.avatar) || DEFAULT_AVATAR;
-  const otAvatar = c.avatar || DEFAULT_AVATAR;
-  const hits = (c.messages || []).filter(m => (m.type || 'text') === 'text' && (m.content || '').toLowerCase().includes(q));
-  if (!hits.length) {
-    box.innerHTML = `<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:18px 0;">没有找到包含「${escapeHtml(kw.trim())}」的消息</div>`;
-    return;
-  }
-  // 按时间倒序，最多显示 100 条
-  hits.sort((a, b) => b.time - a.time);
-  const shown = hits.slice(0, 100);
-  box.innerHTML = `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">找到 ${hits.length} 条${hits.length > 100 ? '（显示最近 100 条）' : ''}</div>` +
-    shown.map(m => {
-      const mine = m.from === 'me';
-      const av = mine ? myAvatar : otAvatar;
-      return `<div style="display:flex;gap:8px;align-items:flex-start;padding:10px;border-radius:10px;background:var(--card-bg);margin-bottom:8px;">
-        <img src="${escapeHtml(av)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:3px;">${mine ? '我' : escapeHtml(c.name)} · ${formatTime(m.time)}</div>
-          <div style="font-size:13px;line-height:1.5;word-break:break-word;">${escapeHtml(m.content)}</div>
-        </div>
-      </div>`;
-    }).join('');
 }
 
 // ============ 字卡库 ============
@@ -591,7 +610,8 @@ export async function renderCardLib() {
       <button class="del" onclick="event.stopPropagation();deleteCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
       <div class="multi-ellipsis">${escapeHtml(card.content)}</div>
     </div>`).join('');
-    return `<div class="group-block" id="grp-${escapeHtml(g.id)}">
+    // 默认折叠：所有分组初始都收起，点标题再展开
+    return `<div class="group-block collapsed" id="grp-${escapeHtml(g.id)}">
       <div class="group-header" onclick="document.getElementById('grp-${escapeHtml(g.id)}').classList.toggle('collapsed')">
         <span><svg class="i i-sm collapse-arrow" style="width:14px;height:14px;transition:transform .2s;"><use href="#icon-chevron-down"/></svg> ${escapeHtml(g.name)}（${count}张）</span>
         <span class="group-actions">
@@ -605,6 +625,20 @@ export async function renderCardLib() {
       </div>
     </div>`;
   }).join('');
+}
+// 联系人设置项搜索：不隐藏任何模块，命中后平滑滚动到该模块并短暂高亮
+export function csSearchJump(kw) {
+  const q = (kw || '').trim().toLowerCase();
+  const box = $('cs-content');
+  if (!box || !q) return;
+  const secs = Array.from(box.querySelectorAll('.cs-section'));
+  const hit = secs.find(s => s.textContent.toLowerCase().includes(q));
+  if (!hit) { toast('没有找到匹配的设置项'); return; }
+  hit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  hit.classList.remove('cs-flash');
+  void hit.offsetWidth;
+  hit.classList.add('cs-flash');
+  setTimeout(() => hit.classList.remove('cs-flash'), 900);
 }
 export function filterCardLib(keyword) {
   const box = $('card-groups');
@@ -624,9 +658,9 @@ export function filterCardLib(keyword) {
 }
 export async function createCardGroup() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const name = prompt('分组名：', '新分组');
-  if (name == null) return;
-  const nm = name.trim(); if (!nm) return toast('请输入分组名');
+  const r = await inputDialog('新建分组', [{ key: 'name', label: '分组名', value: '新分组', required: true }], '创建');
+  if (!r) return;
+  const nm = (r.name || '').trim(); if (!nm) return toast('请输入分组名');
   c.cardGroups = c.cardGroups || [];
   c.cardGroups.push({ id: uid(), name: nm, cards: [] });
   await saveContact(c);
@@ -635,9 +669,9 @@ export async function createCardGroup() {
 export async function editCardGroup(gid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
-  const name = prompt('分组名：', g.name);
-  if (name == null) return;
-  const nm = name.trim(); if (!nm) return toast('请输入分组名');
+  const r = await inputDialog('分组改名', [{ key: 'name', label: '分组名', value: g.name, required: true }], '保存');
+  if (!r) return;
+  const nm = (r.name || '').trim(); if (!nm) return toast('请输入分组名');
   g.name = nm;
   await saveContact(c);
   renderCardLib();
@@ -645,7 +679,7 @@ export async function editCardGroup(gid) {
 export async function deleteCardGroup(gid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
-  if (!confirm(`删除分组「${g.name}」？组内${(g.cards||[]).length}张字卡将一并删除！`)) return;
+  if (!await confirmDialog(`删除分组「${g.name}」？组内${(g.cards||[]).length}张字卡将一并删除！`)) return;
   c.cardGroups = (c.cardGroups||[]).filter(x => x.id !== gid);
   await saveContact(c);
   renderCardLib();
@@ -653,10 +687,12 @@ export async function deleteCardGroup(gid) {
 export async function addCard(gid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
-  const content = prompt('字卡内容（一句话）：', '');
-  if (content == null) return;
-  const s = content.trim(); if (!s) return toast('请输入内容');
+  const r = await inputDialog('添加字卡', [{ key:'content', label:'字卡内容（一句话）', placeholder:'例如：我想你了' }]);
+  if (!r) return;
+  const s = (r.content || '').trim(); if (!s) return toast('请输入内容');
   g.cards = g.cards || [];
+  // 去重：同分组内已存在相同内容则拦截
+  if (g.cards.some(x => x.content === s)) return toast('该分组已有相同内容的字卡');
   g.cards.push({ id: uid(), content: s });
   await saveContact(c);
   renderCardLib();
@@ -665,15 +701,17 @@ export async function editCard(gid, cid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
   const card = (g.cards||[]).find(x => x.id === cid); if (!card) return;
-  const content = prompt('字卡内容：', card.content);
-  if (content == null) return;
-  const s = content.trim(); if (!s) return toast('内容不能为空');
+  const r = await inputDialog('编辑字卡', [{ key:'content', label:'字卡内容', value: card.content }]);
+  if (!r) return;
+  const s = (r.content || '').trim(); if (!s) return toast('内容不能为空');
+  // 去重：改成与同组其它字卡相同的内容则拦截
+  if (g.cards.some(x => x.id !== cid && x.content === s)) return toast('该分组已有相同内容的字卡');
   card.content = s;
   await saveContact(c);
   renderCardLib();
 }
 export async function deleteCard(gid, cid) {
-  if (!confirm('删除这张字卡？')) return;
+  if (!await confirmDialog('删除这张字卡？')) return;
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
   g.cards = (g.cards||[]).filter(x => x.id !== cid);
@@ -702,16 +740,16 @@ export function openBatchImport() {
       if (!lines.length) return toast('没有有效内容');
       // 查重
       const exist = new Set((g.cards||[]).map(x => x.content));
-      let add = 0, dup = 0;
+      let add = 0, dupList = [];
       for (const l of lines) {
-        if (exist.has(l)) { dup++; continue; }
+        if (exist.has(l)) { dupList.push(l); continue; }
         g.cards.push({ id: uid(), content: l });
         exist.add(l);
         add++;
       }
       await saveContact(c);
       closeModal();
-      toast(`导入${add}张${dup?`，跳过重复${dup}张`:''}`);
+      toast(`导入${add}张${dupList.length?`，跳过重复${dupList.length}张：${dupList.slice(0,3).join(' / ')}${dupList.length>3?'…':''}`:''}`);
       renderCardLib();
     }}
   ]);
@@ -748,7 +786,6 @@ export function switchStkTab(tab, first=false) {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
   renderStkLibGrid();
-  if (!first) {}
 }
 export async function renderStkLibGrid() {
   const grid = $('stk-lib-grid'); if (!grid) return;
@@ -769,7 +806,7 @@ export async function renderStkLibGrid() {
   </div>`).join('');
 }
 export async function deleteLibSticker(id, owner) {
-  if (!confirm('删除这张表情包？')) return;
+  if (!await confirmDialog('删除这张表情包？')) return;
   if (owner === 'me') {
     const m = await getMe();
     m.stickers = (m.stickers||[]).filter(x => x.id !== id);

@@ -183,7 +183,7 @@ export function estimateSizeMB(str) {
 }
 
 // ============ 通用弹窗 ============
-export function showModal(title, bodyHtml, buttons) {
+export function showModal(title, bodyHtml, buttons, onClose) {
   // 清理旧的
   const old = $('_modal'); if (old) old.remove();
   const m = document.createElement('div');
@@ -192,11 +192,28 @@ export function showModal(title, bodyHtml, buttons) {
     `<button class="btn ${b.cls||''}" onclick="window._modalBtns[${i}] && window._modalBtns[${i}]()">${escapeHtml(b.label)}</button>`
   ).join('');
   m.innerHTML = `<div class="modal">
-    <div class="modal-header"><span>${escapeHtml(title||'')}</span><button class="close-btn" onclick="closeModal()"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>
+    <div class="modal-header"><span>${escapeHtml(title||'')}</span><button class="close-btn" onclick="(window._modalOnClose||closeModal)()"><svg class="i i-sm"><use href="#icon-close"/></svg></button></div>
     <div class="modal-body">${bodyHtml||''}</div>
     <div class="modal-footer">${btns}</div>
   </div>`;
   document.body.appendChild(m);
   window._modalBtns = (buttons||[]).map(b => b.onClick || closeModal);
+  window._modalOnClose = onClose || closeModal;
 }
-export function closeModal() { const m = $('_modal'); if (m) m.remove(); window._modalBtns = []; }
+export function closeModal() { const m = $('_modal'); if (m) m.remove(); window._modalBtns = []; window._modalOnClose = null; }
+
+// 替代原生 confirm()：返回 Promise<boolean>，点右上角 × 或遮罩等同于取消
+export function confirmDialog(msg, okText = '确定') {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (done) return; done = true; closeModal(); resolve(v); };
+    showModal('请确认',
+      `<div style="font-size:14px;line-height:1.7;color:var(--text-primary);white-space:pre-wrap;">${escapeHtml(msg)}</div>`,
+      [
+        { label: '取消', cls: 'btn-outline', onClick: () => finish(false) },
+        { label: okText, cls: 'btn', onClick: () => finish(true) }
+      ],
+      () => finish(false)
+    );
+  });
+}

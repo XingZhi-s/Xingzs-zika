@@ -1,6 +1,6 @@
 // 依赖：04-chat.js
 import { CALL_PERSIST_KEY, DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, escapeHtml, formatTime, now, pick, randInt, toast } from './02-core.js';
+import { $, confirmDialog, escapeHtml, formatTime, now, pick, randInt, toast } from './02-core.js';
 import { applyNickname, backFromChat, getAllContacts, getContact, getMe, openPage, renderContacts, saveContact } from './03-data.js';
 import { renderChatMessages, toggleChatMenu } from './04-chat.js';
 
@@ -181,15 +181,20 @@ export function bindMiniClickToRestore(el) {
 }
 
 // 通话计时器：接通后开始，每秒刷新计时，到达时长自动挂断
+// startTime 只在首次接通时写入一次，之后任何恢复/刷新都绝不重置，计时只累加
 function startCallInterval(dur) {
-  if (!state.callState) return;
-  if (state.callState.intervalId) clearInterval(state.callState.intervalId);
-  state.callState.duration = dur;
-  state.callState.intervalId = setInterval(() => {
+  const cs = state.callState;
+  if (!cs) return;
+  if (cs.intervalId) { clearInterval(cs.intervalId); cs.intervalId = null; }
+  if (!cs.startTime) cs.startTime = now();          // 首次接通才写起点
+  if (!cs.duration) cs.duration = dur || randomCallDuration();
+  const startTs = cs.startTime;                     // 闭包锁定起点，外部改动不影响
+  const total = cs.duration;
+  cs.intervalId = setInterval(() => {
     if (!state.callState) return;
-    const s = Math.floor((now() - state.callState.startTime)/1000);
+    const s = Math.floor((now() - startTs)/1000);
     updateCallTimer(s);
-    if (s >= dur) remoteHangUp();
+    if (s >= total) remoteHangUp();
   }, 1000);
 }
 
@@ -267,7 +272,15 @@ function buildRestoredHang(cid) {
 
 // 刷新/切回前台时恢复未结束的通话（读取 localStorage 持久化状态）
 export async function restoreCallState() {
-  if (state.callState) return; // 内存中已有进行中的通话，直接沿用
+  if (state.callState) {
+    // 内存中已有进行中的通话：只补活可能被后台挂起的计时器，绝不重置 startTime
+    const cs = state.callState;
+    if (cs.connected && cs.startTime && !cs.intervalId) {
+      startCallInterval(cs.duration || randomCallDuration());
+      updateCallTimer(Math.floor((now() - cs.startTime)/1000));
+    }
+    return;
+  }
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(CALL_PERSIST_KEY) || 'null'); } catch (e) { saved = null; }
   if (!saved || !saved.contactId) return;
@@ -326,13 +339,7 @@ export async function restoreCallState() {
         closeCallScreen();
         const cc = await getContact(cid);
         if (cc) {
-          cc.missedCalls = cc.missedCalls || [];
-          cc.missedCalls.push(now());
-          cc.messages.push({
-            id: uid(), from:'other', type:'text', content: `${name}（未接来电）`,
-            time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-          });
-          cc.unread = (cc.unread||0)+1;
+          pushMissedCall(cc);
           await saveContact(cc);
           renderContacts();
           if (state.currentContactId === cid) renderChatMessages(cid, true);
@@ -446,21 +453,32 @@ export function rejectIncoming() {
 }
 export function hangUpCall() { if (state.callState && state.callState.hang) state.callState.hang(); }
 
+// 记录一条未接来电（纯函数，不落库，调用方统一 saveContact）
+// 防雪崩：同一联系的未接来电系统消息最多保留 3 条，超出静默丢弃；missedCalls 计数照常累加
+export function pushMissedCall(c, time) {
+  const t = time || now();
+  c.missedCalls = c.missedCalls || [];
+  c.missedCalls.push(t);
+  const exist = (c.messages || []).filter(m => m.type === 'text' && String(m.content).includes('（未接来电）'));
+  if (exist.length >= 3) return false;
+  c.messages.push({
+    id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
+    time: t, replyTo: null, snapshot: null, read: true, readAt: t, replyAt: 0, replied: true
+  });
+  c.unread = (c.unread||0)+1;
+  return true;
+}
+
 // 联系人主动来电（停留在对话页时弹出）
 export async function showIncomingCall(c, type='voice') {
   const cid = c.id;
-  // 仅当停留在该联系人对话页时弹
-  if (state.currentContactId !== cid) {
-    // 错过：记未接来电 + 一条系统消息
-    c.missedCalls = c.missedCalls || [];
-    c.missedCalls.push(now());
-    c.messages.push({
-      id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
-      time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-    });
-    c.unread = (c.unread||0)+1;
+  // 互斥：已有响铃/通话界面时，后续来电一律转未接记录，绝不弹全屏覆盖
+  // 同时不在该联系人对话页也记未接（多个联系人的未接都要记录，不作废）
+  if (state.callState || state.currentContactId !== cid) {
+    pushMissedCall(c);
     await saveContact(c);
     renderContacts();
+    if (state.currentContactId === cid) renderChatMessages(cid, true);
     return;
   }
   showCallScreen({
@@ -484,16 +502,12 @@ export async function showIncomingCall(c, type='voice') {
         // 未接
         closeCallScreen();
         const cc = await getContact(cid);
-        cc.missedCalls = cc.missedCalls || [];
-        cc.missedCalls.push(now());
-        cc.messages.push({
-          id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
-          time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-        });
-        cc.unread = (cc.unread||0)+1;
-        await saveContact(cc);
-        renderContacts();
-        if (state.currentContactId === cid) renderChatMessages(cid, true);
+        if (cc) {
+          pushMissedCall(cc);
+          await saveContact(cc);
+          renderContacts();
+          if (state.currentContactId === cid) renderChatMessages(cid, true);
+        }
       }
     }, timeout*1000)
   };
@@ -654,7 +668,7 @@ export async function sendLetter() {
   const cards = c.cardGroups.flatMap(g => g.cards);
   const willReply = cards.length > 0;
   if (!willReply) {
-    if (!confirm(`该联系人没有字卡，无法回信。是否仍然发送？`)) return;
+    if (!await confirmDialog('该联系人没有字卡，无法回信。是否仍然发送？')) return;
   }
   // 存发出去的信
   const letter = { id: uid(), direction:'out', title, content, time: now() };
@@ -702,7 +716,7 @@ export async function openLetterDetail(cid, lid) {
 
 export async function deleteCurrentLetter() {
   if (!state.currentLetterId || !state.currentLetterContactId) return;
-  if (!confirm('确定删除这封信吗？')) return;
+  if (!await confirmDialog('确定删除这封信吗？')) return;
   const c = await getContact(state.currentLetterContactId);
   c.letters = (c.letters || []).filter(x => x.id !== state.currentLetterId);
   await saveContact(c);

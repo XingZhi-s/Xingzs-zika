@@ -1,13 +1,15 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, closeModal, dbAll, dbPut, escapeHtml, now, openDB, pick, randInt, toast } from './02-core.js';
+import { $, closeModal, dbAll, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getTheme, openChat, openContactSettingsFromChatDirect, openPage, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, previewImg, quoteReply, renderChatMessages, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
-import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSetBgPos, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStickerPanel, updateMyAvatar, uploadBg } from './06-ui.js';
-import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, promptTodoAdd, renderHomeAvatar, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
+import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStickerPanel, updateMyAvatar, uploadBg } from './06-ui.js';
+import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
+import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
+import { initMusicModule, musicBack, musicDelete, musicNext, musicPickFiles, musicPlayId, musicPrev, musicSeek, musicSetVolume, musicToggleLoop, musicTogglePlay, openMusicPage } from './12-music.js';
 import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
 
 export function enqueueTask(fn) {
@@ -154,15 +156,8 @@ export async function runCatchUp() {
                 // 弹窗
                 showIncomingCall(c, Math.random()<0.5 ? 'video' : 'voice');
               } else {
-                // 记未接
-                c.missedCalls = c.missedCalls || [];
-                c.missedCalls.push(slot.time);
-                c.messages.push({
-                  id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
-                  time: slot.time, replyTo: null, snapshot: null,
-                  read: true, readAt: slot.time, replyAt: 0, replied: true
-                });
-                c.unread = (c.unread||0) + 1;
+                // 记未接（多个联系人的未接都留下，不作废；同一联系人最多 3 条系统消息防雪崩）
+                pushMissedCall(c, slot.time);
                 changed = true;
               }
             }
@@ -211,18 +206,6 @@ function ensureCallSlots(c, t) {
   const today = new Date(t);
   const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
   if (c.callSlots && c.callSlots.date === todayStr) return c; // 已排
-  // 排当天的
-  // 获取所有联系人当天已经占用的槽位
-  getAllContacts().then(all => {
-    // 这里用同步再检查，但因为ensureCallSlots在串行队列中执行，我们直接在内存上处理：
-    // 由于此函数在串行任务内部（已拿到联系人引用），我们先做一次排期保存
-    // 先构建48个槽（每30分钟一个）
-  });
-  // 简化但正确的实现：因为异步 getAllContacts 在队列内部不会阻塞，改为每次runCatchUp重新排当天。
-  // 改用同步直接基于此联系人c排自己的3个槽（保证自己的不重叠，不保证与其他联系人严格错开，但通过给每个联系人使用不同"起始偏移"方式尽量分散）。
-  // 实际上需要全局协调。这里使用一个更简单但满足“单人3个、间隔≥30分钟、自己不冲突”的排法：48槽随机取3个不相邻的，对单人足够；需求中说任意两个来电间隔≥30分钟是对整体或单人？文档是“任意两个来电至少间隔30分钟、每人固定3个”。
-  // 我们使用更严格的实现：在c对象上记录。（当需要全局时，在串行任务里读取所有联系人做协调）— 但 ensureCallSlots 目前是同步函数。
-  // 为了满足需求，我们在下面 periodicCheck 中加一步"全局排期"。此处只保证单人自己排到3个不重叠的槽。
   const slots = [];
   // 从0..47中挑3个，彼此间隔≥1（≥30分钟）
   const candidates = [];
@@ -253,6 +236,8 @@ async function periodicCheck() {
     renderContacts();
     if (state.currentContactId) renderChatMessages(state.currentContactId, false);
   }
+  // 联系人提醒到点触发（串行执行，避免和 runCatchUp 同时写联系人）
+  try { await enqueueTask(() => checkReminders(false)); } catch (e) { console.warn('提醒检查失败：', e); }
 }
 
 // ============ 初始化 ============
@@ -260,7 +245,7 @@ async function initApp() {
   try {
     await openDB();
   } catch (e) {
-    alert('IndexedDB初始化失败：' + e.message);
+    showModal('初始化失败', `<div style="font-size:14px;line-height:1.7;">IndexedDB 初始化失败：${escapeHtml(e.message)}</div>`);
     return;
   }
   // 应用主题
@@ -278,6 +263,8 @@ async function initApp() {
   await renderMeBrief();
   // 启动时先补算（失败不阻塞后续初始化）
   try { await runCatchUp(); } catch (e) { console.warn('补算失败：', e); }
+  // 启动补发：应用关闭期间到点的联系人提醒，明确标注为「补发 / 错过」
+  try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
   // 渲染联系人列表
   renderContacts();
   renderLetterList();
@@ -305,6 +292,7 @@ async function initApp() {
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       await runCatchUp();
+      try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
       renderContacts();
       if (state.currentContactId) renderChatMessages(state.currentContactId, true);
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
@@ -333,6 +321,10 @@ async function initApp() {
   initInspirationModule();
   // 占卜模块初始化
   initDivineModule();
+  // 聊天「＋」工具抽屉 & 联系人提醒模块
+  initReminderModule();
+  // 本地音乐模块（空盒子，等待用户导入）
+  initMusicModule();
   // 每 30 秒检查待办提醒
   setInterval(checkTodoReminders, 30_000);
   setTimeout(checkTodoReminders, 2000);
@@ -403,6 +395,7 @@ window.createCardGroup = createCardGroup;
 window.createNewContact = createNewContact;
 window.csAddStatus = csAddStatus;
 window.csDeleteContact = csDeleteContact;
+window.csSearchJump = csSearchJump;
 window.csEditMyNickname = csEditMyNickname;
 window.csEditName = csEditName;
 window.csResetBg = csResetBg;
@@ -410,6 +403,7 @@ window.csSaveProactive = csSaveProactive;
 window.csSaveReply = csSaveReply;
 window.csSearchChat = csSearchChat;
 window.csSearchChatRender = csSearchChatRender;
+window.backFromChatSearch = backFromChatSearch;
 window.csSetBgPos = csSetBgPos;
 window.csToggleIncomingCall = csToggleIncomingCall;
 window.csToggleLetter = csToggleLetter;
@@ -502,6 +496,8 @@ window.setBgPos = setBgPos;
 window.setDIYColor = setDIYColor;
 window.setDiyMode = setDiyMode;
 window.setDIYText = setDIYText;
+window.previewDIYFontSize = previewDIYFontSize;
+window.saveDIYFontSize = saveDIYFontSize;
 window.setStatusCurrent = setStatusCurrent;
 window.startDivineDraw = startDivineDraw;
 window.switchStkTab = switchStkTab;
@@ -536,3 +532,22 @@ window.readerNextPage = readerNextPage;
 window.renderReaderPage = renderReaderPage;
 window.readerOpenNote = readerOpenNote;
 window.openReaderNoteView = openReaderNoteView;
+// 聊天工具抽屉 & 联系人提醒
+window.toggleChatToolDrawer = toggleChatToolDrawer;
+window.closeChatToolDrawer = closeChatToolDrawer;
+window.runChatTool = runChatTool;
+window.openReminderPanel = openReminderPanel;
+window.editReminder = editReminder;
+window.deleteReminder = deleteReminder;
+// 本地音乐
+window.openMusicPage = openMusicPage;
+window.musicBack = musicBack;
+window.musicPickFiles = musicPickFiles;
+window.musicTogglePlay = musicTogglePlay;
+window.musicPrev = musicPrev;
+window.musicNext = musicNext;
+window.musicSeek = musicSeek;
+window.musicSetVolume = musicSetVolume;
+window.musicToggleLoop = musicToggleLoop;
+window.musicPlayId = musicPlayId;
+window.musicDelete = musicDelete;

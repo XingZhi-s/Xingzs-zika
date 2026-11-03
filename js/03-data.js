@@ -43,10 +43,16 @@ export function createEmptyContact(name) {
     id: uid(),
     name: name || '新联系人',
     avatar: DEFAULT_AVATAR,
-    status: '',
+    // 默认内置贴近生活的状态（不用「在线/离线」这类没人味的词）
+    status: '在身边',
     statusAuto: true,
     nextStatusChangeAt: now() + randInt(30, 180) * 60 * 1000,
-    statusList: [],
+    statusList: [
+      { id: uid(), name: '在身边', replyRate: 100 },
+      { id: uid(), name: '吃饭中', replyRate: 50 },
+      { id: uid(), name: '睡觉中', replyRate: 5 },
+      { id: uid(), name: '忙碌中', replyRate: 20 },
+    ],
     settings: {
       fastSec: 5, slowMin: 3, replyCount: 1,
       incomingCall: true, proactiveMsg: false,
@@ -187,7 +193,7 @@ export async function renderContacts(search='') {
   });
   const renderCard = (c) => {
     const last = c.messages.length ? c.messages[c.messages.length-1] : null;
-    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[帮我选择]' : '') : '还没有消息，点击开始聊天';
+    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : '') : '还没有消息，点击开始聊天';
     const anni = getNearestAnniversary(c.anniversaries);
     const anniHtml = anni ? `<div class="contact-card-anni">${anni.text}</div>` : '';
     const mc = (c.missedCalls && c.missedCalls.length > 0) ? `<div class="missed-call-badge"><svg class="i i-sm" style="margin-right:2px;"><use href="#icon-phone"/></svg>${c.missedCalls.length}个未接</div>` : '';

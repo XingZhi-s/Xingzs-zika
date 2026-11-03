@@ -1,6 +1,6 @@
 // 依赖：06-ui.js
 import { DEFAULT_AVATAR, DIY_SECTIONS, state, uid } from './01-state.js';
-import { $, compressImage, dbAll, dbPut, escapeAttr, escapeHtml, estimateSizeMB, hexWithAlpha, inputDialog, now, toast } from './02-core.js';
+import { $, compressImage, confirmDialog, dbAll, dbPut, escapeAttr, escapeHtml, estimateSizeMB, hexWithAlpha, inputDialog, now, toast } from './02-core.js';
 import { createEmptyContact, getAllContacts, getMe, getTheme, openPage, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
 
 /* ============ 手机首页：自主文本 + 装饰贴纸 ============ */
@@ -376,10 +376,18 @@ export async function renderDiyPage() {
       </div>
     </div>`, '仅手机端');
 
-  // ===== 区块 6：图标 / 字体 / 按钮皮肤（高级） =====
-  const secIcons = secBlock('六、图标 / 字体 / 按钮皮肤',
-    '上传自定义图片替换图标，留空 = 默认',
-    itemsHTML(['bg_btn', 'customFont'])
+  // ===== 区块 6：字体 / 字号 / 图标 / 按钮皮肤（高级） =====
+  const fontPx = thm.fontSize || 14;
+  const secIcons = secBlock('六、字体 / 字号 / 图标 / 按钮皮肤',
+    '拖动滑块实时调整全局字号；自定义字体支持系统字体名或网络字体链接',
+    `<div class="diy-block">
+      <div class="diy-block-title"><span>字体大小</span><span id="diy-font-size-label" style="font-size:12px;color:#9db0cc;">${fontPx}px</span></div>
+      <input type="range" class="diy-range" min="12" max="20" step="1" value="${fontPx}" oninput="previewDIYFontSize(this.value)" onchange="saveDIYFontSize(this.value)">
+      <div class="diy-block-title" style="margin-top:16px;"><span>自定义字体</span></div>
+      <input type="text" class="input" value="${escapeHtml(thm.customFont||'')}" placeholder='例："楷体" 或 https://xxx.woff2' onchange="setDIYText('customFont', this.value)">
+      <div class="diy-page-desc" style="margin:8px 0 0;">支持字体名称（如 楷体、宋体）或网络字体 .woff2 链接，留空恢复默认。</div>
+    </div>`
+      + itemsHTML(['bg_btn'])
       + `<div class="diy-page-sec-title" style="margin-top:14px;">图标 · 顶部栏 / 底部栏</div>`
       + itemsHTML(['icon_heart', 'icon_mail', 'icon_user', 'icon_cog', 'icon_plus'])
       + `<div class="diy-page-sec-title" style="margin-top:14px;">图标 · 气泡按钮 / 聊天按钮</div>`
@@ -485,7 +493,7 @@ export async function clearCustomCSS() {
 }
 
 export async function clearHomeDecos() {
-  if (!confirm('清除所有首页装饰贴纸？')) return;
+  if (!await confirmDialog('清除所有首页装饰贴纸？')) return;
   const thm = await getTheme();
   thm.homeDecos = [];
   await saveTheme(thm);
@@ -494,13 +502,13 @@ export async function clearHomeDecos() {
   toast('装饰贴纸已清空');
 }
 export async function resetDIYAll() {
-  if (!confirm('重置全部美化设置？（背景/框/气泡/按键/图标/字体/装饰贴纸都会恢复默认）')) return;
+  if (!await confirmDialog('重置全部美化设置？（背景/框/气泡/按键/图标/字体/装饰贴纸都会恢复默认）')) return;
   const thm = await getTheme();
   for (const sec of Object.values(DIY_SECTIONS)) {
     for (const it of sec.items) { if (it.key !== 'themeColor') delete thm[it.key]; }
   }
   delete thm.pageBg; delete thm.frameBg; delete thm.contentBg;
-  delete thm.homeBanner; delete thm.homeDecos; delete thm.customFont;
+  delete thm.homeBanner; delete thm.homeDecos; delete thm.customFont; delete thm.fontSize;
   await saveTheme(thm);
   applyDIYVariables(thm);
   renderHomeAvatar();
@@ -563,6 +571,53 @@ export async function resetDIYSection() {
   refreshDiyUI();
   toast('本项全部重置回默认');
 }
+/* ============ 全局字号：按基准 14px 等比缩放样式表中的 px 字号 ============ */
+const _fontSizeBase = new WeakMap();
+function walkFontRules(rules, fn) {
+  if (!rules) return;
+  for (let i = 0; i < rules.length; i++) {
+    const r = rules[i];
+    if (r.style) fn(r);
+    if (r.cssRules) walkFontRules(r.cssRules, fn);
+  }
+}
+// 基准值缓存在 WeakMap 中，反复调用只会按原始值缩放，不会累积叠加
+export function applyFontScale(px) {
+  const base = Math.max(12, Math.min(20, Number(px) || 14));
+  const scale = base / 14;
+  document.documentElement.style.fontSize = base + 'px';
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules;
+    try { rules = sheet.cssRules; } catch (e) { continue; } // 跨域样式表不可读，跳过
+    walkFontRules(rules, rule => {
+      const fs = rule.style && rule.style.fontSize;
+      if (!fs || !/px$/i.test(fs)) return;
+      let origin = _fontSizeBase.get(rule);
+      if (origin == null) {
+        origin = parseFloat(fs);
+        if (!origin) return;
+        _fontSizeBase.set(rule, origin);
+      }
+      rule.style.fontSize = (origin * scale).toFixed(1) + 'px';
+    });
+  }
+}
+// 拖动滑块：实时预览（不落库）
+export function previewDIYFontSize(val) {
+  const n = Math.max(12, Math.min(20, parseInt(val, 10) || 14));
+  applyFontScale(n);
+  const lb = $('diy-font-size-label'); if (lb) lb.textContent = n + 'px';
+}
+// 松手落库
+export async function saveDIYFontSize(val) {
+  const n = Math.max(12, Math.min(20, parseInt(val, 10) || 14));
+  const thm = await getTheme();
+  thm.fontSize = n;
+  await saveTheme(thm);
+  applyDIYVariables(thm);
+  toast(`字号已设为 ${n}px`);
+}
+
 // 应用 DIY 变量到 :root CSS 与 body 样式、图标替换
 export function applyDIYVariables(thm) {
   thm = thm || defaultTheme();
@@ -690,6 +745,8 @@ export function applyDIYVariables(thm) {
       container.insertBefore(rep, svg);
     });
   }
+  // 全局字号（基准 14px，滑块 12~20px）
+  applyFontScale(thm.fontSize || 14);
 }
 
 /* ============ 待办提示功能 ============ */
@@ -730,7 +787,7 @@ export async function toggleTodo(id) {
   renderTodos();
 }
 export async function deleteTodo(id) {
-  if (!confirm('删除这条待办？')) return;
+  if (!await confirmDialog('删除这条待办？')) return;
   const list = await getTodos();
   await saveTodos(list.filter(x => x.id !== id));
   renderTodos();
@@ -933,7 +990,7 @@ export async function doImport(input) {
   if (!input.files || !input.files.length) return;
   const file = input.files[0];
   input.value = '';
-  if (!confirm(`即将从「${file.name}」恢复数据。\n导入将按文件实际包含的范围，覆盖现有对应数据（联系人的字卡、表情包、聊天记录，我的表情包、主题等）。\n是否继续？`)) return;
+  if (!await confirmDialog(`即将从「${file.name}」恢复数据。\n导入将按文件实际包含的范围，覆盖现有对应数据（联系人的字卡、表情包、聊天记录，我的表情包、主题等）。\n是否继续？`)) return;
   toast('正在解析，请稍候…');
   try {
     // 分片读：用FileReader读为text，然后用setTimeout切片解析（虽然大部分情况一次性即可，但按需求实现分片）
