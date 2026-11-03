@@ -198,7 +198,7 @@ a { text-decoration:none; color:inherit; }
 .app { height:100vh; display:flex; flex-direction:column; background:var(--theme-bg-light); }
 /* 内容包装容器约束（手机端也生效）：让 .main 的 flex:1 生效，长页面在 .page 内部滚动而非撑破布局 */
 .content-wrap { flex:1; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--theme-bg-light); }
-.main { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:calc(var(--nav-height) + 24px); }
+.main { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:calc(var(--nav-height) + 24px + env(safe-area-inset-bottom, 0px)); }
 .page { display:none; flex:1; min-height:0; overflow-y:auto; flex-direction:column; background:var(--theme-bg-light); }
 .page.active { display:flex; }
 .page > .top-bar { flex-shrink:0; }
@@ -254,7 +254,7 @@ a { text-decoration:none; color:inherit; }
     flex-direction: column;
     gap: 14px;
     position: relative;
-    min-height: 100dvh;
+    min-height: 100%;
     box-sizing: border-box;
     overflow-x: hidden;
   }
@@ -263,7 +263,7 @@ a { text-decoration:none; color:inherit; }
     padding: 0 0 calc(var(--nav-height) + 30px);
     background: var(--theme-bg-light);
     flex-direction: column;
-    min-height: 100dvh;
+    min-height: 100%;
     box-sizing: border-box;
   }
   .love-contacts-body { padding: 4px clamp(12px, 4vw, 20px); display:flex; flex-direction:column; gap:10px; }
@@ -706,7 +706,7 @@ a { text-decoration:none; color:inherit; }
 }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不再写死浅蓝渐变，改为透明以继承全局背景（聊天背景由 applyChatBg 行内 !important 独占） */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music {
     background: transparent;
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -822,6 +822,24 @@ a { text-decoration:none; color:inherit; }
   }
   .sidebar-bottom-nav .nav-icon svg { width: 16px; height:16px; stroke: var(--theme-color); }
 
+  /* 电脑端应用中心：与手机桌面应用格同一份入口，打开同一套二级页 */
+  .desktop-app-center {
+    padding: 12px 14px 14px;
+    flex-shrink: 0;
+    background: color-mix(in srgb, var(--card-bg) 86%, transparent);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--theme-color) 10%, transparent);
+  }
+  .desktop-app-center .section-title { margin: 0 0 10px 2px; }
+  .desktop-app-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 4px; }
+  .desktop-app-grid .app-cell { gap: 4px; }
+  .desktop-app-grid .app-cell .app-tile {
+    width: 42px; height: 42px;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--theme-color) 26%, transparent);
+  }
+  .desktop-app-grid .app-cell:hover .app-tile { transform: scale(1.06); }
+  .desktop-app-grid .app-tile svg { stroke: var(--my-bubble-text); }
+  .desktop-app-grid .app-name { font-size: 10px; color: var(--theme-color); }
+
   .content-wrap {
     flex:1; display:flex; flex-direction:column;
     height: 100%;
@@ -884,6 +902,24 @@ a { text-decoration:none; color:inherit; }
 .msg-wrap { max-width:calc(100% - 48px - 12px); display:flex; flex-direction:column; gap:4px; }
 .msg-row.me .msg-wrap { align-items:flex-end; }
 .msg-row.other .msg-wrap { align-items:flex-start; }
+/* 普通消息：引用块单独一行；头像只与主气泡顶边对齐；时间排在主气泡下方 */
+.msg-row:not(.msg-center) {
+  display:grid; align-items:start; column-gap:8px; row-gap:4px;
+}
+.msg-row.me:not(.msg-center) { grid-template-columns:minmax(0,1fr) 40px; }
+.msg-row.other:not(.msg-center) { grid-template-columns:40px minmax(0,1fr); }
+.msg-row.me:not(.msg-center) .msg-avatar { grid-column:2; grid-row:2; }
+.msg-row.other:not(.msg-center) .msg-avatar { grid-column:1; grid-row:2; }
+.msg-row.me:not(.msg-center) .msg-quote { grid-column:1; grid-row:1; justify-self:end; }
+.msg-row.other:not(.msg-center) .msg-quote { grid-column:2; grid-row:1; justify-self:start; }
+.msg-row.me:not(.msg-center) .msg-main { grid-column:1; grid-row:2; justify-self:end; }
+.msg-row.other:not(.msg-center) .msg-main { grid-column:2; grid-row:2; justify-self:start; }
+.msg-row.me:not(.msg-center) .msg-meta { grid-column:1; grid-row:3; justify-self:end; }
+.msg-row.other:not(.msg-center) .msg-meta { grid-column:2; grid-row:3; justify-self:start; }
+.msg-row:not(.msg-center) .msg-quote { margin-bottom:0; max-width:100%; }
+.msg-main { max-width:100%; min-width:0; }
+.msg-meta { display:flex; align-items:center; gap:4px; }
+.msg-meta:empty { display:none; }
 .msg-avatar { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#e5e7eb; }
 .msg-bubble { padding:10px 14px; border-radius:16px; word-wrap:break-word; word-break:break-word; line-height:1.5; font-size:15px; }
 .msg-row.me .msg-bubble { background:var(--my-bubble); color:var(--my-bubble-text); border-bottom-right-radius:4px; }
@@ -1050,7 +1086,14 @@ a { text-decoration:none; color:inherit; }
 .cs-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; }
 .cs-row + .cs-row { border-top:1px solid var(--border-color); }
 .cs-label { color:var(--text-secondary); flex-shrink:0; }
-.cs-value { flex:1; text-align:right; word-break:break-all; }
+.cs-value { flex:1; min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:10px; text-align:right; word-break:break-all; }
+/* 开关行：标签靠左，开关紧贴标签右侧，整行从左起排 */
+.cs-row-switch { justify-content:flex-start; }
+.cs-row-switch .cs-value { flex:0 0 auto; justify-content:flex-start; gap:0; }
+.cs-unit { font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+/* 卡片说明小字：统一放在按钮之后、整张卡片最下方，左对齐 */
+.cs-hint { margin-top:10px; font-size:12px; line-height:1.65; color:var(--text-secondary); text-align:left; }
+.cs-hint:first-child { margin-top:0; }
 
 /* ========== 独立聊天记录查询页 ========== */
 .chat-search-input {
@@ -1181,7 +1224,11 @@ a { text-decoration:none; color:inherit; }
 
 /* ========== 输入数字范围 ========== */
 .range-row { display:flex; align-items:center; gap:8px; }
-.range-row input { width:80px; min-height:36px; padding:6px 8px; background:#f9fafb; border:1px solid var(--border-color); border-radius:6px; }
+.range-row input {
+  width:80px; height:36px; min-height:36px; padding:0 10px; box-sizing:border-box;
+  background:#f9fafb; border:1px solid var(--border-color); border-radius:10px;
+  color:var(--text-primary); text-align:center; line-height:normal;
+}
 
 /* ========== 分组折叠 ========== */
 .collapsed .group-content { display:none; }
@@ -1215,13 +1262,13 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 
 /* ========== 聊天输入区「＋」工具抽屉（条目由数组驱动） ========== */
 .chat-tool-drawer { position:fixed; inset:0; z-index:700; display:flex; align-items:flex-end; }
-.chat-tool-mask { position:absolute; inset:0; background:rgba(30,50,80,0.32); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+.chat-tool-mask { position:absolute; inset:0; background:color-mix(in srgb, var(--text-primary) 30%, transparent); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
 .chat-tool-panel {
   position:relative; width:100%; max-width:520px; margin:0 auto;
   border-radius:18px 18px 0 0; padding:14px 14px calc(18px + env(safe-area-inset-bottom));
   background:color-mix(in srgb, var(--card-bg) 88%, transparent);
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
-  box-shadow:0 -8px 28px rgba(80,110,170,0.18);
+  box-shadow:0 -8px 28px color-mix(in srgb, var(--theme-color) 18%, transparent);
   animation:chatToolUp .22s ease;
 }
 @keyframes chatToolUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
@@ -1238,7 +1285,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
   display:flex; align-items:center; justify-content:center;
   box-shadow:0 4px 12px color-mix(in srgb, var(--theme-color) 25%, transparent);
 }
-.chat-tool-item .ct-icon svg { width:18px; height:18px; stroke:#fff; }
+.chat-tool-item .ct-icon svg { width:18px; height:18px; stroke:var(--my-bubble-text); }
 .chat-tool-item .ct-name { font-size:12px; color:var(--text-primary); }
 
 /* ========== 提醒卡片消息（复用聊天卡片容器 .msg-choice） ========== */
@@ -1256,7 +1303,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .reminder-row-meta { font-size:11px; color:var(--text-secondary); margin-top:4px; }
 .reminder-row-actions { display:flex; gap:6px; flex-shrink:0; }
 .reminder-icon-btn { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:var(--theme-light); color:var(--theme-color); }
-.reminder-icon-btn.del { background:#fee2e2; color:#991b1b; }
+.reminder-icon-btn.del { background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); }
 
 /* ========== 音乐页（第二页伪应用入口 → 独立二级界面） ========== */
 .music-body { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -1271,14 +1318,14 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-track.playing { border-color:var(--theme-color); box-shadow:0 0 0 2px color-mix(in srgb, var(--theme-color) 18%, transparent); }
 .music-track-cover {
   width:42px; height:42px; min-width:42px; border-radius:10px; flex-shrink:0;
-  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, #ffffff), var(--theme-color));
+  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, var(--card-bg)), var(--theme-color));
   display:flex; align-items:center; justify-content:center;
 }
-.music-track-cover svg { width:18px; height:18px; stroke:#fff; }
+.music-track-cover svg { width:18px; height:18px; stroke:var(--my-bubble-text); }
 .music-track-info { flex:1; min-width:0; }
 .music-track-name { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .music-track-meta { font-size:11px; color:var(--text-secondary); margin-top:2px; }
-.music-track-del { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:#fee2e2; color:#991b1b; flex-shrink:0; }
+.music-track-del { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); flex-shrink:0; }
 .music-player {
   flex-shrink:0; border-top:1px solid var(--border-color);
   padding:14px 16px calc(16px + env(safe-area-inset-bottom));
@@ -1288,10 +1335,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-now { display:flex; align-items:center; gap:12px; }
 .music-cover {
   width:54px; height:54px; min-width:54px; border-radius:14px;
-  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, #ffffff), var(--theme-color));
+  background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 55%, var(--card-bg)), var(--theme-color));
   display:flex; align-items:center; justify-content:center;
 }
-.music-cover svg { width:22px; height:22px; stroke:#fff; }
+.music-cover svg { width:22px; height:22px; stroke:var(--my-bubble-text); }
 .music-now-info { flex:1; min-width:0; }
 .music-now-title { font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .music-now-sub { font-size:11px; color:var(--text-secondary); margin-top:2px; }
@@ -1302,14 +1349,95 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-ctrl { width:44px; height:44px; border-radius:50%; background:var(--theme-light); color:var(--theme-color); }
 .music-ctrl svg { stroke:var(--theme-color); }
 .music-play { width:54px; height:54px; min-width:54px; min-height:54px; border-radius:50%; background:var(--theme-color); box-shadow:0 6px 16px color-mix(in srgb, var(--theme-color) 30%, transparent); }
-.music-play svg { stroke:#fff; width:24px; height:24px; }
+.music-play svg { stroke:var(--my-bubble-text); width:24px; height:24px; }
 .music-ctrl.on { background:var(--theme-color); }
-.music-ctrl.on svg { stroke:#fff; }
+.music-ctrl.on svg { stroke:var(--my-bubble-text); }
 .music-side { position:absolute; display:flex; align-items:center; gap:6px; }
 .music-side.left { left:0; }
 .music-side.right { right:0; }
 .music-side input[type=range] { width:64px; }
 .music-track.playing .music-track-name { color:var(--theme-color); }
+
+/* ========== 音乐：导入进度 / 存储用量 / 一起听 / 邀请卡片 ========== */
+.music-import-status { padding:8px 16px 0; font-size:11px; color:var(--text-secondary); }
+.music-import-text { margin-bottom:4px; }
+.music-import-bar { height:4px; border-radius:2px; background:var(--theme-light); overflow:hidden; }
+.music-import-bar i { display:block; height:100%; width:0; background:var(--theme-color); transition:width .2s; }
+.music-storage { padding:4px 16px 8px; font-size:11px; color:var(--text-secondary); }
+.music-storage.warn { color:var(--warning); }
+.music-together {
+  display:flex; align-items:center; gap:10px; margin:0 16px 8px; padding:8px 10px;
+  border-radius:12px; border:1px solid var(--border-color);
+  background:color-mix(in srgb, var(--theme-light) 80%, transparent);
+}
+.music-together-avatar { width:34px; height:34px; min-width:34px; border-radius:50%; object-fit:cover; background:var(--theme-light); }
+.music-together-info { flex:1; min-width:0; }
+.music-together-name { font-size:13px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.music-together-sub { font-size:11px; color:var(--text-secondary); }
+/* 迷你播放条：退出音乐页后仍有可见控制；细条、半透明、遵守背景优先级 */
+.music-mini {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(var(--nav-height) + 26px + env(safe-area-inset-bottom, 0px));
+  width:min(calc(100% - 24px), 520px); z-index:1200;
+  display:flex; align-items:center; gap:8px; padding:5px 8px 5px 12px;
+  border-radius:14px;
+  background:color-mix(in srgb, var(--card-bg) 78%, transparent);
+  border:1px solid color-mix(in srgb, var(--theme-color) 22%, transparent);
+  box-shadow:0 4px 16px color-mix(in srgb, var(--theme-color) 18%, transparent);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .music-mini { backdrop-filter:blur(14px) saturate(1.2); -webkit-backdrop-filter:blur(14px) saturate(1.2); }
+}
+.music-mini-main {
+  flex:1; min-width:0; min-height:36px; display:flex; align-items:center; gap:8px;
+  color:var(--text-primary);
+}
+.music-mini-title { flex:1; min-width:0; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.music-mini-btn {
+  width:36px; height:36px; min-width:36px; min-height:36px; border-radius:50%;
+  background:color-mix(in srgb, var(--theme-color) 12%, transparent);
+  color:var(--theme-color);
+}
+body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) {
+  .music-mini { bottom:14px; }
+  body.music-mini-on .main { padding-bottom:64px; }
+}
+.music-together-exit { flex-shrink:0; padding:6px 12px; min-height:32px; font-size:12px; }
+.msg-music-invite { border-left:3px solid var(--theme-color); }
+.msg-invite-actions { display:flex; gap:8px; margin-top:8px; }
+.msg-invite-actions .btn { padding:6px 14px; min-height:32px; font-size:12px; }
+.msg-invite-status { font-size:11px; color:var(--text-secondary); margin-top:6px; }
+.together-pick-list { display:flex; flex-direction:column; gap:8px; }
+.together-pick-item {
+  display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px;
+  border-radius:12px; border:1px solid var(--border-color);
+  background:color-mix(in srgb, var(--card-bg) 86%, transparent);
+  color:var(--text-primary); font-size:14px; text-align:left; min-height:48px;
+}
+.together-pick-item img { width:36px; height:36px; border-radius:50%; object-fit:cover; background:var(--theme-light); flex-shrink:0; }
+.together-pick-item:active { transform:scale(0.98); }
+.together-pick-tip { font-size:12px; color:var(--text-secondary); margin-top:10px; line-height:1.6; }
+.storage-extra-line { font-size:12px; color:var(--text-secondary); margin-top:6px; line-height:1.65; word-break:break-word; }
+.storage-note {
+  margin-top:10px; padding:8px 10px; border-radius:8px; font-size:12px; line-height:1.6;
+  background:color-mix(in srgb, var(--warning) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  color:var(--warning);
+}
+
+/* ========== 灵感随记：搜索 ========== */
+.insp-search-bar {
+  display:flex; align-items:center; gap:8px; flex-shrink:0;
+  margin:0 16px 8px; padding:8px 12px; border-radius:12px;
+  background:color-mix(in srgb, var(--card-bg) 82%, transparent);
+  border:1px solid var(--border-color); color:var(--text-secondary);
+}
+.insp-search-input { flex:1; min-width:0; border:none; outline:none; background:transparent; color:var(--text-primary); font-size:13px; font-family:inherit; }
+.insp-search-input::placeholder { color:var(--text-secondary); }
+.insp-search-clear { width:24px; height:24px; min-width:24px; min-height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-secondary); background:transparent; }
+.insp-search-clear svg { stroke:var(--text-secondary); }
+.insp-hit { background:color-mix(in srgb, var(--theme-color) 20%, transparent); color:var(--theme-color); border-radius:3px; padding:0 2px; }
 
 </style>
 </head>
@@ -1367,6 +1495,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-next" viewBox="0 0 24 24"><polygon points="6 4 16 12 6 20 6 4"/><line x1="19" y1="4" x2="19" y2="20"/></symbol>
     <symbol id="icon-repeat" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
     <symbol id="icon-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="icon-headphones" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/></symbol>
   </defs>
 </svg>
 <div class="app" id="app">
@@ -1386,6 +1515,36 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </button>
       </div>
       <div class="sidebar-contacts" id="sidebar-contacts"></div>
+    </div>
+    <!-- 中下段：应用中心（电脑端；与手机桌面应用格共用同一套二级页） -->
+    <div class="sidebar-card desktop-app-center">
+      <div class="section-title">应用中心</div>
+      <div class="desktop-app-grid">
+        <button class="app-cell" onclick="openDivinePage()" title="占卜">
+          <span class="app-tile"><svg class="i"><use href="#icon-sparkles"/></svg></span>
+          <span class="app-name">占卜</span>
+        </button>
+        <button class="app-cell" onclick="openMoodPage()" title="心情日历">
+          <span class="app-tile"><svg class="i"><use href="#icon-calendar"/></svg></span>
+          <span class="app-name">心情日历</span>
+        </button>
+        <button class="app-cell" onclick="openInspirationPage()" title="灵感随记">
+          <span class="app-tile"><svg class="i"><use href="#icon-bulb"/></svg></span>
+          <span class="app-name">灵感随记</span>
+        </button>
+        <button class="app-cell" onclick="openDiyPage()" title="美化">
+          <span class="app-tile"><svg class="i"><use href="#icon-palette"/></svg></span>
+          <span class="app-name">美化</span>
+        </button>
+        <button class="app-cell" onclick="openReaderPage()" title="阅读">
+          <span class="app-tile"><svg class="i"><use href="#icon-book"/></svg></span>
+          <span class="app-name">阅读</span>
+        </button>
+        <button class="app-cell" onclick="openMusicPage()" title="音乐">
+          <span class="app-tile"><svg class="i"><use href="#icon-music"/></svg></span>
+          <span class="app-name">音乐</span>
+        </button>
+      </div>
     </div>
     <!-- 下段：3 导航按钮（合并一卡，纵向） -->
     <div class="sidebar-card sidebar-bottom-nav">
@@ -1529,6 +1688,13 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <textarea class="input" id="insp-input" rows="2" placeholder="记录一闪而过的灵感…" style="resize:none;line-height:1.5;"></textarea>
           <button class="btn" onclick="addInspiration()" style="flex-shrink:0;">记录</button>
         </div>
+        <div class="insp-search-bar">
+          <svg class="i i-sm"><use href="#icon-search"/></svg>
+          <input class="insp-search-input" id="insp-search" placeholder="搜索灵感内容…" oninput="inspSearch(this.value)">
+          <button class="insp-search-clear hide" id="insp-search-clear" onclick="inspClearSearch()" title="清空搜索">
+            <svg class="i i-sm"><use href="#icon-close"/></svg>
+          </button>
+        </div>
         <div class="insp-list" id="insp-list"></div>
       </div>
 
@@ -1608,12 +1774,28 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <div class="top-bar">
           <button class="chat-header-back" onclick="musicBack()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow">音乐</div>
+          <button class="top-bar-btn" onclick="musicOpenTogetherPicker()" title="一起听">
+            <svg class="i"><use href="#icon-headphones"/></svg>
+          </button>
           <button class="top-bar-btn" onclick="document.getElementById('music-file').click()" title="导入本地音频">
             <svg class="i"><use href="#icon-upload"/></svg>
           </button>
         </div>
         <div class="music-body">
+          <div id="music-import-status" class="music-import-status hide">
+            <div class="music-import-text" id="music-import-text"></div>
+            <div class="music-import-bar"><i id="music-import-fill"></i></div>
+          </div>
+          <div class="music-storage" id="music-storage-line"></div>
           <div class="music-shelf" id="music-shelf"></div>
+          <div id="music-together-bar" class="music-together hide">
+            <img class="music-together-avatar" id="music-together-avatar" src="" alt="">
+            <div class="music-together-info">
+              <div class="music-together-name" id="music-together-name"></div>
+              <div class="music-together-sub" id="music-together-sub">和你一起听</div>
+            </div>
+            <button class="btn-outline btn music-together-exit" onclick="musicExitTogether()">退出</button>
+          </div>
           <div class="music-player">
             <div class="music-now">
               <div class="music-cover"><svg class="i"><use href="#icon-music"/></svg></div>
@@ -1740,7 +1922,6 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <div class="chat-tool-title">聊天工具</div>
               <div class="chat-tool-grid" id="chat-tool-grid"></div>
             </div>
-          </div>
           </div>
         </div>
       </div>
@@ -1961,6 +2142,13 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </div>
 
         <div class="cs-card" style="margin:0 16px 16px;">
+          <div class="section-title">浏览器存储</div>
+          <div class="storage-extra-line" id="ss-quota">存储用量：未知</div>
+          <div class="storage-extra-line" id="ss-persist">持久化存储：未知</div>
+          <div class="storage-note hide" id="ss-storage-note"></div>
+        </div>
+
+        <div class="cs-card" style="margin:0 16px 16px;">
           <div class="section-title">导出数据</div>
           <div class="export-options" id="export-opts">
             <label class="export-opt"><input type="checkbox" value="chat">聊天记录（不含图片base64）</label>
@@ -1999,6 +2187,17 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <span class="nav-icon"><svg class="i"><use href="#icon-cog"/></svg></span>
       </button>
     </nav>
+
+    <!-- 退出音乐页后仍在播放时显示的迷你播放条 -->
+    <div id="music-mini" class="music-mini hide">
+      <div class="music-mini-main" onclick="openMusicPage()" title="回到音乐页">
+        <svg class="i i-sm"><use href="#icon-music"/></svg>
+        <span class="music-mini-title" id="music-mini-title">未播放</span>
+      </div>
+      <button class="music-mini-btn" onclick="event.stopPropagation();musicTogglePlay()" title="播放/暂停">
+        <svg class="i i-sm"><use id="music-mini-icon" href="#icon-play"/></svg>
+      </button>
+    </div>
     </div>
 </div>
 

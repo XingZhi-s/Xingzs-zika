@@ -36,7 +36,7 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   const contactName = c.name;
   const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
   const otherAvatar = c.avatar || DEFAULT_AVATAR;
-  const html = slice.map(m => renderMsg(m, contactName, msgs, myAvatar, otherAvatar)).join('');
+  const html = slice.map(m => renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar)).join('');
   // 输入中提示（对方正在输入）：typing-dots 包裹在真实的对方气泡里
   let typingHtml = '';
   if (state.chatTypingState[contactId]) {
@@ -60,7 +60,7 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   // 绑定长按
   bindLongpress(box);
 }
-export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
+export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar) {
   const isMe = m.from === 'me';
   // 判断系统提示消息（未接来电 / 通话 / 已拒接 / 取消呼叫等）
   let isSys = false;
@@ -138,6 +138,7 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
       else if (ref.type === 'sticker') refContent = `<img class="msg-quote-img" src="${escapeHtml(ref.content)}" alt="" onclick="event.stopPropagation();previewImg('${escapeHtml(ref.content)}')">`;
       else if (ref.type === 'choice') refContent = `<span><svg class="i i-sm"><use href="#icon-target"/></svg> ${escapeHtml(ref.choice.question)}</span>`;
       else if (ref.type === 'reminder') refContent = `<span><svg class="i i-sm"><use href="#icon-bell"/></svg> ${escapeHtml((ref.reminder && ref.reminder.text) || ref.content)}</span>`;
+      else if (ref.type === 'musicInvite') refContent = `<span><svg class="i i-sm"><use href="#icon-headphones"/></svg> 一起听 · ${escapeHtml((ref.musicInvite && ref.musicInvite.trackName) || '本地歌曲')}</span>`;
       quoteHtml = `<div class="msg-quote" onclick="jumpToMsg('${ref.id}')"><strong style="font-size:11px;">${refMe?'我':escapeHtml(contactName)}：</strong>${refContent}</div>`;
     }
   }
@@ -178,6 +179,29 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
       <div class="msg-reminder-meta">${escapeHtml(contactName)} 提醒你${r.at ? ' · ' + escapeHtml(new Date(r.at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : ''}${r.missed ? ' · 应用未打开，已补发' : ''}</div>
     </div></div>`;
   }
+  else if (m.type === 'musicInvite') {
+    // 一起听邀请卡：联系人不发言，只保留邀请/接受/拒绝/结束这几种状态
+    const inv = m.musicInvite || {};
+    const isOut = m.from === 'me';
+    const song = escapeHtml(inv.trackName || '本地歌曲');
+    let statusText = '';
+    if (inv.status === 'pending') statusText = isOut ? '等待回应…' : `${escapeHtml(contactName)} 邀请你一起听`;
+    else if (inv.status === 'accepted') statusText = '正在一起听';
+    else if (inv.status === 'rejected') statusText = '已拒绝';
+    else if (inv.status === 'ended') statusText = '一起听已结束';
+    const actions = (!isOut && inv.status === 'pending')
+      ? `<div class="msg-invite-actions">
+          <button class="btn" onclick="musicAcceptInvite('${contactId}','${m.id}')">接受</button>
+          <button class="btn-outline btn" onclick="musicRejectInvite('${contactId}','${m.id}')">拒绝</button>
+        </div>`
+      : '';
+    contentHtml = `<div class="msg-bubble"><div class="msg-choice msg-music-invite">
+      <div class="msg-reminder-head"><svg class="i"><use href="#icon-headphones"/></svg> 一起听</div>
+      <div class="msg-reminder-text">${isOut ? '你邀请' + escapeHtml(contactName) : escapeHtml(contactName) + '想和你'}一起听《${song}》</div>
+      <div class="msg-invite-status">${statusText}</div>
+      ${actions}
+    </div></div>`;
+  }
   const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
   if (typingHtml) return `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar||DEFAULT_AVATAR)}" alt=""><div class="msg-wrap">${typingHtml}</div></div>`;
   // 时间戳和已读
@@ -186,27 +210,24 @@ export function renderMsg(m, contactName, allMsgs, myAvatar, otherAvatar) {
   const avImg = isMe
     ? `<img class="msg-avatar" src="${escapeHtml(myAvatar||DEFAULT_AVATAR)}" alt="">`
     : `<img class="msg-avatar" src="${escapeHtml(otherAvatar||DEFAULT_AVATAR)}" alt="">`;
+  // 结构：引用块独立占第一行；主气泡（含图片/卡片）在第二行，头像只在第二行与气泡顶边对齐；时间/已读在第三行
+  const mainHtml = `<div class="msg-main">${contentHtml}</div>`;
+  const metaHtml = `<div class="msg-meta">${timeHtml}${readHtml}</div>`;
   if (isMe) {
     // 我：气泡在左，头像在右
     return `<div class="${wrapClass}" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="${m.type}">
-      <div class="msg-wrap">
-        ${quoteHtml}
-        ${contentHtml}
-        ${timeHtml}
-        ${readHtml}
-      </div>
+      ${quoteHtml}
+      ${mainHtml}
+      ${metaHtml}
       ${avImg}
     </div>`;
   }
   // 对方：头像在左，气泡在右
   return `<div class="${wrapClass}" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="${m.type}">
     ${avImg}
-    <div class="msg-wrap">
-      ${quoteHtml}
-      ${contentHtml}
-      ${timeHtml}
-      ${readHtml}
-    </div>
+    ${quoteHtml}
+    ${mainHtml}
+    ${metaHtml}
   </div>`;
 }
 export function jumpToMsg(id) {

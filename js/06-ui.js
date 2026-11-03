@@ -183,15 +183,15 @@ export async function renderContactSetting(id) {
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-cog"/></svg> 生活状态</div>
       <div class="cs-card">
-        <div class="cs-row">
+        <div class="cs-row cs-row-switch">
           <span class="cs-label">自动切换</span>
-          <span class="cs-value" style="text-align:right;">
+          <span class="cs-value">
             <div class="switch ${autoMode?'on':''}" onclick="csToggleStatusAuto()"></div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">每 30 分钟~3 小时随机切换</div>
           </span>
         </div>
         ${statusRows || '<div style="padding:20px 0;text-align:center;color:var(--text-secondary);">还没有状态，点击下方按钮添加</div>'}
         <button class="btn btn-ghost" style="width:100%;margin-top:10px;" onclick="csAddStatus()">＋ 添加状态</button>
+        <div class="cs-hint">每 30 分钟~3 小时随机切换</div>
       </div>
     </div>
 
@@ -213,61 +213,62 @@ export async function renderContactSetting(id) {
         <div class="cs-row">
           <span class="cs-label">回复条数</span>
           <span class="cs-value" style="text-align:right;">
-            <div class="range-row" style="justify-content:flex-end;"><input type="number" min="1" max="10" value="${c.settings.replyCount||1}" id="cs-repc"> <span style="font-size:12px;color:var(--text-secondary);">条（多条连发，每条间隔1-3秒）</span></div>
+            <div class="range-row" style="justify-content:flex-end;"><input type="number" min="1" max="10" value="${c.settings.replyCount||1}" id="cs-repc"> <span class="cs-unit">条</span></div>
           </span>
         </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveReply()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存回复设置</button>
+        <div class="cs-hint">多条连发，每条间隔 1-3 秒</div>
       </div>
     </div>
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-heart"/></svg> 主动消息</div>
       <div class="cs-card">
-        <div class="cs-row">
+        <div class="cs-row cs-row-switch">
           <span class="cs-label">主动发消息</span>
-          <span class="cs-value" style="text-align:right;">
+          <span class="cs-value">
             <div class="switch ${c.settings.proactiveMsg?'on':''}" onclick="csToggleProactive()"></div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">开启后每 2~8 小时随机主动发一批</div>
           </span>
         </div>
         <div class="cs-row">
           <span class="cs-label">每批条数范围</span>
-          <span class="cs-value" style="text-align:right;">
+          <span class="cs-value">
             <div class="range-row" style="justify-content:flex-end;gap:6px;">
               <input type="number" min="0" max="20" value="${c.settings.proactiveMin!=null?c.settings.proactiveMin:1}" id="cs-pmin">
-              <span style="color:var(--text-secondary);">~</span>
+              <span class="cs-unit">~</span>
               <input type="number" min="0" max="20" value="${c.settings.proactiveMax!=null?c.settings.proactiveMax:3}" id="cs-pmax">
-              <span style="font-size:12px;color:var(--text-secondary);">条（0 表示该批次不发送）</span>
+              <span class="cs-unit">条</span>
             </div>
           </span>
         </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveProactive()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存主动消息设置</button>
+        <div class="cs-hint">开启后每 2~8 小时随机主动发一批；条数 0 表示该批次不发送</div>
       </div>
     </div>
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-mail"/></svg> 主动来信</div>
       <div class="cs-card">
-        <div class="cs-row">
+        <div class="cs-row cs-row-switch">
           <span class="cs-label">Ta 主动写信</span>
-          <span class="cs-value" style="text-align:right;">
+          <span class="cs-value">
             <div class="switch ${c.settings.letterEnabled?'on':''}" onclick="csToggleLetter()"></div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">开启后每天 50% 概率寄来一封信</div>
           </span>
         </div>
+        <div class="cs-hint">开启后每天 50% 概率寄来一封信</div>
       </div>
     </div>
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-phone"/></svg> 来电设置</div>
       <div class="cs-card">
-        <div class="cs-row">
+        <div class="cs-row cs-row-switch">
           <span class="cs-label">主动来电</span>
-          <span class="cs-value" style="text-align:right;">
+          <span class="cs-value">
             <div class="switch ${c.settings.incomingCall?'on':''}" onclick="csToggleIncomingCall()"></div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">每天每联系人3次，时间间隔≥30分钟</div>
           </span>
         </div>
+        <div class="cs-hint">每天每联系人 3 次，时间间隔 ≥30 分钟</div>
       </div>
     </div>
 

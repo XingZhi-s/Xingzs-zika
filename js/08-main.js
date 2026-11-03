@@ -6,10 +6,10 @@ import { addAnni, addChoiceOpt, autoResize, cascadeReadFromMe, clearQuoteReply, 
 import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStickerPanel, updateMyAvatar, uploadBg } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
-import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
+import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
 import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
-import { initMusicModule, musicBack, musicDelete, musicNext, musicPickFiles, musicPlayId, musicPrev, musicSeek, musicSetVolume, musicToggleLoop, musicTogglePlay, openMusicPage } from './12-music.js';
+import { checkTogetherInvites, initMusicModule, musicAcceptInvite, musicBack, musicDelete, musicExitTogether, musicNext, musicOpenTogetherPicker, musicPickFiles, musicPlayId, musicPrev, musicRejectInvite, musicSeek, musicSetVolume, musicStartTogether, musicToggleLoop, musicTogglePlay, openMusicPage, renderGlobalStorage, requestPersistStorage, updateMusicMiniBar } from './12-music.js';
 import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
 
 export function enqueueTask(fn) {
@@ -238,6 +238,8 @@ async function periodicCheck() {
   }
   // 联系人提醒到点触发（串行执行，避免和 runCatchUp 同时写联系人）
   try { await enqueueTask(() => checkReminders(false)); } catch (e) { console.warn('提醒检查失败：', e); }
+  // 联系人的「一起听」邀请（同样串行，避免并发写联系人）
+  try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
 }
 
 // ============ 初始化 ============
@@ -265,11 +267,14 @@ async function initApp() {
   try { await runCatchUp(); } catch (e) { console.warn('补算失败：', e); }
   // 启动补发：应用关闭期间到点的联系人提醒，明确标注为「补发 / 错过」
   try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
+  // 全应用请求持久化存储（不阻塞启动，失败只记录）
+  requestPersistStorage().catch(() => {});
   // 渲染联系人列表
   renderContacts();
   renderLetterList();
   renderThemeUI(theme);
   renderStorageStats();
+  renderGlobalStorage().catch(() => {});
   // 恢复刷新前未结束的通话（失败不阻塞后续初始化）
   try { await restoreCallState(); } catch (e) { console.warn('恢复通话状态失败：', e); }
   // 手机端默认进入手机桌面页
@@ -293,6 +298,7 @@ async function initApp() {
     if (document.visibilityState === 'visible') {
       await runCatchUp();
       try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
+      try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
       renderContacts();
       if (state.currentContactId) renderChatMessages(state.currentContactId, true);
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
@@ -458,6 +464,8 @@ window.openDivinePage = openDivinePage;
 window.openDiyPage = openDiyPage;
 window.openHomeStickerUploader = openHomeStickerUploader;
 window.openInspirationPage = openInspirationPage;
+window.inspSearch = inspSearch;
+window.inspClearSearch = inspClearSearch;
 window.openLetterCompose = openLetterCompose;
 window.openLetterDetail = openLetterDetail;
 window.openMoodDay = openMoodDay;
@@ -551,3 +559,11 @@ window.musicSetVolume = musicSetVolume;
 window.musicToggleLoop = musicToggleLoop;
 window.musicPlayId = musicPlayId;
 window.musicDelete = musicDelete;
+window.musicOpenTogetherPicker = musicOpenTogetherPicker;
+window.musicStartTogether = musicStartTogether;
+window.musicAcceptInvite = musicAcceptInvite;
+window.musicRejectInvite = musicRejectInvite;
+window.musicExitTogether = musicExitTogether;
+window.renderGlobalStorage = renderGlobalStorage;
+window.requestPersistStorage = requestPersistStorage;
+window.updateMusicMiniBar = updateMusicMiniBar;

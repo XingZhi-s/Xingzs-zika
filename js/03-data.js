@@ -167,12 +167,19 @@ export function openPage(id, pushPrev=false) {
   // 进入me页时刷新显示
   if (id === 'page-me') renderMeBrief();
   if (id === 'page-letter') renderLetterList();
-  if (id === 'page-setting') { renderThemeUI(getThemeSync()); renderStorageStats(); }
+  if (id === 'page-setting') {
+    renderThemeUI(getThemeSync());
+    renderStorageStats();
+    // 全站存储用量 / 持久化状态（由 12-music.js 挂载，进入设置页时刷新）
+    if (window.renderGlobalStorage) window.renderGlobalStorage();
+  }
   if (id === 'page-my-stickers') renderMyStickersGrid();
   if (id === 'page-contact-settings-list') renderContactSettingsList();
   if (id === 'page-love' || id === 'page-chat') renderContacts();
   if (id === 'page-home') { renderHomeAvatar(); renderTodos(); }
   state.lastPage = id;
+  // 页面切换后刷新迷你播放条（由 12-music.js 挂载）
+  if (window.updateMusicMiniBar) window.updateMusicMiniBar();
 }
 export function getThemeSync() {
   // 用于页面渲染时快速获取（非异步），实际存储用async
@@ -193,7 +200,7 @@ export async function renderContacts(search='') {
   });
   const renderCard = (c) => {
     const last = c.messages.length ? c.messages[c.messages.length-1] : null;
-    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : '') : '还没有消息，点击开始聊天';
+    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : last.type === 'musicInvite' ? '[一起听] ' + ((last.musicInvite && last.musicInvite.trackName) || '本地歌曲') : '') : '还没有消息，点击开始聊天';
     const anni = getNearestAnniversary(c.anniversaries);
     const anniHtml = anni ? `<div class="contact-card-anni">${anni.text}</div>` : '';
     const mc = (c.missedCalls && c.missedCalls.length > 0) ? `<div class="missed-call-badge"><svg class="i i-sm" style="margin-right:2px;"><use href="#icon-phone"/></svg>${c.missedCalls.length}个未接</div>` : '';

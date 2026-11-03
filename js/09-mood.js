@@ -224,6 +224,7 @@ export async function ensureDailyMoods(c, t) {
 }
 
 /* ============ 灵感随记 ============ */
+let _inspQuery = '';
 async function getInspirations() {
   const r = await dbGet('meta', 'inspirations');
   return (r && r.list) || [];
@@ -232,19 +233,54 @@ async function saveInspirations(list) {
   await dbPut('meta', { k: 'inspirations', list });
 }
 export function openInspirationPage() {
+  _inspQuery = '';
+  const s = $('insp-search'); if (s) s.value = '';
+  const c = $('insp-search-clear'); if (c) c.classList.add('hide');
   openPage('page-inspiration');
   renderInspirations();
 }
+export function inspSearch(v) {
+  _inspQuery = String(v || '').trim();
+  const c = $('insp-search-clear');
+  if (c) c.classList.toggle('hide', !_inspQuery);
+  renderInspirations();
+}
+export function inspClearSearch() {
+  _inspQuery = '';
+  const s = $('insp-search'); if (s) s.value = '';
+  const c = $('insp-search-clear'); if (c) c.classList.add('hide');
+  renderInspirations();
+}
+// 仅用于展示的命中高亮，不写回数据
+function highlightInsp(text, q) {
+  if (!q) return escapeHtml(text);
+  const lower = text.toLowerCase(), ql = q.toLowerCase();
+  let out = '', i = 0;
+  while (i < text.length) {
+    const idx = lower.indexOf(ql, i);
+    if (idx < 0) break;
+    out += escapeHtml(text.slice(i, idx));
+    out += `<mark class="insp-hit">${escapeHtml(text.slice(idx, idx + q.length))}</mark>`;
+    i = idx + q.length;
+  }
+  return out + escapeHtml(text.slice(i));
+}
 export async function renderInspirations() {
   const box = $('insp-list'); if (!box) return;
-  const list = (await getInspirations()).slice().sort((a, b) => b.ts - a.ts);
-  if (!list.length) {
+  const q = _inspQuery;
+  const all = (await getInspirations()).slice().sort((a, b) => b.ts - a.ts);
+  const list = q ? all.filter(it => (it.text || '').toLowerCase().includes(q.toLowerCase())) : all;
+  if (!all.length) {
     box.innerHTML = '<div class="insp-empty">还没有灵感随记，在上方写下第一条吧</div>';
+    return;
+  }
+  if (!list.length) {
+    box.innerHTML = `<div class="insp-empty">没有找到匹配「${escapeHtml(q)}」的灵感</div>`;
     return;
   }
   box.innerHTML = list.map(it =>
     `<div class="insp-item" onclick="editInspiration('${it.id}')">` +
-    `<div class="it-text">${escapeHtml(it.text)}</div>` +
+    `<div class="it-text">${highlightInsp(it.text, q)}</div>` +
     `<div class="it-time">${formatTime(it.ts)}</div></div>`
   ).join('');
 }
