@@ -98,12 +98,10 @@ export function applyTheme(theme) {
     document.body.style.removeProperty('background');
   }
 
-  // 全局主题色穿透：没有全局背景图时，底层背景跟随主题色极浅色（rgba 8%）
-  if (hasBgImage) {
-    r.style.removeProperty('--theme-bg-light');
-  } else {
-    r.style.setProperty('--theme-bg-light', hexToRgba(c, 0.08));
-  }
+  // 全局主题色穿透：底层背景始终是半透明主题色叠加层。
+  // A22：有壁纸/全局背景图时不再清空变量（清空会让所有二级页回落到 transparent，换色完全不可见）；
+  // 壁纸仍在最底层（body 背景图），主题色以 8% 半透明叠在其上，换色可见且不压掉壁纸。
+  r.style.setProperty('--theme-bg-light', hexToRgba(c, 0.08));
 
   // 主题色穿透：无全局背景图时，页面/顶栏/设置项等基础底色都跟随主题浅色
   if (hasBgImage) {
@@ -160,6 +158,8 @@ export function openPage(id, pushPrev=false) {
   if (pg) pg.classList.add('active');
   // 聊天页激活时手机端隐藏底部导航栏
   document.body.classList.toggle('page-chat-active', id === 'page-chat');
+  // 所有二级页面隐藏底部导航栏（首页/联系人列表为一级页，保留导航）
+  document.body.classList.toggle('nav-hidden-page', id !== 'page-home' && id !== 'page-love');
   // 底部导航状态
   document.querySelectorAll('.bottom-nav .nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.page === id);

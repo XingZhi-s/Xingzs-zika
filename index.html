@@ -705,9 +705,10 @@ a { text-decoration:none; color:inherit; }
   #page-home, #page-love { display: none !important; }
 }
 @media (max-width: 899px) {
-  /* 手机端聊天/写信/me/设置/美化等页面不再写死浅蓝渐变，改为透明以继承全局背景（聊天背景由 applyChatBg 行内 !important 独占） */
+  /* 手机端聊天/写信/me/设置/美化等页面不写死浅蓝渐变，改为半透明主题色叠加层：
+     既继承全局背景（聊天背景由 applyChatBg 行内 !important 独占），又让换主题色时这些页面可见跟随 */
   #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music {
-    background: transparent;
+    background: var(--theme-bg-light);
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
   .pc-only-beauty { display: none !important; }
@@ -737,6 +738,16 @@ a { text-decoration:none; color:inherit; }
     /* 预留输入栏高度，内容不被挡住 */
     padding-bottom: 86px !important;
   }
+  /* 所有二级页隐藏底部导航栏（一级页：手机桌面 / 联系人列表 保留导航） */
+  body.nav-hidden-page .bottom-nav { display: none !important; }
+  body.nav-hidden-page .main { padding-bottom: env(safe-area-inset-bottom, 0px) !important; }
+  /* 聊天搜索页原为导航预留的底部空间，导航隐藏后收回 */
+  body.nav-hidden-page .chat-search-body { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+  /* 迷你播放条：导航隐藏后贴近底部；聊天页让开固定输入栏 */
+  body.nav-hidden-page .music-mini { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  body.nav-hidden-page.page-chat-active .music-mini { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
+  body.nav-hidden-page.music-mini-on .main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important; }
+  body.nav-hidden-page.page-chat-active.music-mini-on #chat-content-wrap .chat-messages { padding-bottom: 122px !important; }
 }
 
 /* ========== 主体布局：电脑版（双栏） ========== */
@@ -750,8 +761,11 @@ a { text-decoration:none; color:inherit; }
   }
   .app {
     flex-direction: row;
-    width: calc(100vw - 48px);
+    /* 用 100% 而非 100vw：100vw 含滚动条宽度，平板/小窗出现纵向滚动条时会顶出横向滚动 */
+    width: calc(100% - 48px);
     height: calc(100vh - 48px);
+    /* A23：优先用动态视口高度，平板浏览器栏收缩时 App 仍贴合可视区，底部「设置」不会被裁掉 */
+    height: calc(100dvh - 48px);
     max-width: 1680px;
     margin: 24px auto;
     background: var(--theme-bg-light); /* 与主题色联动 */
@@ -761,12 +775,14 @@ a { text-decoration:none; color:inherit; }
     box-shadow: 0 16px 60px rgba(60,80,140,0.18);
   }
   .sidebar {
-    width: 320px; flex-shrink:0;
+    /* A23：按可用宽度收窄，平板横屏不再固定占 320px，给内容区留出足够宽度 */
+    width: clamp(240px, 26vw, 320px); flex-shrink:0;
     display:flex; flex-direction:column;
     gap: 16px;
     height: 100%;
     background: transparent;
     border: none;
+    min-width: 0;
   }
   /* 三段独立卡片 */
   .sidebar-card {
@@ -779,6 +795,7 @@ a { text-decoration:none; color:inherit; }
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     cursor:pointer;
     gap: 8px;
+    flex-shrink: 0;
     transition: transform .15s;
   }
   .sidebar-me-card:hover { transform: translateY(-1px); background:#fcfdff; }
@@ -800,6 +817,7 @@ a { text-decoration:none; color:inherit; }
     gap: 4px;
     flex-direction: column;
     display: flex;
+    flex-shrink: 0;
   }
   .sidebar-bottom-nav .nav-btn {
     flex-direction:row;
@@ -854,6 +872,35 @@ a { text-decoration:none; color:inherit; }
   .content-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
   .page { padding-bottom:0; }
   .chat-header-back { display:none; }
+}
+
+/* ========== 平板横屏 / 低高度窗口：宽 ≥900 且高度不足时收紧纵向尺寸 ==========
+   目的：底部导航（含「设置」）始终完整落在可视区内，且不产生横向滚动；
+   手机竖屏与常规桌面（高 >860）不受影响。 */
+@media (min-width: 900px) and (max-height: 860px) {
+  .app {
+    width: calc(100% - 24px);
+    height: calc(100vh - 24px);
+    height: calc(100dvh - 24px);
+    margin: 12px auto;
+    padding: 14px;
+    gap: 14px;
+    border-radius: 18px;
+  }
+  .sidebar { width: clamp(224px, 24vw, 300px); gap: 10px; }
+  .sidebar-me-card { padding: 10px 12px 8px; gap: 6px; }
+  .sidebar-me-avatar { width: 54px; height: 54px; }
+  .sidebar-me-name { font-size: 14px; }
+  .desktop-app-center { padding: 8px 10px; }
+  .desktop-app-center .section-title { margin: 0 0 6px 2px; }
+  .desktop-app-grid { gap: 6px 2px; }
+  .desktop-app-grid .app-cell .app-tile { width: 34px; height: 34px; }
+  .desktop-app-grid .app-name { font-size: 9px; line-height: 1.15; }
+  .sidebar-bottom-nav { padding: 6px; gap: 2px; }
+  .sidebar-bottom-nav .nav-btn { padding: 8px 10px; min-height: 34px; font-size: 13px; }
+  .sidebar-bottom-nav .nav-icon { width: 24px; height: 24px; }
+  .sidebar-bottom-nav .nav-icon svg { width: 16px; height: 16px; }
+  .content-wrap { border-radius: 14px; }
 }
 
 /* ========== 左侧栏通用（手机/电脑） ========== */
@@ -984,18 +1031,38 @@ a { text-decoration:none; color:inherit; }
   from { opacity:0; transform:translateX(20px); }
   to { opacity:1; transform:translateX(0); }
 }
-.msg-row.me { animation: slideInRight 0.25s ease-out; }
+/* A17：发送动画只在真正发出的那一刻播放（历史消息不带 msg-sent-anim，静态呈现） */
+.msg-row.me.msg-sent-anim { animation: slideInRight 0.25s ease-out; }
 /* 「正在输入」包在真实对方气泡内（padding 交给 .msg-bubble） */
-.msg-typing { font-size:12px; color:var(--text-secondary); display:inline-flex; align-items:center; gap:4px; }
+.msg-typing { font-size:12px; color:var(--text-secondary); display:inline-flex; flex-wrap:nowrap; align-items:center; gap:4px; white-space:nowrap; max-width:100%; overflow:hidden; }
 .typing-dots span { display:inline-block; width:5px; height:5px; background:var(--text-secondary); border-radius:50%; margin:0 1px; animation:typing 1.4s infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes typing { 0%,60%,100% { transform:translateY(0); opacity:0.4; } 30% { transform:translateY(-3px); opacity:1; } }
+/* A14：正在输入提示落在主内容列（与头像同一行），整行横向单行、基线对齐、超宽省略 */
+.msg-row.me:not(.msg-center) .msg-wrap { grid-column:1; grid-row:2; justify-self:end; }
+.msg-row.other:not(.msg-center) .msg-wrap { grid-column:2; grid-row:2; justify-self:start; }
+.msg-typing-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.msg-typing .typing-dots { flex-shrink:0; display:inline-flex; align-items:center; margin-left:2px; }
+
+/* A13：气泡美化预览左右并排（左：对方+头像 / 右：我方+头像），窄屏也不叠成竖排 */
+.bubble-preview {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+  padding:10px; overflow:hidden;
+}
+.bubble-preview .msg-row:not(.msg-center) {
+  display:flex; align-items:flex-start; gap:6px;
+  flex:1 1 0; min-width:0; max-width:calc(50% - 4px); padding:0;
+}
+.bubble-preview .msg-row.other:not(.msg-center) { justify-content:flex-start; }
+.bubble-preview .msg-row.me:not(.msg-center) { justify-content:flex-end; }
+.bubble-preview .msg-avatar { width:28px; height:28px; min-width:28px; min-height:28px; }
+.bubble-preview .msg-bubble { font-size:13px; max-width:100%; min-width:0; padding:8px 12px; }
 
 .chat-input { border-top:1px solid var(--border-color); padding:8px 10px; background:var(--card-bg); display:flex; align-items:flex-end; gap:8px; }
 .chat-input-btn { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; font-size:20px; flex-shrink:0; }
 .chat-input-btn:hover { background:var(--bg-color); }
-.chat-input-box { flex:1; background:#f3f4f6; border-radius:20px; padding:10px 14px; font-size:14px; min-height:40px; max-height:120px; overflow-y:auto; resize:none; line-height:1.4; }
+.chat-input-box { flex:1; min-width:0; background:#f3f4f6; border-radius:20px; padding:10px 14px; font-size:14px; min-height:40px; max-height:120px; overflow-y:auto; resize:none; line-height:1.4; }
 /* 输入框上方引用条 */
 .quote-bar { display:flex; align-items:center; gap:8px; background:#f3f6fc; border-left:3px solid var(--theme-color); border-radius:8px; padding:7px 10px; margin:6px 10px 0; font-size:12px; color:var(--text-secondary); }
 .quote-bar .quote-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1004,6 +1071,9 @@ a { text-decoration:none; color:inherit; }
 
 /* 表情下面板 */
 .sticker-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:260px; overflow-y:auto; }
+.sticker-panel-head { margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.sticker-panel-head strong { flex:1; min-width:0; }
+.sticker-panel-close { width:36px; height:36px; min-width:36px; min-height:36px; border-radius:50%; background:var(--bg-color); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .sticker-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:10px; }
 .sticker-item { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; cursor:pointer; background:#f9fafb; }
 .sticker-item img { width:100%; height:100%; object-fit:cover; }
@@ -1117,6 +1187,15 @@ a { text-decoration:none; color:inherit; }
 .chat-search-row .csr-text { font-size:13px; line-height:1.6; color:var(--text-primary); word-break:break-word; white-space:pre-wrap; }
 
 .status-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; }
+/* A18：当前生效状态明确标识（与「自动切换」开关无关） */
+.status-item.current {
+  background:var(--theme-light);
+  border-radius:10px;
+  padding-left:10px; padding-right:10px;
+  margin-left:-10px; margin-right:-10px;
+  box-shadow:inset 0 0 0 1px var(--theme-color);
+}
+.status-item.current .status-name { color:var(--theme-color); font-weight:600; }
 .status-item + .status-item { border-top:1px solid var(--border-color); }
 .status-info { flex:1; }
 .status-name { font-weight:500; }
@@ -1890,10 +1969,13 @@ body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px +
           <div class="chat-messages" id="chat-messages"></div>
           <div class="chat-input-wrap" style="flex-shrink:0;">
             <div class="sticker-panel hide" id="sticker-panel">
-              <div style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+              <div class="sticker-panel-head">
                 <strong>我的表情包</strong>
                 <button style="background:var(--theme-light);color:var(--theme-color);border-radius:8px;padding:6px 12px;min-height:36px;" onclick="document.getElementById('sticker-panel-file').click()">
                   <svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg>添加
+                </button>
+                <button class="sticker-panel-close" title="关闭表情面板" onclick="closeStickerPanel()">
+                  <svg class="i i-sm"><use href="#icon-close"/></svg>
                 </button>
                 <input type="file" accept="image/*" id="sticker-panel-file" class="hide" multiple onchange="quickAddMyStickers(this)">
               </div>
@@ -1904,9 +1986,15 @@ body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px +
               <button class="quote-clear" onclick="clearQuoteReply()" title="取消引用"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
             </div>
             <div class="chat-input">
-              <!-- 左侧唯一入口：＋ 工具抽屉（图片/表情/写信/选择/纪念日/电话/视频/提醒 全在这里） -->
+              <!-- 左侧入口：＋ 工具抽屉（图片已移到输入框左侧单独按钮） -->
               <button class="chat-input-btn" title="更多工具" onclick="toggleChatToolDrawer()">
                 <svg class="i"><use href="#icon-plus"/></svg>
+              </button>
+              <button class="chat-input-btn" title="图片" onclick="document.getElementById('chat-img-file').click()">
+                <svg class="i"><use href="#icon-image"/></svg>
+              </button>
+              <button class="chat-input-btn" id="chat-sticker-toggle" title="表情" onclick="toggleStickerPanel()">
+                <svg class="i"><use href="#icon-smile"/></svg>
               </button>
               <input type="file" accept="image/*" id="chat-img-file" class="hide" onchange="sendImageMessage(this)">
               <textarea class="chat-input-box" id="chat-input-box" placeholder="输入消息..." rows="1" onkeydown="onChatKeydown(event)" oninput="autoResize(this)"></textarea>

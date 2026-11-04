@@ -3,7 +3,7 @@ import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-stat
 import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
 import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getTheme, openChat, openPage, rateColor, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
-import { enqueueTask, runCatchUp } from './08-main.js';
+import { runCatchUp } from './08-main.js';
 
 // ============ ME 页功能 ============
 export async function updateMyAvatar(input) {
@@ -84,10 +84,42 @@ export async function renderStickerPanel() {
   grid.innerHTML = list.map(s => `<div class="sticker-item" onclick="sendStickerAndClose('${encodeURIComponent(s.data)}')"><img src="${escapeHtml(s.data)}" alt=""></div>`).join('');
 }
 export async function sendStickerAndClose(encData) {
-  $('sticker-panel').classList.add('hide');
+  closeStickerPanel();
   await sendStickerMessage(decodeURIComponent(encData));
 }
-export function toggleStickerPanel() { $('sticker-panel').classList.toggle('hide'); }
+// A15：表情面板可随时关闭（再点表情按钮 / 点外部 / 关闭按钮 / Esc），不发送任何消息
+let _stickerDocBound = false;
+function onStickerOutside(e) {
+  const p = $('sticker-panel');
+  if (!p || p.classList.contains('hide')) return;
+  if (e.target.closest && (e.target.closest('#sticker-panel') || e.target.closest('#chat-sticker-toggle'))) return;
+  closeStickerPanel();
+}
+function onStickerEsc(e) {
+  if (e.key === 'Escape' || e.key === 'Esc') closeStickerPanel();
+}
+export function openStickerPanel() {
+  const p = $('sticker-panel'); if (!p) return;
+  p.classList.remove('hide');
+  if (!_stickerDocBound) {
+    document.addEventListener('pointerdown', onStickerOutside, true);
+    document.addEventListener('keydown', onStickerEsc);
+    _stickerDocBound = true;
+  }
+}
+export function closeStickerPanel() {
+  const p = $('sticker-panel'); if (!p) return;
+  p.classList.add('hide');
+  if (_stickerDocBound) {
+    document.removeEventListener('pointerdown', onStickerOutside, true);
+    document.removeEventListener('keydown', onStickerEsc);
+    _stickerDocBound = false;
+  }
+}
+export function toggleStickerPanel() {
+  const p = $('sticker-panel'); if (!p) return;
+  if (p.classList.contains('hide')) openStickerPanel(); else closeStickerPanel();
+}
 
 // ============ 联系人设置页功能 ============
 
@@ -124,12 +156,15 @@ export async function renderContactSetting(id) {
   const box = $('cs-content'); if (!box) return;
   const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
   const tiers = ['秒回','常回','看心情','很少回','不理人'];
+  // A18：当前生效状态（同名时只标识第一条，保证不出现多个选中）
+  const currentSid = (c.statusList || []).find(s => s.name === c.status)?.id;
   const statusRows = (c.statusList || []).map(s => {
     const rate = (typeof s.replyRate === 'number') ? s.replyRate : ({ '秒回': 97, '常回': 80, '看心情': 50, '很少回': 20, '不理人': 5 }[s.tier] || 50);
+    const isCurrent = !!currentSid && s.id === currentSid;
     return `
-    <div class="status-item">
+    <div class="status-item${isCurrent ? ' current' : ''}">
       <div class="status-info">
-        <div class="status-name">${escapeHtml(s.name)} ${c.status===s.name ? '<span class="tag tier-秒回" style="background:'+rateColor(rate)+';color:#fff;border:none;">当前</span>' : ''}</div>
+        <div class="status-name">${escapeHtml(s.name)} ${isCurrent ? '<span class="tag tier-秒回" style="background:'+rateColor(rate)+';color:#fff;border:none;">当前</span>' : ''}</div>
         <div class="status-tier" style="color:var(--text-secondary);font-size:12px;">回复概率 ${rate}%</div>
       </div>
       <div class="status-actions">
@@ -371,7 +406,8 @@ export async function setStatusCurrent(sid) {
   c.nextStatusChangeAt = now() + randInt(30, 180) * 60 * 1000;
   await saveContact(c);
   // 切到更活跃状态后，立刻补算积压的未读+回复（概率<10%时被暂停的）
-  enqueueTask(async () => await runCatchUp());
+  // runCatchUp 内部已自行入队，不要再包一层 enqueueTask（否则队列自锁）
+  runCatchUp().catch(() => {});
   renderContactSetting(state.currentContactSettingId);
   renderContacts();
   if (state.currentContactId === c.id) {
@@ -395,13 +431,14 @@ export async function editStatus(sid) {
   s.replyRate = rr;
   delete s.tier;
   await saveContact(c);
-  enqueueTask(async () => await runCatchUp());
+  runCatchUp().catch(() => {});
   renderContactSetting(state.currentContactSettingId);
   renderContacts();
 }
 export async function deleteStatus(sid) {
   if (!await confirmDialog('删除这个状态？')) return;
   const c = await getContact(state.currentContactSettingId); if (!c) return;
+  if ((c.statusList || []).length <= 1) return toast('至少保留一个状态');
   const s = (c.statusList||[]).find(x => x.id === sid);
   c.statusList = (c.statusList||[]).filter(x => x.id !== sid);
   if (s && c.status === s.name) { c.status = c.statusList[0] ? c.statusList[0].name : ''; }

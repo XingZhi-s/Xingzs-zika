@@ -36,13 +36,14 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   const contactName = c.name;
   const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
   const otherAvatar = c.avatar || DEFAULT_AVATAR;
-  const html = slice.map(m => renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar)).join('');
+  const html = slice.map(m => renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar, state._animMsgId)).join('');
   // 输入中提示（对方正在输入）：typing-dots 包裹在真实的对方气泡里
   let typingHtml = '';
   if (state.chatTypingState[contactId]) {
-    typingHtml = `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div></div></div>`;
+    typingHtml = `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble msg-typing"><span class="msg-typing-text">${escapeHtml(contactName)}正在输入</span><span class="typing-dots"><span></span><span></span><span></span></span></div></div></div>`;
   }
   box.innerHTML = html + typingHtml;
+  state._animMsgId = null;
   // 加载更多按钮
   if (showCount < msgs.length) {
     const btn = document.createElement('div');
@@ -57,10 +58,22 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
     box.insertBefore(btn, box.firstChild);
   }
   if (scrollToBottom) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 30);
+  // A21：会话已在聊天页实际渲染即视为“看到”，清除该会话未读；
+  // 仅在聊天页处于激活态且渲染的正是当前会话时执行，不影响其它联系人计未读。
+  // 用最新快照写回，避免覆盖渲染期间刚到达的新消息。
+  const pageChat = $('page-chat');
+  if (contactId === state.currentContactId && pageChat && pageChat.classList.contains('active')) {
+    const fresh = await getContact(contactId);
+    if (fresh && fresh.unread) {
+      fresh.unread = 0;
+      await saveContact(fresh);
+      renderContacts();
+    }
+  }
   // 绑定长按
   bindLongpress(box);
 }
-export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar) {
+export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar, animId) {
   const isMe = m.from === 'me';
   // 判断系统提示消息（未接来电 / 通话 / 已拒接 / 取消呼叫等）
   let isSys = false;
@@ -126,6 +139,8 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
     return `<div class="${wrapClass}" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="${m.type}">${wrapInner}</div>`;
   }
   wrapClass += isMe ? 'me' : 'other';
+  // A17：仅本次真实发送的那条消息播放发出动画，历史/重渲染保持静态
+  if (isMe && animId && m.id === animId) wrapClass += ' msg-sent-anim';
   // 引用
   let quoteHtml = '';
   if (m.replyTo) {
@@ -202,7 +217,7 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
       ${actions}
     </div></div>`;
   }
-  const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing">${escapeHtml(contactName)}正在输入<span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
+  const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing"><span class="msg-typing-text">${escapeHtml(contactName)}正在输入</span><span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
   if (typingHtml) return `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar||DEFAULT_AVATAR)}" alt=""><div class="msg-wrap">${typingHtml}</div></div>`;
   // 时间戳和已读
   const timeHtml = `<div class="msg-time">${formatTime(m.time)}</div>`;
@@ -386,9 +401,10 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   const maxSec = Math.max(fastSec, slowMin * 60); // 统一转为秒
 
   const nowT = now();
-  // 时间轴推演：replyDelay = 本次回复延迟（严格落在设置区间内）；readDelay = 已读时间（固定 1~3 秒）
-  const replyDelay = randInt(fastSec, maxSec);
-  const readDelay = randInt(1, 3);
+  // A20 时间轴：已读时刻与「最快~最慢」区间同一套规则随机；
+  // 命中回复时，回复时刻必定晚于已读时刻（先已读、后回复）。
+  const readDelay = maxSec > fastSec ? randInt(fastSec, maxSec - 1) : maxSec;
+  const replyDelay = readDelay < maxSec ? randInt(readDelay + 1, maxSec) : readDelay;
   const readAt = nowT + readDelay * 1000;
   const replyAt = nowT + replyDelay * 1000;
 
@@ -401,6 +417,7 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   };
   c.messages.push(msg);
   await saveContact(c);
+  state._animMsgId = msg.id; // A17：仅这条新发送的消息播放发出动画
   await renderChatMessages(cid, true);
   clearQuoteReply();
 
@@ -508,6 +525,7 @@ export async function sendChoiceResponseFlow(c, choice) {
   };
   c.messages.push(qMsg);
   await saveContact(c);
+  state._animMsgId = qMsg.id;
   if (state.currentContactId === cid) renderChatMessages(cid, true);
   // 延迟：10秒~3分钟
   const delay = randInt(10, 180);

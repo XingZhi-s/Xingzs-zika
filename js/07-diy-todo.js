@@ -326,8 +326,8 @@ export async function renderDiyPage() {
 
   // ===== 区块 3：聊天气泡美化（预览 + 两段代码） =====
   const bubblePreview = `<div class="bubble-preview" id="bubble-preview">
-      <div class="msg-row other"><div class="msg-bubble">今天过得怎么样呀？</div></div>
-      <div class="msg-row me"><div class="msg-bubble">还不错，刚看到你的消息～</div></div>
+      <div class="msg-row other"><img class="msg-avatar" src="${escapeHtml(DEFAULT_AVATAR)}" alt=""><div class="msg-bubble">今天过得怎么样呀？</div></div>
+      <div class="msg-row me"><div class="msg-bubble">还不错，刚看到你的消息～</div><img class="msg-avatar" src="${escapeHtml(DEFAULT_AVATAR)}" alt=""></div>
     </div>`;
   const bubbleInput = (side, title, key, ph) => `<div class="diy-block" style="margin-top:10px;">
       <div class="diy-block-title"><span>${title}</span></div>
@@ -636,27 +636,35 @@ export function applyDIYVariables(thm) {
       ? `#fff url("${pageBg}") center/cover no-repeat fixed`
       : pageBg;
   } else {
-    // 默认手机蓝格或电脑蓝格斜纹
-    document.body.style.background = '';
+    // A22：没有 DIY 页面背景时不能清空全局背景——否则会把 applyTheme 刚设好的壁纸/自定义背景擦掉。
+    // 这里按主题背景重新落一次，保证「壁纸最底层、主题色半透明叠加」的优先级不被破坏。
+    const bg = thm.background;
+    const hasImg = !!(bg && bg.type === 'image');
+    const isDefault = !bg || (bg.type === 'color' && bg.value === '#f5f6fa');
+    if (hasImg) document.body.style.background = `url("${bg.value}") ${thm.backgroundPos || 'center'}/cover no-repeat fixed`;
+    else if (!isDefault) document.body.style.background = bg.value;
+    else document.body.style.removeProperty('background');
   }
   // frameBg（.app 容器 淡黄色内框）
-  if (thm.frameBg) {
-    const isImg = /^data:image|^https?:/.test(String(thm.frameBg));
-    const appEl = $('app');
-    if (appEl) {
+  const appEl = $('app');
+  if (appEl) {
+    if (thm.frameBg) {
+      const isImg = /^data:image|^https?:/.test(String(thm.frameBg));
       if (isImg) { appEl.style.background = `#fff url("${thm.frameBg}") center/cover no-repeat`; }
       else { appEl.style.background = thm.frameBg; }
+    } else {
+      // A22：取消自定义框背景后必须清掉行内层，否则旧的不透明层会一直盖住主题色
+      appEl.style.removeProperty('background');
     }
   }
   // contentBg（右侧内容）
-  if (thm.contentBg) {
+  const wraps = document.querySelectorAll('.content-wrap');
+  wraps.forEach(w => {
+    if (!thm.contentBg) { w.style.removeProperty('background'); return; }
     const isImg = /^data:image|^https?:/.test(String(thm.contentBg));
-    const wraps = document.querySelectorAll('.content-wrap');
-    wraps.forEach(w => {
-      if (isImg) w.style.background = `#fffbe4 url("${thm.contentBg}") center/cover no-repeat`;
-      else w.style.background = thm.contentBg;
-    });
-  }
+    if (isImg) w.style.background = `#fffbe4 url("${thm.contentBg}") center/cover no-repeat`;
+    else w.style.background = thm.contentBg;
+  });
   // 主按钮皮肤 bg_btn
   const btns = document.querySelectorAll('.btn');
   btns.forEach(b => {

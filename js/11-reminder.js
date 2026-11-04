@@ -4,13 +4,10 @@ import { $, closeModal, confirmDialog, dbGet, dbPut, escapeHtml, formatTime, now
 import { getContact, renderContacts, saveContact } from './03-data.js';
 import { openAnniversary, openChoice, renderChatMessages } from './04-chat.js';
 import { composeLetterToCurrent, makeCall } from './05-call-letter.js';
-import { toggleStickerPanel } from './06-ui.js';
 
 /* ============ 聊天工具抽屉（数组驱动，第一项固定为「提醒」） ============ */
 const CHAT_TOOLS = [
   { id: 'reminder', name: '提醒', icon: 'icon-bell' },
-  { id: 'image',    name: '图片', icon: 'icon-image' },
-  { id: 'sticker',  name: '表情', icon: 'icon-smile' },
   { id: 'choice',   name: '选择', icon: 'icon-target' },
   { id: 'anni',     name: '纪念日', icon: 'icon-calendar' },
   { id: 'letter',   name: '写信', icon: 'icon-mail' },
@@ -40,12 +37,6 @@ export function runChatTool(id) {
   closeChatToolDrawer();
   switch (id) {
     case 'reminder': return openReminderPanel();
-    case 'image': {
-      const f = $('chat-img-file');
-      if (f) f.click();
-      return;
-    }
-    case 'sticker': return toggleStickerPanel();
     case 'choice': return openChoice();
     case 'anni': return openAnniversary();
     case 'letter': return composeLetterToCurrent();
