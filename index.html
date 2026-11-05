@@ -738,7 +738,7 @@ a { text-decoration:none; color:inherit; }
     /* 预留输入栏高度，内容不被挡住 */
     padding-bottom: 86px !important;
   }
-  /* 所有二级页隐藏底部导航栏（一级页：手机桌面 / 联系人列表 保留导航） */
+  /* 其余二级页隐藏底部导航栏（一级页：手机桌面/联系人/写信/我的/设置 保留导航） */
   body.nav-hidden-page .bottom-nav { display: none !important; }
   body.nav-hidden-page .main { padding-bottom: env(safe-area-inset-bottom, 0px) !important; }
   /* 聊天搜索页原为导航预留的底部空间，导航隐藏后收回 */
@@ -873,6 +873,15 @@ a { text-decoration:none; color:inherit; }
   .page { padding-bottom:0; }
   .chat-header-back { display:none; }
 }
+/* A25：六个伪应用在桌面/平板横屏下也必须有可见返回键（聊天页仍由侧栏切换，保持隐藏） */
+@media (min-width: 900px) {
+  #page-mood .chat-header-back,
+  #page-inspiration .chat-header-back,
+  #page-divine .chat-header-back,
+  #page-reader .chat-header-back,
+  #page-music .chat-header-back,
+  #page-diy .chat-header-back { display:flex; }
+}
 
 /* ========== 平板横屏 / 低高度窗口：宽 ≥900 且高度不足时收紧纵向尺寸 ==========
    目的：底部导航（含「设置」）始终完整落在可视区内，且不产生横向滚动；
@@ -919,7 +928,6 @@ a { text-decoration:none; color:inherit; }
 .top-bar { position:sticky; top:0; background:var(--card-bg); border-bottom:1px solid var(--border-color); padding:0 12px; height:54px; display:flex; align-items:center; z-index:10; }
 .top-bar-title { font-weight:600; font-size:16px; }
 .top-bar-btn { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; font-size:20px; background:transparent; }
-.top-bar-btn:hover { background:var(--bg-color); }
 
 /* ========== LOVE 页 - 联系人列表 ========== */
 .contact-card { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; position:relative; border-bottom:1px solid var(--border-color); background:var(--card-bg); }
@@ -1059,15 +1067,26 @@ a { text-decoration:none; color:inherit; }
 .bubble-preview .msg-avatar { width:28px; height:28px; min-width:28px; min-height:28px; }
 .bubble-preview .msg-bubble { font-size:13px; max-width:100%; min-width:0; padding:8px 12px; }
 
-.chat-input { border-top:1px solid var(--border-color); padding:8px 10px; background:var(--card-bg); display:flex; align-items:flex-end; gap:8px; }
-.chat-input-btn { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; font-size:20px; flex-shrink:0; }
-.chat-input-btn:hover { background:var(--bg-color); }
-.chat-input-box { flex:1; min-width:0; background:#f3f4f6; border-radius:20px; padding:10px 14px; font-size:14px; min-height:40px; max-height:120px; overflow-y:auto; resize:none; line-height:1.4; }
+.chat-input { border-top:1px solid var(--border-color); padding:8px 10px; background:var(--card-bg); display:flex; align-items:flex-end; gap:4px; }
+/* A25：按钮视觉 34px、热区 36px（padding 补足），间距 4px；输入框吃满剩余宽度 */
+.chat-input-btn { width:36px; height:36px; min-width:36px; min-height:36px; padding:1px; background-clip:content-box; border-radius:50%; font-size:20px; flex-shrink:0; }
+.chat-input-btn .i { width:18px; height:18px; }
+.chat-input-box { flex:1; min-width:0; background:#f3f4f6; border-radius:20px; padding:9px 14px; font-size:14px; min-height:36px; max-height:120px; overflow-y:auto; resize:none; line-height:1.4; }
 /* 输入框上方引用条 */
 .quote-bar { display:flex; align-items:center; gap:8px; background:#f3f6fc; border-left:3px solid var(--theme-color); border-radius:8px; padding:7px 10px; margin:6px 10px 0; font-size:12px; color:var(--text-secondary); }
 .quote-bar .quote-text { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .quote-bar .quote-clear { width:22px; height:22px; min-width:22px; min-height:22px; border-radius:50%; background:#e5e9f0; color:#5a6e8f; font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.chat-send-btn { background:var(--theme-color); color:#fff; border-radius:50%; width:40px; height:40px; min-width:40px; min-height:40px; font-size:16px; flex-shrink:0; }
+.chat-send-btn { background:var(--theme-color); color:#fff; border-radius:50%; width:36px; height:36px; min-width:36px; min-height:36px; padding:1px; background-clip:content-box; font-size:16px; flex-shrink:0; }
+.chat-send-btn .i { width:18px; height:18px; }
+/* 只在支持悬停的指针设备显示 hover 底色，触摸点击后不残留高亮 */
+@media (hover: hover) and (pointer: fine) {
+  .chat-input-btn:hover { background-color: var(--bg-color); }
+  .top-bar-btn:hover { background-color: var(--bg-color); }
+}
+/* 焦点框只在键盘导航时出现 */
+.chat-input-btn:focus-visible,
+.chat-send-btn:focus-visible,
+.top-bar-btn:focus-visible { outline:2px solid var(--theme-color); outline-offset:2px; }
 
 /* 表情下面板 */
 .sticker-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:260px; overflow-y:auto; }
@@ -1202,6 +1221,35 @@ a { text-decoration:none; color:inherit; }
 .status-tier { margin-top:2px; }
 .status-actions { display:flex; gap:4px; }
 .status-actions button { width:36px; height:36px; min-width:36px; min-height:36px; border-radius:8px; background:#f3f4f6; font-size:14px; }
+/* A26：状态按大类分组 + 拆分比例 + 说明 */
+.status-group { margin-top:12px; }
+.status-group:first-child { margin-top:4px; }
+.status-group + .status-group { margin-top:16px; padding-top:12px; border-top:1px dashed var(--border-color); }
+.status-group-title { font-size:12px; font-weight:600; color:var(--theme-color); letter-spacing:0.5px; }
+.status-split {
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px;
+  margin-top:8px; padding:8px 10px; border-radius:8px;
+  background:var(--bg-color); font-size:12px; color:var(--text-secondary);
+}
+.status-split label { display:flex; align-items:center; gap:4px; }
+.status-split input {
+  width:62px; height:30px; min-height:30px; padding:0 6px; text-align:center;
+  border:1px solid var(--border-color); border-radius:6px;
+  background:var(--card-bg); color:var(--text-primary);
+}
+.status-card { position:relative; }
+.status-help-corner { position:absolute; right:16px; bottom:14px; }
+.status-hint { padding-right:44px; }
+.status-help-btn {
+  width:28px; height:28px; min-width:28px; min-height:28px; border-radius:50%;
+  background:var(--theme-light); color:var(--theme-color); font-weight:700; font-size:14px;
+  flex-shrink:0;
+}
+.status-help { margin-top:8px; padding:10px 12px; border-radius:8px; background:var(--bg-color); font-size:12px; line-height:1.7; color:var(--text-secondary); }
+.status-help div + div { margin-top:6px; }
+.status-help b { color:var(--text-primary); }
+.status-form-row { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; font-size:13px; color:var(--text-secondary); }
+.status-form-row .input { color:var(--text-primary); }
 
 /* ========== 字卡库页 ========== */
 .group-block { margin-bottom:16px; background:var(--card-bg); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
@@ -1735,7 +1783,7 @@ body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px +
       <!-- ========== 心情日历页（右上角菜单 → 抽屉式角色切换：我 / 各联系人；有记录的日期格显示 Emoji） ========== -->
       <div class="page" id="page-mood">
         <div class="top-bar">
-          <button class="chat-header-back" onclick="openPage('page-home')"><svg class="i"><use href="#icon-back"/></svg></button>
+          <button class="chat-header-back" onclick="backFromApp()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow">心情日历</div>
           <button class="top-bar-btn" onclick="toggleMoodDrawer(true)" title="切换查看">
             <svg class="i"><use href="#icon-menu"/></svg>
@@ -1760,7 +1808,7 @@ body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px +
       <!-- ========== 灵感随记页（极简列表，时间倒序，支持修改/删除） ========== -->
       <div class="page" id="page-inspiration">
         <div class="top-bar">
-          <button class="chat-header-back" onclick="openPage('page-home')"><svg class="i"><use href="#icon-back"/></svg></button>
+          <button class="chat-header-back" onclick="backFromApp()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow">灵感随记</div>
         </div>
         <div class="insp-input-bar">
@@ -1780,7 +1828,7 @@ body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px +
       <!-- ========== 占卜页（分步沉浸式：①选牌种 → ②选牌阵+输入问题 → ③牌面翻转结果） ========== -->
       <div class="page" id="page-divine">
         <div class="top-bar">
-          <button class="chat-header-back" onclick="openPage('page-home')"><svg class="i"><use href="#icon-back"/></svg></button>
+          <button class="chat-header-back" onclick="backFromApp()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow">占卜</div>
           <button class="top-bar-btn" onclick="openDivineHistory()" title="历史记录">
             <svg class="i"><use href="#icon-menu"/></svg>

@@ -1,7 +1,7 @@
 // 依赖：03-data.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, countdownAnniversary, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, getContact, getCurrentReplyRate, getMe, getReplyRateOf, renderContacts, saveContact } from './03-data.js';
+import { applyNickname, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
 
 // 给联系人c的消息做级联已读：把最新一条"我发出的消息"及其之前所有我发出的都标已读
 export function cascadeReadFromMe(cc, upToMsgId) {
@@ -72,6 +72,78 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   }
   // 绑定长按
   bindLongpress(box);
+}
+// A26：增量渲染（补出消息时只插入新增节点，避免整列表重建导致画面跳动）
+export async function renderChatIncremental(contactId) {
+  const box = $('chat-messages');
+  if (!box) return;
+  const [c, me] = await Promise.all([getContact(contactId), getMe()]);
+  if (!c) return;
+  const msgs = c.messages || [];
+  const lmState = state.loadMoreState[contactId] || { pageSize: 50 };
+  const showCount = Math.min(msgs.length, lmState.pageSize);
+  const slice = msgs.slice(msgs.length - showCount);
+  const contactName = c.name;
+  const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
+  const otherAvatar = c.avatar || DEFAULT_AVATAR;
+
+  // 记录视口锚点，插入后补偿滚动，避免内容跳动
+  const boxRect = box.getBoundingClientRect();
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  let anchor = null;
+  for (const el of box.querySelectorAll('.msg-row[data-msgid]')) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom > boxRect.top + 1) { anchor = { id: el.dataset.msgid, top: r.top }; break; }
+  }
+
+  const map = new Map();
+  for (const el of Array.from(box.querySelectorAll('.msg-row[data-msgid]'))) map.set(el.dataset.msgid, el);
+  const keep = new Set(slice.map(m => m.id));
+  // 删除已不存在的消息节点
+  for (const [id, el] of map) if (!keep.has(id)) { el.remove(); map.delete(id); }
+  // 更新已读文案 + 缺失节点按真实时间位置插入
+  const typingRow = box.querySelector('[data-type="_typing"]');
+  let inserted = 0;
+  for (let i = 0; i < slice.length; i++) {
+    const m = slice[i];
+    const old = map.get(m.id);
+    if (old) {
+      const rl = old.querySelector('.msg-read');
+      if (rl && m.from === 'me') { const txt = m.read ? '已读' : '未读'; if (rl.textContent !== txt) rl.textContent = txt; }
+      continue;
+    }
+    const tpl = document.createElement('div');
+    tpl.innerHTML = renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar, state._animMsgId).trim();
+    const node = tpl.firstElementChild;
+    if (!node) continue;
+    let nextEl = null;
+    for (let j = i + 1; j < slice.length; j++) { const e2 = map.get(slice[j].id); if (e2) { nextEl = e2; break; } }
+    if (nextEl) box.insertBefore(node, nextEl);
+    else if (typingRow) box.insertBefore(node, typingRow);
+    else box.appendChild(node);
+    map.set(m.id, node);
+    inserted++;
+  }
+  // 输入中提示同步
+  if (state.chatTypingState[contactId]) {
+    if (!typingRow) {
+      const tpl = document.createElement('div');
+      tpl.innerHTML = `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble msg-typing"><span class="msg-typing-text">${escapeHtml(contactName)}正在输入</span><span class="typing-dots"><span></span><span></span><span></span></span></div></div></div>`;
+      box.appendChild(tpl.firstElementChild);
+    }
+  } else if (typingRow) typingRow.remove();
+
+  if (atBottom) box.scrollTop = box.scrollHeight;
+  else if (anchor && inserted) {
+    const el = box.querySelector(`[data-msgid="${anchor.id}"]`);
+    if (el) box.scrollTop += el.getBoundingClientRect().top - anchor.top;
+  }
+  // 同步未读计数（聊天页当前会话）
+  const pageChat = $('page-chat');
+  if (contactId === state.currentContactId && pageChat && pageChat.classList.contains('active')) {
+    const fresh = await getContact(contactId);
+    if (fresh && fresh.unread) { fresh.unread = 0; await saveContact(fresh); renderContacts(); }
+  }
 }
 export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar, animId) {
   const isMe = m.from === 'me';
@@ -358,29 +430,125 @@ export async function sendChoiceMessage(question, options, result, allowMulti) {
   await sendMessageCore({ type:'choice', choice:{ question, options, result, allowMulti: !!allowMulti }, content: '', replyTo: null });
 }
 
-// 取消联系人当前的回复定时器（取消合并窗口排程）
+// 取消联系人当前的回复定时器（A26：键全部带 cid，避免跨联系人串台）
 export function cancelRoundTimers(cid) {
+  for (const k in state.chatTimers) {
+    if (k.indexOf('_' + cid + '_') !== -1 && (k.startsWith('rd_') || k.startsWith('rp_'))) {
+      clearTimeout(state.chatTimers[k]); delete state.chatTimers[k];
+    }
+  }
   const keys = ['rm_'+cid, 'rt_'+cid, 'rr_'+cid];
   for (const k of keys) { if (state.chatTimers[k]) { clearTimeout(state.chatTimers[k]); delete state.chatTimers[k]; } }
   state.chatTypingState[cid] = false;
 }
-// 触发 N 条回复（1 ~ roundCount），每条间隔 1~3 秒
+function clearJudgeTimers(cid, key) {
+  for (const p of ['rd_', 'rp_']) {
+    const k = p + cid + '_' + key;
+    if (state.chatTimers[k]) { clearTimeout(state.chatTimers[k]); delete state.chatTimers[k]; }
+  }
+}
+// 回复条数范围：旧单值 replyCount 自动扩展为 min=max；不设上限，保留 >=1 校验
+export function replyCountRange(c) {
+  const s = (c && c.settings) || {};
+  let min = s.replyCountMin != null ? parseInt(s.replyCountMin) : parseInt(s.replyCount);
+  let max = s.replyCountMax != null ? parseInt(s.replyCountMax) : parseInt(s.replyCount);
+  if (!Number.isFinite(min) || min < 1) min = 1;
+  if (!Number.isFinite(max) || max < 1) max = min;
+  if (min > max) { const t = min; min = max; max = t; }
+  return { min, max };
+}
+export function pickReplyCount(c) {
+  const { min, max } = replyCountRange(c);
+  return min === max ? min : randInt(min, max);
+}
+// 生成一批回复（条数由调用方决定，不超上限；时间戳=命中时刻，按 1~3 秒递增且不晚于当前）
+export async function appendReplyMessages(c, anchor, count, atTime) {
+  const cards = (c.cardGroups || []).flatMap(g => (g.cards || []).map(x => ({ content: x.content })));
+  const stickers = c.stickers || [];
+  const total = Math.max(0, count || 0);
+  const base = Math.min(Number(atTime) || now(), now());
+  let sent = 0;
+  for (let i = 0; i < total; i++) {
+    if (!cards.length && !stickers.length) break;
+    const useSticker = stickers.length > 0 && Math.random() < 0.5;
+    let type = 'text', content = '';
+    if (useSticker) { type = 'sticker'; content = pick(stickers).data; }
+    else if (cards.length) { type = 'text'; content = await applyNickname(pick(cards).content, c); }
+    else continue;
+    const history = (c.messages || []).filter(x => x.type === 'text' || x.type === 'image' || x.type === 'sticker' || x.type === 'choice');
+    let replyTo = null;
+    if (history.length && Math.random() < 0.5) replyTo = pick(history).id;
+    const time = Math.min(now(), base + i * randInt(1000, 3000));
+    c.messages.push({
+      id: uid(), from: 'other', type, content,
+      time, replyTo, snapshot: null,
+      read: true, readAt: time, replyAt: 0, replied: true, replyDone: true
+    });
+    sent++;
+  }
+  return sent;
+}
+// 触发 N 条回复（兼容旧入口）
 export async function emitRoundReplies(cid, baseMsg, count) {
   const cc = await getContact(cid); if (!cc) return;
-  const repCount = Math.max(1, Math.min(20, count || 1));
-  let totalSent = 0;
-  for (let i = 0; i < repCount; i++) {
-    await triggerReply(cc, baseMsg); // 每次抽一条字卡/表情
-    if (i < repCount - 1) await new Promise(r => setTimeout(r, randInt(1000, 3000)));
-    totalSent++;
-  }
+  const sent = await appendReplyMessages(cc, baseMsg, count, now());
   await saveContact(cc);
-  if (state.currentContactId === cid) renderChatMessages(cid, true);
-  else { cc.unread = (cc.unread || 0) + totalSent; await saveContact(cc); }
+  if (state.currentContactId === cid) renderChatIncremental(cid);
+  else if (sent) { cc.unread = (cc.unread || 0) + sent; await saveContact(cc); }
   renderContacts();
-  return totalSent;
+  return sent;
 }
-// 发送消息核心：保存消息 + 已读独立触发 + 合并回复窗口排程
+// 已读/回复定时排程（实时）；补算路径由 08-main 的判定组统一处理
+function scheduleJudgement(cid, key, msgIds, judgement, readAt, replyAt, replyCount) {
+  clearJudgeTimers(cid, key);
+  const readKey = 'rd_' + cid + '_' + key;
+  const repKey = 'rp_' + cid + '_' + key;
+  state.chatTimers[readKey] = setTimeout(() => {
+    delete state.chatTimers[readKey];
+    const task = async () => {
+      const cc = await getContact(cid); if (!cc) return;
+      if (!msgIds.some(id => { const m = cc.messages.find(x => x.id === id); return m && m.read; })) {
+        cascadeReadFromMe(cc, msgIds[msgIds.length - 1]);
+        await saveContact(cc);
+      }
+      if (state.currentContactId === cid) renderChatIncremental(cid);
+      if (judgement === 'reply') {
+        state.chatTypingState[cid] = true;
+        if (state.currentContactId === cid) renderChatIncremental(cid);
+      } else if (judgement === 'readNoReply') {
+        state.chatTypingState[cid] = true;
+        if (state.currentContactId === cid) renderChatIncremental(cid);
+        const mk = 'rm_' + cid + '_' + key;
+        state.chatTimers[mk] = setTimeout(() => {
+          delete state.chatTimers[mk];
+          state.chatTypingState[cid] = false;
+          if (state.currentContactId === cid) renderChatIncremental(cid);
+        }, 4000);
+      }
+    };
+    // 与补算串行，避免定时器与补算同时生成同一条回复
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
+  }, Math.max(0, readAt - now()));
+  if (judgement !== 'reply') return;
+  state.chatTimers[repKey] = setTimeout(() => {
+    delete state.chatTimers[repKey];
+    const task = async () => {
+      const cc = await getContact(cid); if (!cc) return;
+      const grp = cc.messages.filter(m => msgIds.includes(m.id));
+      if (grp.some(m => m.replyDone)) { state.chatTypingState[cid] = false; return; }
+      cascadeReadFromMe(cc, msgIds[msgIds.length - 1]);
+      const anchor = cc.messages.find(x => x.id === msgIds[msgIds.length - 1]) || cc.messages[cc.messages.length - 1];
+      const sent = await appendReplyMessages(cc, anchor, replyCount, replyAt);
+      for (const m of grp) { m.replied = true; m.replyDone = true; }
+      state.chatTypingState[cid] = false;
+      if (state.currentContactId === cid) { await saveContact(cc); renderChatIncremental(cid); }
+      else { cc.unread = (cc.unread || 0) + sent; await saveContact(cc); }
+      renderContacts();
+    };
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
+  }, Math.max(800, replyAt - now()));
+}
+// 发送消息核心：状态驱动判定链（分节 + 两个骰子 + 挂起队列）
 export async function sendMessageCore({ type, content, choice, replyTo }) {
   const cid = state.currentContactId;
   const c = await getContact(cid);
@@ -391,127 +559,98 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
     return sendChoiceResponseFlow(c, choice);
   }
 
-  // 快照：发送瞬间的状态 + 回复概率（0-100）
-  const statusName = c.status;
-  const rate = getReplyRateOf(c, statusName);
-
-  // 回复延迟：严格取「最快回复(fastSec 秒) ~ 最慢回复(slowMin 分钟)」区间随机，与状态概率完全解耦
-  const fastSec = Math.max(1, c.settings.fastSec || 5);
-  const slowMin = Math.max(1, c.settings.slowMin || 3);
-  const maxSec = Math.max(fastSec, slowMin * 60); // 统一转为秒
-
   const nowT = now();
-  // A20 时间轴：已读时刻与「最快~最慢」区间同一套规则随机；
-  // 命中回复时，回复时刻必定晚于已读时刻（先已读、后回复）。
-  const readDelay = maxSec > fastSec ? randInt(fastSec, maxSec - 1) : maxSec;
-  const replyDelay = readDelay < maxSec ? randInt(readDelay + 1, maxSec) : readDelay;
-  const readAt = nowT + readDelay * 1000;
-  const replyAt = nowT + replyDelay * 1000;
-
-  // 保存消息
+  // 1) 记录发送时刻与当时状态（statusId 快照写入消息）
   const msg = {
     id: uid(), from:'me', type, content: content || '', choice: choice || undefined,
     time: nowT, replyTo,
-    snapshot: { status: statusName, rate },
-    read: false, readAt, replyAt, replied: false
+    snapshot: null, read: false, readAt: 0, replyAt: 0, replied: false,
+    judgement: null, judgeKey: null
   };
   c.messages.push(msg);
-  await saveContact(c);
-  state._animMsgId = msg.id; // A17：仅这条新发送的消息播放发出动画
-  await renderChatMessages(cid, true);
-  clearQuoteReply();
 
-  // 已读定时器（每条独立，不再按 rate 门槛跳过）
-  const readKey = `r_${cid}_${msg.id}`;
-  state.chatTimers[readKey] = setTimeout(async () => {
-    const cc = await getContact(cid);
-    if (!cc) return;
-    const m = cc.messages.find(x => x.id === msg.id);
-    if (m && !m.read) {
-      cascadeReadFromMe(cc, msg.id);
-      await saveContact(cc);
-      if (state.currentContactId === cid) renderChatMessages(cid, false);
-    }
-    delete state.chatTimers[readKey];
-  }, Math.max(0, readAt - nowT));
-
-  // ========== 合并窗口回复排程 ==========
-  // 该联系人是否已有在等待中的回复轮次？
-  let round = state.replyRounds[cid];
-  const repCountSetting = c.settings.replyCount || 1;
-
-  if (!round || round.triggered) {
-    // 新的一轮
-    const willReply = Math.random() * 100 < rate;
-    const roundCount = willReply ? (repCountSetting <= 1 ? 1 : randInt(1, repCountSetting)) : 0;
-    round = {
-      rate,
-      willReply, // 本轮是否回复（决定显示输入中/要不要写回复消息）
-      roundCount, // 回复条数（1~replyCount）
-      anchorMsgId: msg.id, // 用最后一条 anchor 做级联已读锚
-      triggered: false
-    };
-    state.replyRounds[cid] = round;
-  } else {
-    // 已有一轮在等待 → 合并：锚更新为最新一条，回复时间按最新消息重新计时
-    round.anchorMsgId = msg.id;
-    // 重新计算回复条数（以发送瞬间rate的replyCount为准）
-    if (round.willReply) {
-      round.roundCount = repCountSetting <= 1 ? 1 : randInt(1, repCountSetting);
+  // 2) 分节：连续我发出的消息 1~2 条独立，≥3 条每 3 条一节（第 3/6/9…条到达时合并成节）
+  const msgs = c.messages;
+  let runStart = msgs.length - 1;
+  while (runStart > 0 && msgs[runStart - 1].from === 'me') runStart--;
+  const runLen = msgs.length - runStart;
+  let group = [msg];
+  let isSection = false;
+  if (runLen >= 3) {
+    const local = runLen - 1;
+    const gsize = (local % 3) + 1;
+    if (gsize === 3) {
+      const gStart = local - 2;
+      const cand = [msgs[runStart + gStart], msgs[runStart + gStart + 1], msgs[runStart + gStart + 2]];
+      // 只合并尚未被已读/回复的 3 条，避免覆盖已经发生的结果
+      if (cand.every(m => m && !m.read && !m.replyDone)) { group = cand; isSection = true; }
     }
   }
+  const judgeKey = isSection ? uid() : msg.id;
+  if (isSection) {
+    for (const m of group) { if (m.judgeKey) clearJudgeTimers(cid, m.judgeKey); }
+    // 之前独立判定为未读的挂起项取消（同节重新判定）
+    c.pendingReplies = (c.pendingReplies || []).filter(p => !(p.msgIds || []).some(id => group.some(m => m.id === id)));
+  }
 
-  // 取消旧定时器（每次新消息都重新排程一次）
-  cancelRoundTimers(cid);
+  const pool = await getStatusPool();
+  const cats = await getStatusCategories();
+  const st = pool.find(s => s.id === c.statusId) || null;
+  const rate = st ? st.replyRate : 50; // status.replyRate = 已读并回复的概率（0-100）
+  const cat = cats.find(x => x.id === (st && st.category)) || cats[0];
 
-  // 时间轴：readDelay 秒后消息被已读 → 同一时刻立刻显示「正在输入」气泡；
-  // 本轮要回复：动画持续到 replyDelay 到点（剩余等待 = replyDelay - readDelay）再关动画、发回复；
-  // 已读不回：动画持续 4 秒后自动消失（对方看到了，打了一半字又删了）
-  state.chatTimers['rt_'+cid] = setTimeout(() => {
-    state.chatTypingState[cid] = true;
-    if (state.currentContactId === cid) renderChatMessages(cid, false);
-    if (!round.willReply) {
-      state.chatTimers['rm_'+cid] = setTimeout(() => {
-        state.chatTypingState[cid] = false;
-        if (state.currentContactId === cid) renderChatMessages(cid, false);
-        delete state.chatTimers['rm_'+cid];
-      }, 4000);
+  const fastSec = Math.max(1, c.settings.fastSec || 5);
+  const slowMin = Math.max(1, c.settings.slowMin || 3);
+  const maxSec = Math.max(fastSec, slowMin * 60);
+  const baseTime = isSection ? group[0].time : nowT;
+  const readDelay = maxSec > fastSec ? randInt(fastSec, maxSec - 1) : maxSec;
+
+  // 3) 第一个骰子：该状态的 replyRate 判回不回
+  const willReply = Math.random() * 100 < rate;
+  let judgement = 'unread', readAt = 0, replyAt = 0, replyCount = 0;
+  if (willReply) {
+    const replyDelay = readDelay < maxSec ? randInt(readDelay + 1, maxSec) : readDelay;
+    readAt = baseTime + readDelay * 1000;
+    replyAt = baseTime + replyDelay * 1000;
+    if (readAt <= nowT) { readAt = nowT + 1000; replyAt = Math.max(replyAt, readAt + 1000); }
+    judgement = 'reply';
+    replyCount = pickReplyCount(c);
+  } else {
+    // 4) 第二个骰子：所属大类拆分判「未读 / 已读不回」
+    const unreadRoll = Math.random() * 100 < (cat ? cat.unread : 100);
+    if (unreadRoll) { judgement = 'unread'; readAt = 0; }
+    else {
+      judgement = 'readNoReply';
+      readAt = baseTime + readDelay * 1000;
+      if (readAt <= nowT) readAt = nowT + 1000;
     }
-  }, Math.max(0, readAt - nowT));
-
-  // 排程：最终回复/已读不回
-  state.chatTimers['rr_'+cid] = setTimeout(async () => {
-    const cc = await getContact(cid);
-    const rd = state.replyRounds[cid];
-    if (!cc || !rd || rd.triggered) { cancelRoundTimers(cid); delete state.replyRounds[cid]; return; }
-    rd.triggered = true;
-    state.chatTypingState[cid] = false;
-
-    // 级联已读（锚=最新一条）
-    cascadeReadFromMe(cc, rd.anchorMsgId);
-    // 将所有之前积累的未 replied 我的消息全部标已处理
-    for (const m of cc.messages) {
-      if (m.from === 'me' && !m.replied && m.snapshot) m.replied = true;
-    }
-
-    let sentCount = 0;
-    if (rd.willReply && rd.roundCount > 0) {
-      // 生成 1~roundCount 条回复（间隔1~3秒），逐条写入db
-      const cnt = Math.max(1, rd.roundCount);
-      let anchor = cc.messages.find(x => x.id === rd.anchorMsgId) || cc.messages[cc.messages.length-1];
-      for (let i = 0; i < cnt; i++) {
-        await triggerReply(cc, anchor);
-        if (i < cnt - 1) await new Promise(r => setTimeout(r, randInt(1000, 3000)));
-      }
-      sentCount = cnt;
-    }
-    await saveContact(cc);
-    if (state.currentContactId === cid) renderChatMessages(cid, true);
-    else if (sentCount > 0) { cc.unread = (cc.unread || 0) + sentCount; await saveContact(cc); }
-    cancelRoundTimers(cid);
-    delete state.replyRounds[cid];
-    renderContacts();
-  }, Math.max(800, replyAt - nowT));
+  }
+  for (const m of group) {
+    m.snapshot = { status: st ? st.name : '', statusId: c.statusId, rate, category: st ? st.category : '' };
+    m.judgeKey = judgeKey;
+    m.judgement = judgement;
+    m.sectionId = isSection ? judgeKey : null;
+    m.read = false;
+    m.readAt = readAt;
+    m.replyAt = judgement === 'reply' ? replyAt : 0;
+    m.replied = false;
+    m.replyDone = false;
+    m.queued = judgement === 'unread';
+  }
+  if (judgement === 'unread') {
+    c.pendingReplies = c.pendingReplies || [];
+    c.pendingReplies.push({
+      id: uid(), sectionId: isSection ? judgeKey : null,
+      msgIds: group.map(m => m.id), sentAt: nowT,
+      statusId: c.statusId, windows: 0
+    });
+  }
+  await saveContact(c);
+  state._animMsgId = msg.id;
+  await renderChatMessages(cid, true);
+  clearQuoteReply();
+  if (judgement === 'unread') return; // 挂起：等状态切换窗口
+  scheduleJudgement(cid, judgeKey, group.map(m => m.id), judgement, readAt, replyAt, replyCount);
 }
 
 // 选择流程：先发提问消息 → 10s~3min 后对方回复选择
@@ -572,43 +711,9 @@ export async function sendChoiceResponseFlow(c, choice) {
   }, delay*1000);
 }
 
-// 触发回复：从字卡库抽，按回复条数，50%引用历史，50%概率用表情包
+// 触发回复：从字卡库随机抽，条数按设置范围；50%引用历史，50%概率用表情包
 export async function triggerReply(c, triggerMsg) {
-  const cid = c.id;
-  const cards = c.cardGroups.flatMap(g => g.cards.map(c2 => ({content: c2.content, type:'text'})));
-  const hasCards = cards.length > 0;
-  const hasStickers = (c.stickers || []).length > 0;
-  let count = Math.max(1, c.settings.replyCount || 1);
-  for (let i = 0; i < count; i++) {
-    let gap = i === 0 ? 0 : randInt(1, 3);
-    // 钳平到当前时刻，防止补算时给出未来时间戳导致乱序
-    const atTime = Math.min((triggerMsg.replyAt || now()) + gap * 1000, now());
-    // 50%引用历史消息
-    let replyTo = null;
-    const history = (c.messages || []).filter(x => x.type === 'text' || x.type === 'image' || x.type === 'sticker' || x.type === 'choice');
-    if (history.length > 0 && Math.random() < 0.5) replyTo = pick(history).id;
-    // 生成内容
-    let type = 'text', content = '';
-    const useSticker = hasStickers && Math.random() < 0.5;
-    if (useSticker) {
-      type = 'sticker';
-      content = pick(c.stickers).data;
-    } else {
-      if (!hasCards) {
-        // 无字卡，不回复（该条跳过）
-        continue;
-      }
-      type = 'text';
-      content = pick(cards).content;
-      content = await applyNickname(content, c);
-    }
-    const reply = {
-      id: uid(), from:'other', type, content,
-      time: atTime, replyTo, snapshot: null,
-      read: true, readAt: atTime, replyAt: 0, replied: true
-    };
-    c.messages.push(reply);
-  }
+  return appendReplyMessages(c, triggerMsg, pickReplyCount(c), triggerMsg.replyAt || now());
 }
 
 // ============ 折叠菜单 ============

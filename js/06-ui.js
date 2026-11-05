@@ -1,7 +1,7 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
-import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getTheme, openChat, openPage, rateColor, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
+import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
 
@@ -110,6 +110,9 @@ export function openStickerPanel() {
 export function closeStickerPanel() {
   const p = $('sticker-panel'); if (!p) return;
   p.classList.add('hide');
+  // A25：关闭后主动失焦，避免触发按钮残留高亮/焦点
+  const btn = $('chat-sticker-toggle');
+  if (btn) { btn.blur(); btn.classList.remove('active', 'focus'); }
   if (_stickerDocBound) {
     document.removeEventListener('pointerdown', onStickerOutside, true);
     document.removeEventListener('keydown', onStickerEsc);
@@ -153,27 +156,45 @@ export function backFromContactSetting() {
 }
 export async function renderContactSetting(id) {
   const c = await getContact(id); if (!c) return;
+  // A25：状态来自共享池；为空/不在池内时随机取一个并写回
+  const pool = await getStatusPool();
+  await normalizeContactStatus(c, pool);
   const box = $('cs-content'); if (!box) return;
   const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
-  const tiers = ['秒回','常回','看心情','很少回','不理人'];
-  // A18：当前生效状态（同名时只标识第一条，保证不出现多个选中）
-  const currentSid = (c.statusList || []).find(s => s.name === c.status)?.id;
-  const statusRows = (c.statusList || []).map(s => {
-    const rate = (typeof s.replyRate === 'number') ? s.replyRate : ({ '秒回': 97, '常回': 80, '看心情': 50, '很少回': 20, '不理人': 5 }[s.tier] || 50);
-    const isCurrent = !!currentSid && s.id === currentSid;
+  const cats = await getStatusCategories();
+  // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
+  const currentSid = (c.statusId && pool.some(s => s.id === c.statusId))
+    ? c.statusId : (pool.find(s => s.name === c.status)?.id);
+  const statusGroupHtml = cats.map(cat => {
+    const items = pool.filter(s => s.category === cat.id);
+    if (!items.length) return '';
+    const rows = items.map(s => {
+      const rate = (typeof s.replyRate === 'number') ? s.replyRate : 50;
+      const isCurrent = !!currentSid && s.id === currentSid;
+      return `
+      <div class="status-item${isCurrent ? ' current' : ''}">
+        <div class="status-info">
+          <div class="status-name">${escapeHtml(s.name)} ${isCurrent ? '<span class="tag tier-秒回" style="background:'+rateColor(rate)+';color:#fff;border:none;">当前</span>' : ''}</div>
+          <div class="status-tier" style="color:var(--text-secondary);font-size:12px;">已读并回复的概率 ${rate}%</div>
+        </div>
+        <div class="status-actions">
+          <button onclick="setStatusCurrent('${escapeHtml(s.id)}')" title="设为当前" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-check"/></svg></button>
+          <button onclick="editStatus('${escapeHtml(s.id)}')" title="编辑" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-pencil"/></svg></button>
+          <button style="background:#fee2e2;color:#991b1b;display:flex;align-items:center;justify-content:center;" onclick="deleteStatus('${escapeHtml(s.id)}')" title="删除"><svg class="i i-sm" style="stroke:#991b1b;"><use href="#icon-trash"/></svg></button>
+        </div>
+      </div>`;
+    }).join('');
     return `
-    <div class="status-item${isCurrent ? ' current' : ''}">
-      <div class="status-info">
-        <div class="status-name">${escapeHtml(s.name)} ${isCurrent ? '<span class="tag tier-秒回" style="background:'+rateColor(rate)+';color:#fff;border:none;">当前</span>' : ''}</div>
-        <div class="status-tier" style="color:var(--text-secondary);font-size:12px;">回复概率 ${rate}%</div>
-      </div>
-      <div class="status-actions">
-        <button onclick="setStatusCurrent('${escapeHtml(s.id)}')" title="设为当前" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-check"/></svg></button>
-        <button onclick="editStatus('${escapeHtml(s.id)}')" title="编辑" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-pencil"/></svg></button>
-        <button style="background:#fee2e2;color:#991b1b;display:flex;align-items:center;justify-content:center;" onclick="deleteStatus('${escapeHtml(s.id)}')" title="删除"><svg class="i i-sm" style="stroke:#991b1b;"><use href="#icon-trash"/></svg></button>
-      </div>
-    </div>
-  `;}).join('');
+      <div class="status-group">
+        <div class="status-group-title">${escapeHtml(cat.name)}</div>
+        ${rows}
+        <div class="status-split">
+          <label>未读 <input type="number" min="0" max="100" value="${cat.unread}" onchange="csSetSplit('${escapeHtml(cat.id)}','unread',this.value)"> %</label>
+          <label>已读不回 <input type="number" min="0" max="100" value="${cat.readNoReply}" onchange="csSetSplit('${escapeHtml(cat.id)}','readNoReply',this.value)"> %</label>
+        </div>
+      </div>`;
+  }).join('');
+  const statusRows = statusGroupHtml;
   const autoMode = c.statusAuto !== false;
   box.innerHTML = `
     <div class="cs-section">
@@ -217,7 +238,7 @@ export async function renderContactSetting(id) {
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-cog"/></svg> 生活状态</div>
-      <div class="cs-card">
+      <div class="cs-card status-card">
         <div class="cs-row cs-row-switch">
           <span class="cs-label">自动切换</span>
           <span class="cs-value">
@@ -226,7 +247,13 @@ export async function renderContactSetting(id) {
         </div>
         ${statusRows || '<div style="padding:20px 0;text-align:center;color:var(--text-secondary);">还没有状态，点击下方按钮添加</div>'}
         <button class="btn btn-ghost" style="width:100%;margin-top:10px;" onclick="csAddStatus()">＋ 添加状态</button>
-        <div class="cs-hint">每 30 分钟~3 小时随机切换</div>
+        <div id="cs-status-help" class="status-help hide">
+          <div><b>已读并回复</b>：按该状态的「已读并回复的概率」掷骰，命中后会先已读，再发字卡回复。</div>
+          <div><b>已读不回</b>：看到了消息，但这次不回复。</div>
+          <div><b>未读</b>：一直没看，留到下次状态切换再判定；连续 3 个窗口未看会收尾为已读不回。睡觉类永远不会出现已读不回。</div>
+        </div>
+        <button class="status-help-btn status-help-corner" onclick="toggleStatusHelp()" title="状态说明">?</button>
+        <div class="cs-hint status-hint">每 2~8 小时随机切换</div>
       </div>
     </div>
 
@@ -246,9 +273,14 @@ export async function renderContactSetting(id) {
           </span>
         </div>
         <div class="cs-row">
-          <span class="cs-label">回复条数</span>
+          <span class="cs-label">回复条数范围</span>
           <span class="cs-value" style="text-align:right;">
-            <div class="range-row" style="justify-content:flex-end;"><input type="number" min="1" max="10" value="${c.settings.replyCount||1}" id="cs-repc"> <span class="cs-unit">条</span></div>
+            <div class="range-row" style="justify-content:flex-end;">
+              <input type="number" min="1" value="${(() => { const s=c.settings; let mn = s.replyCountMin != null ? s.replyCountMin : (s.replyCount||1); let mx = s.replyCountMax != null ? s.replyCountMax : mn; return mn; })()}" id="cs-repc-min">
+              <span class="cs-unit">~</span>
+              <input type="number" min="1" value="${(() => { const s=c.settings; let mn = s.replyCountMin != null ? s.replyCountMin : (s.replyCount||1); let mx = s.replyCountMax != null ? s.replyCountMax : mn; return mx; })()}" id="cs-repc-max">
+              <span class="cs-unit">条</span>
+            </div>
           </span>
         </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveReply()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存回复设置</button>
@@ -399,11 +431,19 @@ export async function csDeleteContact() {
 }
 export async function setStatusCurrent(sid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const s = (c.statusList||[]).find(x => x.id === sid);
+  const pool = await getStatusPool();
+  const s = pool.find(x => x.id === sid);
   if (!s) return;
+  const t = now();
+  // 手动切换也是一次状态窗口：先记上一段，再以新状态开始新窗口
+  recordStatusWindow(c, c.statusId, c.statusSince || t, t);
+  c.statusId = s.id;
   c.status = s.name;
   c.statusAuto = false;
-  c.nextStatusChangeAt = now() + randInt(30, 180) * 60 * 1000;
+  c.statusSince = t;
+  c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+  c.nextStatusChangeAt = c.nextStatusAt;
+  c.manualSwitchAt = t;
   await saveContact(c);
   // 切到更活跃状态后，立刻补算积压的未读+回复（概率<10%时被暂停的）
   // runCatchUp 内部已自行入队，不要再包一层 enqueueTask（否则队列自锁）
@@ -416,75 +456,136 @@ export async function setStatusCurrent(sid) {
   }
   toast(`已设为「${s.name}」`);
 }
+// A26：状态编辑弹窗（选大类 + 名称 + 已读并回复的概率）
+function statusFormDialog(title, initial, cats) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (done) return; done = true; closeModal(); resolve(v); };
+    const catOpts = cats.map(x => `<option value="${escapeHtml(x.id)}"${x.id === initial.category ? ' selected' : ''}>${escapeHtml(x.name)}</option>`).join('');
+    const body = `
+      <div class="status-form">
+        <label class="status-form-row"><span>所属大类</span>
+          <select id="_st-cat" class="input">${catOpts}</select>
+        </label>
+        <label class="status-form-row"><span>状态名称</span>
+          <input id="_st-name" class="input" value="${escapeHtml(initial.name || '')}" placeholder="例如：读书、追剧">
+        </label>
+        <label class="status-form-row"><span>已读并回复的概率</span>
+          <input id="_st-rate" class="input" type="number" min="0" max="100" value="${initial.rate != null ? initial.rate : 80}">
+        </label>
+        <div class="cs-hint">该数字表示「对方看到消息后，选择回复」的概率（0-100）：100 必回，0 从不回复。</div>
+      </div>`;
+    showModal(title, body, [
+      { label: '取消', cls: 'btn-outline', onClick: () => finish(null) },
+      { label: '保存', cls: 'btn', onClick: () => {
+        const category = $('_st-cat').value;
+        const name = ($('_st-name').value || '').trim();
+        const rate = parseInt($('_st-rate').value);
+        if (!name) return toast('请输入状态名');
+        if (!Number.isFinite(rate) || rate < 0 || rate > 100) return toast('概率无效，请填 0-100 的整数');
+        if (!cats.some(x => x.id === category)) return toast('请选择所属大类');
+        finish({ category, name, rate });
+      } }
+    ], () => finish(null));
+  });
+}
 export async function editStatus(sid) {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const s = (c.statusList||[]).find(x => x.id === sid); if (!s) return;
-  const oldRate = (typeof s.replyRate === 'number') ? s.replyRate : ({ '秒回': 97, '常回': 80, '看心情': 50, '很少回': 20, '不理人': 5 }[s.tier] || 50);
-  const r = await inputDialog('编辑状态', [
-    { key: 'name', label: '状态名称', value: s.name, required: true },
-    { key: 'rate', label: '回复概率（0-100，95=秒回 80=常回 50=看心情 15=很少回 3=不理人）', type: 'number', value: String(oldRate), required: true }
-  ], '保存');
+  const pool = await getStatusPool();
+  const cats = await getStatusCategories();
+  const s = pool.find(x => x.id === sid); if (!s) return;
+  const oldRate = (typeof s.replyRate === 'number') ? s.replyRate : 50;
+  const r = await statusFormDialog('编辑状态', {
+    name: s.name,
+    rate: oldRate,
+    category: s.category || (cats[0] && cats[0].id)
+  }, cats);
   if (!r) return;
-  const rr = parseInt(r.rate);
-  if (isNaN(rr) || rr < 0 || rr > 100) return toast('概率无效，请填 0-100 的整数');
-  s.name = (r.name || '').trim() || s.name;
-  s.replyRate = rr;
+  const oldName = s.name;
+  const oldCategory = s.category;
+  const newName = (r.name || '').trim() || s.name;
+  if (newName !== oldName && pool.some(x => x.id !== sid && x.name === newName)) return toast('状态名已存在');
+  s.name = newName;
+  s.replyRate = r.rate;
+  s.category = r.category;
   delete s.tier;
-  await saveContact(c);
-  runCatchUp().catch(() => {});
+  // 改名时把正在使用旧名字的联系人一起改名，避免变成无效状态
+  if (newName !== oldName) {
+    const all = await getAllContacts();
+    for (const x of all) if (x.status === oldName) { x.status = newName; await saveContact(x); }
+  }
+  await saveStatusPool(pool);
+  if (oldCategory !== r.category) runCatchUp().catch(() => {});
   renderContactSetting(state.currentContactSettingId);
   renderContacts();
 }
 export async function deleteStatus(sid) {
   if (!await confirmDialog('删除这个状态？')) return;
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  if ((c.statusList || []).length <= 1) return toast('至少保留一个状态');
-  const s = (c.statusList||[]).find(x => x.id === sid);
-  c.statusList = (c.statusList||[]).filter(x => x.id !== sid);
-  if (s && c.status === s.name) { c.status = c.statusList[0] ? c.statusList[0].name : ''; }
-  await saveContact(c);
+  const pool = await getStatusPool();
+  if (pool.length <= 1) return toast('至少保留一个状态');
+  if (!pool.some(x => x.id === sid)) return;
+  const nextPool = pool.filter(x => x.id !== sid);
+  await saveStatusPool(nextPool);
   renderContactSetting(state.currentContactSettingId);
   renderContacts();
 }
 export async function csAddStatus() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  const r = await inputDialog('添加状态', [
-    { key: 'name', label: '状态名称（如：读书、追剧、睡觉）', placeholder: '读书', required: true },
-    { key: 'rate', label: '回复概率（0-100，95=秒回 80=常回 50=看心情 15=很少回 3=不理人）', type: 'number', value: '80', required: true }
-  ], '保存');
+  const pool = await getStatusPool();
+  const cats = await getStatusCategories();
+  const r = await statusFormDialog('添加状态', { name: '', rate: 80, category: cats[0] && cats[0].id }, cats);
   if (!r) return;
   const nm = (r.name || '').trim();
   if (!nm) return toast('请输入状态名');
-  const rr = parseInt(r.rate);
-  if (isNaN(rr) || rr < 0 || rr > 100) return toast('概率无效，请填 0-100 的整数');
-  c.statusList = c.statusList || [];
-  c.statusList.push({ id: uid(), name: nm, replyRate: rr });
-  if (!c.status) c.status = nm;
-  await saveContact(c);
+  if (pool.some(x => x.name === nm)) return toast('状态已存在');
+  pool.push({ id: uid(), name: nm, category: r.category, replyRate: r.rate });
+  await saveStatusPool(pool);
   renderContactSetting(state.currentContactSettingId);
   renderContacts();
 }
+// A26：大类拆分比例输入（两项联动，和为 100）
+export async function csSetSplit(catId, key, value) {
+  const cats = await getStatusCategories();
+  const cat = cats.find(x => x.id === catId); if (!cat) return;
+  let v = parseInt(value);
+  if (!Number.isFinite(v)) v = 0;
+  v = Math.max(0, Math.min(100, v));
+  if (key === 'unread') { cat.unread = v; cat.readNoReply = 100 - v; }
+  else { cat.readNoReply = v; cat.unread = 100 - v; }
+  await saveStatusCategories(cats);
+  renderContactSetting(state.currentContactSettingId);
+}
+export function toggleStatusHelp() {
+  const el = $('cs-status-help');
+  if (el) el.classList.toggle('hide');
+}
 export async function csToggleStatusAuto() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
-  c.statusAuto = !(c.statusAuto !== false ? false : true);
-  c.statusAuto = c.statusAuto ? false : true;
-  // 上面的写法会混乱，直接用：当前是开，就变关，反之亦然
-  // 重新读取保证准确
-  const cc = await getContact(state.currentContactSettingId);
-  cc.statusAuto = (cc.statusAuto !== false) ? false : true;
-  cc.nextStatusChangeAt = now() + randInt(30, 180) * 60 * 1000;
-  await saveContact(cc);
+  c.statusAuto = (c.statusAuto !== false) ? false : true;
+  const t = now();
+  c.statusSince = t;
+  c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+  c.nextStatusChangeAt = c.nextStatusAt;
+  await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
 }
 export async function csSaveReply() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   const fast = parseInt($('cs-fast').value) || 1;
   const slow = parseInt($('cs-slow').value) || 1;
-  const repc = Math.min(10, Math.max(1, parseInt($('cs-repc').value) || 1));
+  let mn = parseInt($('cs-repc-min').value);
+  let mx = parseInt($('cs-repc-max').value);
+  // 条数不设上限，只保留 >=1 的输入校验；min/max 填反时自动交换
+  if (isNaN(mn) || mn < 1) mn = 1;
+  if (isNaN(mx) || mx < 1) mx = mn;
+  if (mn > mx) { const t = mn; mn = mx; mx = t; }
   if (fast > slow*60) return toast('最快不能大于最慢');
   c.settings.fastSec = fast;
   c.settings.slowMin = slow;
-  c.settings.replyCount = repc;
+  c.settings.replyCountMin = mn;
+  c.settings.replyCountMax = mx;
+  c.settings.replyCount = mx; // 旧字段兼容
   await saveContact(c);
   toast('已保存');
 }

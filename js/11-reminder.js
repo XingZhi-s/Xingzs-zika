@@ -26,12 +26,22 @@ export function renderChatToolDrawer() {
 export function toggleChatToolDrawer() {
   const d = $('chat-tool-drawer');
   if (!d) return;
-  renderChatToolDrawer();
-  d.classList.toggle('hide');
+  if (d.classList.contains('hide')) {
+    renderChatToolDrawer();
+    d.classList.remove('hide');
+  } else {
+    closeChatToolDrawer();
+  }
 }
 export function closeChatToolDrawer() {
   const d = $('chat-tool-drawer');
   if (d) d.classList.add('hide');
+  // A25：关闭后主动失焦，避免触发按钮残留高亮/焦点
+  const ae = document.activeElement;
+  if (ae && ae.classList && ae.classList.contains('chat-input-btn')) {
+    ae.blur();
+    ae.classList.remove('active', 'focus');
+  }
 }
 export function runChatTool(id) {
   closeChatToolDrawer();

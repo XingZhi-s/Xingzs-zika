@@ -1,10 +1,10 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, closeModal, dbAll, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, applyTheme, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getTheme, openChat, openContactSettingsFromChatDirect, openPage, renderContacts, renderMeBrief, saveContact } from './03-data.js';
-import { addAnni, addChoiceOpt, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, previewImg, quoteReply, renderChatMessages, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
+import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
+import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
+import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickReplyCount, previewImg, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
@@ -31,65 +31,198 @@ async function processQueue() {
 }
 
 // ============ 关闭网页补算 + 周期检查 ============
+const CATCHUP_LOCK_KEY = 'catchup_lock_v1';
+const MAX_STATUS_SEGMENTS = 60; // 状态回放硬上限：超过直接跳到当下（常数级工作量）
+function tabId() { if (!state._tabId) state._tabId = uid(); return state._tabId; }
+async function acquireCatchUpLock() {
+  const t = now();
+  const rec = await dbGet('meta', CATCHUP_LOCK_KEY);
+  if (rec && rec.owner !== tabId()) {
+    const age = t - rec.at;
+    // 其它标签页刚跑过（或时间回拨但仍在锁窗口）→ 跳过，避免重复补算/补发
+    if ((age >= 0 && age < 8000) || (age < 0 && age > -5000)) return false;
+  }
+  await dbPut('meta', { k: CATCHUP_LOCK_KEY, at: t, owner: tabId() });
+  return true;
+}
+async function releaseCatchUpLock() {
+  const rec = await dbGet('meta', CATCHUP_LOCK_KEY);
+  if (rec && rec.owner === tabId()) await dbDel('meta', CATCHUP_LOCK_KEY);
+}
+// 状态回放：按 2–8 小时逐段推进到现在，写作息表（每联系人独立）；返回切换窗口（新状态）
+function replayStatus(c, pool, t) {
+  const windows = [];
+  if (!pool.length) return windows;
+  // 手动切换（自动切换关闭时）：在切换时刻用新状态处理一次挂起队列
+  if (c.manualSwitchAt) {
+    windows.push({ at: c.manualSwitchAt, statusId: c.statusId });
+    c.manualSwitchAt = 0;
+    return windows;
+  }
+  if (c.statusAuto === false) return windows;
+  if (!c.statusSince) c.statusSince = Math.min(t, (c.nextStatusAt || t) - 1000);
+  let next = c.nextStatusAt;
+  if (!next || next <= c.statusSince) next = c.statusSince + randInt(120, 480) * 60 * 1000;
+  let count = 0;
+  while (next <= t && count < MAX_STATUS_SEGMENTS) {
+    recordStatusWindow(c, c.statusId, c.statusSince, next);
+    const nextId = pick(pool).id;
+    windows.push({ at: next, statusId: nextId });
+    c.statusId = nextId;
+    const st = pool.find(s => s.id === nextId);
+    if (st) c.status = st.name;
+    c.statusSince = next;
+    next = next + randInt(120, 480) * 60 * 1000;
+    count++;
+  }
+  if (count >= MAX_STATUS_SEGMENTS && next <= t) {
+    // 离开太久：不再逐段回放，直接跳到当下（挂起消息仍用已生成的 60 个有效窗口处理）
+    if (c.statusSince < t) recordStatusWindow(c, c.statusId, c.statusSince, t);
+    c.statusSince = t;
+    c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+  } else {
+    c.nextStatusAt = next;
+  }
+  if (c.nextStatusAt < c.statusSince) c.nextStatusAt = c.statusSince + randInt(120, 480) * 60 * 1000;
+  c.nextStatusChangeAt = c.nextStatusAt;
+  return windows;
+}
+// 挂起消息按作息表窗口判定（只遍历该联系人的挂起队列，不扫全部消息）
+async function processPending(c, windows, pool, cats) {
+  if (!c.pendingReplies || !c.pendingReplies.length || !windows.length) return false;
+  let changed = false;
+  const remain = [];
+  for (const p of c.pendingReplies) {
+    let resolved = false;
+    for (const w of windows) {
+      if (w.at <= (p.sentAt || 0)) continue;
+      const st = pool.find(s => s.id === w.statusId) || null;
+      const cat = cats.find(x => x.id === (st && st.category)) || cats[0];
+      const seen = Math.random() * 100 >= (cat ? cat.unread : 100);
+      if (!seen) {
+        p.windows = (p.windows || 0) + 1;
+        // 连续 3 个窗口未看 → 收尾已读不回；睡觉类（readNoReply=0）不在睡觉时判已读不回
+        if (p.windows >= 3 && cat && cat.readNoReply > 0) {
+          markPendingRead(c, p, w.at, 'readNoReply');
+          resolved = true; changed = true; break;
+        }
+        continue;
+      }
+      markPendingRead(c, p, w.at, 'read');
+      const rate = st ? st.replyRate : 50; // 已读并回复的概率
+      if (Math.random() * 100 < rate) {
+        const cnt = pickReplyCount(c);
+        const anchorId = (p.msgIds || [])[(p.msgIds || []).length - 1];
+        const anchor = c.messages.find(x => x.id === anchorId) || c.messages[c.messages.length - 1];
+        const sent = await appendReplyMessages(c, anchor, cnt, w.at);
+        for (const id of (p.msgIds || [])) { const m = c.messages.find(x => x.id === id); if (m) { m.replied = true; m.replyDone = true; } }
+        if (sent && state.currentContactId !== c.id) c.unread = (c.unread || 0) + sent;
+      }
+      resolved = true; changed = true; break;
+    }
+    if (!resolved) remain.push(p);
+  }
+  // 已读单调：被其它判读级联标已读的挂起项直接结束（不再补回复）
+  const nextPending = [];
+  for (const p of remain) {
+    const ms = (p.msgIds || []).map(id => c.messages.find(x => x.id === id)).filter(Boolean);
+    if (ms.length && ms.every(m => m.read)) continue;
+    nextPending.push(p);
+  }
+  c.pendingReplies = nextPending;
+  return changed;
+}
+function markPendingRead(c, p, at, reason) {
+  const ids = p.msgIds || [];
+  const anchorId = ids[ids.length - 1];
+  if (anchorId) cascadeReadFromMe(c, anchorId);
+  for (const id of ids) {
+    const m = c.messages.find(x => x.id === id);
+    if (!m) continue;
+    if (!m.readAt) m.readAt = at;
+    m.queued = false;
+    if (reason !== 'reply') m.replied = true;
+  }
+}
+// 判定组（实时定时器之外的补算）：回/已读不回 到点结算，同一节共用判定
+async function processJudgedMessages(c, t) {
+  const groups = new Map();
+  for (const m of c.messages) {
+    if (m.from !== 'me' || !m.judgeKey || !m.judgement || m.judgement === 'unread') continue;
+    let g = groups.get(m.judgeKey);
+    if (!g) { g = { msgs: [], judgement: m.judgement, readAt: m.readAt || 0, replyAt: m.replyAt || 0, replyDone: false }; groups.set(m.judgeKey, g); }
+    g.msgs.push(m);
+    if (m.replyDone) g.replyDone = true;
+    if (!g.readAt && m.readAt) g.readAt = m.readAt;
+    if (!g.replyAt && m.replyAt) g.replyAt = m.replyAt;
+  }
+  let changed = false;
+  for (const g of groups.values()) {
+    const anchorId = g.msgs[g.msgs.length - 1].id;
+    if (g.readAt && t >= g.readAt && g.msgs.some(m => !m.read)) {
+      cascadeReadFromMe(c, anchorId);
+      for (const m of g.msgs) if (m.judgement === 'readNoReply') m.replied = true;
+      changed = true;
+    }
+    if (g.judgement === 'reply' && !g.replyDone && g.replyAt && t >= g.replyAt) {
+      cascadeReadFromMe(c, anchorId);
+      const anchor = c.messages.find(x => x.id === anchorId) || c.messages[c.messages.length - 1];
+      const sent = await appendReplyMessages(c, anchor, pickReplyCount(c), g.replyAt);
+      for (const m of g.msgs) { m.replied = true; m.replyDone = true; }
+      if (sent && state.currentContactId !== c.id) c.unread = (c.unread || 0) + sent;
+      changed = true;
+    }
+  }
+  return changed;
+}
 export async function runCatchUp() {
   return enqueueTask(async () => {
-    const contacts = await getAllContacts();
     const t = now();
+    if (!await acquireCatchUpLock()) return false;
+    try {
+    const contacts = await getAllContacts();
+    // A25/A26：状态共享池（内置 + 自定义，所有联系人通用）
+    const statusPool = await getStatusPool();
+    const cats = await getStatusCategories();
     let changed = false;
     for (let c of contacts) {
-      // 0) 兜底修复：当前状态已不在列表中（被删除/导入脏数据）→ 落到列表第一项，避免空状态或指向已删除项
-      if ((c.statusList || []).length && !c.statusList.some(s => s.name === c.status)) {
-        c.status = c.statusList[0].name;
-        changed = true;
-      }
-      // 1) 状态自动切换（随机池 = 联系人全部状态：内置 + 自定义，不额外加权、不避开上一项）
-      if (c.statusAuto !== false && (c.statusList||[]).length > 1) {
-        if (!c.nextStatusChangeAt || t >= c.nextStatusChangeAt) {
-          const candidates = c.statusList.filter(s => s.name !== c.status);
-          if (candidates.length) {
-            c.status = pick(candidates).name;
-            c.nextStatusChangeAt = t + randInt(30, 180) * 60 * 1000;
-            changed = true;
-          }
-        }
-      } else if ((c.statusList||[]).length === 1 && !c.status) {
-        c.status = c.statusList[0].name; changed = true;
-      }
+      // 0) 先与共享池/作息表/挂起队列对齐（状态为空或不在池内 → 池内随机并写回）
+      await normalizeContactStatus(c, statusPool);
+      // 1) 状态逐段回放（含离线期间错过的切换）+ 挂起消息按窗口判定
+      const windows = replayStatus(c, statusPool, t);
+      if (windows.length) changed = true;
+      if (await processPending(c, windows, statusPool, cats)) changed = true;
 
-      // 2) 聊天消息：已读和回复（全量概率判定：到点即已读，按概率掷骰决定是否回复）
+      // 2) 聊天消息：已读和回复（新判定组走状态链；旧消息保持原逻辑）
       const curRate = getCurrentReplyRate(c);
       let msgsChanged = false;
       const myMsgs = (c.messages || []).filter(m => m.from === 'me');
       let anchorMsg = myMsgs.length ? myMsgs[myMsgs.length - 1] : null;
 
-      // 2a) 已读处理：到达各自 readAt 即已读 + 级联（不再区分状态门槛）
+      // 2a) 已读处理：到达各自 readAt 即已读 + 级联（仅旧数据）
       for (const m of myMsgs) {
-        if (!m.read && m.readAt && t >= m.readAt) {
+        if (m.judgement == null && !m.queued && !m.read && m.readAt && t >= m.readAt) {
           cascadeReadFromMe(c, m.id);
           msgsChanged = true; changed = true;
         }
       }
 
-      // 2b) 回复处理：最新一条 replyAt 到点后，按发送瞬间快照的 rate 掷骰子，命中才回
-      const anyUnhandled = myMsgs.some(m => !m.replied);
-      if (anyUnhandled && anchorMsg && anchorMsg.replyAt && t >= anchorMsg.replyAt) {
+      // 2b) 新链判定组到点结算
+      if (await processJudgedMessages(c, t)) { msgsChanged = true; changed = true; }
+
+      // 2c) 旧数据回复处理：最新一条 replyAt 到点后按快照 rate 掷骰子，命中才回
+      const anyUnhandled = myMsgs.some(m => !m.replied && m.judgement == null && !m.queued);
+      if (anyUnhandled && anchorMsg && anchorMsg.replyAt && anchorMsg.judgement == null && t >= anchorMsg.replyAt) {
         const snap = anchorMsg.snapshot || {};
-        // 标记所有我的消息为 replied（本轮一次性合并）
-        for (const m of myMsgs) if (!m.replied) m.replied = true;
+        for (const m of myMsgs) if (!m.replied && m.judgement == null) m.replied = true;
         cascadeReadFromMe(c, anchorMsg.id);
-        // 一次 willReply 判定
         const rateForRound = snap.rate != null ? snap.rate : curRate;
         const willReply = Math.random() * 100 < rateForRound;
         if (willReply) {
-          const repCnt = (c.settings.replyCount || 1) <= 1 ? 1 : randInt(1, c.settings.replyCount || 1);
-          for (let i = 0; i < repCnt; i++) {
-            await triggerReply(c, anchorMsg);
-            if (i < repCnt - 1) {
-              // 不真的sleep等待（runCatchUp是离线补算，应快速完成），让消息时间按1-3秒递增时间戳即可，且不超过当前时刻
-              c.messages[c.messages.length-1].time = Math.min(t, (c.messages[c.messages.length-1].time || now()) + randInt(1000, 3000));
-            }
-          }
-          c.unread = (c.unread || 0) + repCnt;
+          const range = replyCountRange(c);
+          const repCnt = range.min === range.max ? range.min : randInt(range.min, range.max);
+          const sent = await appendReplyMessages(c, anchorMsg, repCnt, anchorMsg.replyAt);
+          c.unread = (c.unread || 0) + sent;
         }
         msgsChanged = true; changed = true;
       }
@@ -202,8 +335,16 @@ export async function runCatchUp() {
       await saveContact(c);
     } // end contacts loop
     return changed;
+    } finally {
+      await releaseCatchUpLock();
+    }
   });
 }
+
+// 供 03-data.openChat 在进入聊天页之前调用（一次完成补算并落库）
+window.__runCatchUp = runCatchUp;
+// 供 04-chat 的定时器复用串行队列，避免与补算并发写同一联系人
+window.__enqueueTask = enqueueTask;
 
 // 分槽法排期：当天24h每30分钟一个槽，每人3个，互不重叠
 function ensureCallSlots(c, t) {
@@ -234,12 +375,12 @@ function ensureCallSlots(c, t) {
   return c;
 }
 
-// 周期性检查（每15秒一次；更重要的是用户回到网页时立刻补算）
+// 周期性检查（保持低频 60s；更重要的是用户打开页面/切页/回到前台时补算一次）
 async function periodicCheck() {
   const changed = await runCatchUp();
   if (changed) {
     renderContacts();
-    if (state.currentContactId) renderChatMessages(state.currentContactId, false);
+    if (state.currentContactId) renderChatIncremental(state.currentContactId);
   }
   // 联系人提醒到点触发（串行执行，避免和 runCatchUp 同时写联系人）
   try { await enqueueTask(() => checkReminders(false)); } catch (e) { console.warn('提醒检查失败：', e); }
@@ -296,8 +437,8 @@ async function initApp() {
       if (wasActive && window.matchMedia('(max-width: 899px)').matches) openPage('page-home');
     });
   });
-  // 定时检查（状态切换、主动消息、回复触发）
-  setInterval(periodicCheck, 15000); // 15秒检查一次
+  // 定时检查（保持低频 60s；状态切换/主动消息/挂起结算不新增高频定时器）
+  setInterval(periodicCheck, 60000); // 60 秒检查一次
   // 监听可见性
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
@@ -305,7 +446,7 @@ async function initApp() {
       try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
       try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
       renderContacts();
-      if (state.currentContactId) renderChatMessages(state.currentContactId, true);
+      if (state.currentContactId) renderChatIncremental(state.currentContactId);
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
       try { await restoreCallState(); } catch (e) { console.warn('恢复通话状态失败：', e); }
     }
@@ -388,6 +529,7 @@ window.applyCustomColor = applyCustomColor;
 window.applyPresetBg = applyPresetBg;
 window.applyPresetColor = applyPresetColor;
 window.autoResize = autoResize;
+window.backFromApp = backFromApp;
 window.backFromCardLib = backFromCardLib;
 window.backFromChat = backFromChat;
 window.backFromContactSetting = backFromContactSetting;
@@ -412,6 +554,8 @@ window.csEditName = csEditName;
 window.csResetBg = csResetBg;
 window.csSaveProactive = csSaveProactive;
 window.csSaveReply = csSaveReply;
+window.csSetSplit = csSetSplit;
+window.toggleStatusHelp = toggleStatusHelp;
 window.csSearchChat = csSearchChat;
 window.csSearchChatRender = csSearchChatRender;
 window.backFromChatSearch = backFromChatSearch;

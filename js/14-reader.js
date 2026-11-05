@@ -1,7 +1,7 @@
 // 依赖：03-data.js
 import { uid } from './01-state.js';
 import { $, closeModal, confirmDialog, dbGet, dbPut, escapeHtml, now, showModal, toast } from './02-core.js';
-import { openPage } from './03-data.js';
+import { backFromApp, openPage } from './03-data.js';
 
 /* ============ 本地沉浸式阅读与手写笔记 ============
    书籍完全由用户本地上传（TXT），存 IndexedDB meta store，大文本分页渲染防卡死：
@@ -48,10 +48,10 @@ export function openReaderPage() {
   applyReaderView();
   renderReaderShelf();
 }
-// 顶栏返回：阅读中 → 回书架；书架 → 回桌面
+// 顶栏返回：阅读中 → 回书架；书架 → 回进入前的页面（桌面兜底到聊天区）
 export function readerBack() {
   if (_book) { _book = null; applyReaderView(); renderReaderShelf(); }
-  else openPage('page-home');
+  else backFromApp();
 }
 function applyReaderView() {
   $('reader-title').textContent = _book ? _book.title : '阅读';

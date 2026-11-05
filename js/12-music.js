@@ -1,7 +1,7 @@
 // 依赖：01-state.js / 02-core.js / 03-data.js / 04-chat.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, confirmDialog, dbDel, dbGet, dbPut, escapeHtml, now, pick, randInt, showModal, toast } from './02-core.js';
-import { getAllContacts, getContact, openPage, saveContact } from './03-data.js';
+import { backFromApp, getAllContacts, getContact, openPage, saveContact } from './03-data.js';
 import { renderChatMessages } from './04-chat.js';
 
 /* ============ 本地音乐（纯本地文件，空盒子形态） ============
@@ -25,7 +25,6 @@ let _volTimer = null;
 let _seekHoldUntil = 0;
 let _importHideTimer = null;
 let _switching = false; // 自动连播切歌中：暂停/播放事件不驱动迷你条显隐，避免闪动
-let _musicFromPage = null; // 进入音乐页前的页面（电脑端返回用）
 // 一起听状态：{ active:{contactId, since, trackId, inviteMsgId}|null, nextInviteAt }
 let _together = { active: null, nextInviteAt: 0 };
 let _togetherLoaded = false;
@@ -81,7 +80,6 @@ function renderMusicStorage() {
 
 /* ============ 页面入口 / 返回 ============ */
 export async function openMusicPage() {
-  if (state.lastPage && state.lastPage !== 'page-music') _musicFromPage = state.lastPage;
   _index = await getIndex();
   if (!_togetherLoaded) await loadTogether();
   renderMusicShelf();
@@ -103,12 +101,8 @@ export async function openMusicPage() {
 }
 export function musicBack() {
   // 只是收起界面，不暂停、不退场、不释放 objectURL
-  if (window.innerWidth >= 900) {
-    // 电脑端：回到进入前的页面；没有可用来源时落到「我的」，避免落到手机端专用的首页
-    openPage((_musicFromPage && _musicFromPage !== 'page-home') ? _musicFromPage : 'page-me');
-    return;
-  }
-  openPage('page-home');
+  // A25：回到进入前的那一页；桌面兜底到聊天区，避免落到被隐藏的手机首页
+  backFromApp();
 }
 
 /* ============ 导入本地音频 ============ */

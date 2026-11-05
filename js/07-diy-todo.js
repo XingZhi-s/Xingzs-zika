@@ -1,7 +1,7 @@
 // 依赖：06-ui.js
 import { DEFAULT_AVATAR, DIY_SECTIONS, state, uid } from './01-state.js';
 import { $, compressImage, confirmDialog, dbAll, dbPut, escapeAttr, escapeHtml, estimateSizeMB, hexWithAlpha, inputDialog, now, toast } from './02-core.js';
-import { createEmptyContact, getAllContacts, getMe, getTheme, openPage, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
+import { backFromApp, createEmptyContact, getAllContacts, getMe, getTheme, openPage, renderContacts, renderMeBrief, saveContact, saveMe, saveTheme } from './03-data.js';
 
 /* ============ 手机首页：自主文本 + 装饰贴纸 ============ */
 export async function saveHomeFreeText(el) {
@@ -287,7 +287,7 @@ export function openDiyPage(mode) {
   renderDiyPage();
   openPage('page-diy');
 }
-export function closeDiyPage() { openPage(state.diyPageBackTo || 'page-love'); }
+export function closeDiyPage() { backFromApp(); }
 export function setDiyMode(mode) { state.diyMode = mode; renderDiyPage(); }
 export async function renderDiyPage() {
   const body = $('diy-page-body'); if (!body) return;

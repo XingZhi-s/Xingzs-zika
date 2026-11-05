@@ -1,6 +1,6 @@
 // 依赖：01-state.js, 02-core.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, escapeHtml, formatTime, inputDialog, now, randInt, toast } from './02-core.js';
+import { $, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
 import { autoResize, cancelRoundTimers, renderChatMessages } from './04-chat.js';
 import { renderLetterList } from './05-call-letter.js';
 import { openContactSetting, renderContactSettingsList, renderMyStickersGrid, renderStickerPanel, renderThemeUI } from './06-ui.js';
@@ -38,23 +38,166 @@ export async function getContact(id) { return await dbGet('contacts', id); }
 export async function saveContact(c) { await dbPut('contacts', c); }
 export async function deleteContact(id) { await dbDel('contacts', id); }
 
+// ============ 状态大类（固定四类；数据按配置存，便于以后扩展第五类） ============
+const STATUS_CATEGORY_KEY = 'status_categories_v1';
+export const STATUS_CATEGORY_DEFAULTS = [
+  // unread / readNoReply = 不回复时的拆分比例（和为 100），类内所有状态共用
+  { id: 'present', name: '在场', unread: 10, readNoReply: 90 },
+  { id: 'leisure', name: '悠闲', unread: 25, readNoReply: 75 },
+  { id: 'event', name: '事件中', unread: 70, readNoReply: 30 },
+  { id: 'sleep', name: '睡觉', unread: 100, readNoReply: 0 },
+];
+const BUILTIN_STATUS_CATEGORY = { '在身边': 'present', '吃饭中': 'leisure', '睡觉中': 'sleep', '忙碌中': 'event' };
+
+export async function getStatusCategories() {
+  const rec = await dbGet('meta', STATUS_CATEGORY_KEY);
+  const saved = (rec && Array.isArray(rec.list)) ? rec.list : [];
+  const out = STATUS_CATEGORY_DEFAULTS.map(d => {
+    const s = saved.find(x => x && x.id === d.id);
+    return {
+      id: d.id, name: d.name,
+      unread: typeof s?.unread === 'number' ? Math.max(0, Math.min(100, s.unread)) : d.unread,
+      readNoReply: typeof s?.readNoReply === 'number' ? Math.max(0, Math.min(100, s.readNoReply)) : d.readNoReply,
+    };
+  });
+  // 配置里出现的新大类（未来扩展）保留下来
+  for (const s of saved) if (s && s.id && !STATUS_CATEGORY_DEFAULTS.some(d => d.id === s.id)) out.push(s);
+  return out;
+}
+export async function saveStatusCategories(list) {
+  await dbPut('meta', { k: STATUS_CATEGORY_KEY, list: list.map(c => ({ id: c.id, name: c.name, unread: c.unread, readNoReply: c.readNoReply })) });
+}
+
+// ============ 状态共享池（内置 + 自定义，所有联系人通用） ============
+const STATUS_POOL_KEY = 'status_pool_v1';
+export const DEFAULT_STATUSES = [
+  { name: '在身边', category: 'present', replyRate: 100 },
+  { name: '吃饭中', category: 'leisure', replyRate: 50 },
+  { name: '睡觉中', category: 'sleep', replyRate: 5 },
+  { name: '忙碌中', category: 'event', replyRate: 20 },
+];
+function normalizePoolItem(s, cats) {
+  let category = s.category;
+  if (!category || !cats.some(c => c.id === category)) category = BUILTIN_STATUS_CATEGORY[s.name] || 'present';
+  return { id: s.id || uid(), name: s.name, category, replyRate: typeof s.replyRate === 'number' ? s.replyRate : 50 };
+}
+export async function getStatusPool() {
+  const rec = await dbGet('meta', STATUS_POOL_KEY);
+  const cats = await getStatusCategories();
+  let pool = (rec && Array.isArray(rec.list)) ? rec.list.slice() : [];
+  if (!pool.length) pool = DEFAULT_STATUSES.map(s => ({ id: uid(), name: s.name, category: s.category, replyRate: s.replyRate }));
+  let merged = !rec;
+  const fixed = pool.map(s => {
+    const n = normalizePoolItem(s, cats);
+    if (!s.id || s.category !== n.category || typeof s.replyRate !== 'number') merged = true;
+    return n;
+  });
+  pool = fixed;
+  // 兼容旧数据 / 导入数据：联系人本地列表里的自定义状态并入共享池
+  const contacts = await getAllContacts();
+  for (const c of contacts) {
+    for (const s of (c.statusList || [])) {
+      if (!s || !s.name || pool.some(p => p.name === s.name)) continue;
+      pool.push(normalizePoolItem(s, cats));
+      merged = true;
+    }
+  }
+  if (merged) await dbPut('meta', { k: STATUS_POOL_KEY, list: pool });
+  return pool;
+}
+// 写回共享池并同步给所有联系人（列表一致；当前状态失效时随机取一个）
+export async function saveStatusPool(pool) {
+  await dbPut('meta', { k: STATUS_POOL_KEY, list: pool });
+  const contacts = await getAllContacts();
+  const list = pool.map(s => ({ id: s.id, name: s.name, category: s.category, replyRate: s.replyRate }));
+  for (const c of contacts) {
+    c.statusList = list.slice();
+    if (!c.statusId || !pool.some(s => s.id === c.statusId)) {
+      const s = pool.find(x => x.name === c.status) || (pool.length ? pick(pool) : null);
+      c.statusId = s ? s.id : '';
+      c.status = s ? s.name : '';
+    }
+    await saveContact(c);
+  }
+}
+// 渲染/打开联系人前调用：列表与共享池对齐，状态为空或不在池内 → 池内随机并保存
+export async function normalizeContactStatus(c, pool) {
+  const p = pool || await getStatusPool();
+  const list = p.map(s => ({ id: s.id, name: s.name, category: s.category, replyRate: s.replyRate }));
+  const cur = c.statusList || [];
+  const listSame = cur.length === list.length && list.every((s, i) => cur[i] && cur[i].name === s.name && cur[i].replyRate === s.replyRate && cur[i].category === s.category);
+  let changed = false;
+  if (!listSame) { c.statusList = list; changed = true; }
+  // statusId 为主；为空/失效时按旧 status 名回填，或随机取一个
+  const byName = p.find(s => s.name === c.status);
+  if (!c.statusId || !p.some(s => s.id === c.statusId)) {
+    const s = byName || (p.length ? pick(p) : null);
+    c.statusId = s ? s.id : '';
+    if (s && c.status !== s.name) c.status = s.name;
+    changed = true;
+  } else if (byName) {
+    const curStatus = p.find(s => s.id === c.statusId);
+    if (curStatus && byName.id !== c.statusId) {
+      // 旧数据/导入数据/外部直接改 status 名：以有效名字为准，同步 statusId
+      c.statusId = byName.id;
+      changed = true;
+    }
+  } else {
+    // 当前 status 名不在共享池内 → 池内随机取一个并写回（不再出现「未设置状态」）
+    const s = p.length ? pick(p) : null;
+    c.statusId = s ? s.id : '';
+    c.status = s ? s.name : '';
+    changed = true;
+  }
+  const t = now();
+  // nextStatusAt 为主，nextStatusChangeAt 保留同步（旧数据/导入数据兼容）
+  if (!c.nextStatusAt) { c.nextStatusAt = c.nextStatusChangeAt || (t + randInt(120, 480) * 60 * 1000); changed = true; }
+  if (c.nextStatusChangeAt !== c.nextStatusAt) { c.nextStatusChangeAt = c.nextStatusAt; changed = true; }
+  // 负间隔保护（系统时间回拨）：状态起点不能晚于下一切换点
+  if (!c.statusSince || c.statusSince > c.nextStatusAt) {
+    c.statusSince = Math.min(t, c.nextStatusAt - 1000);
+    if (!c.statusSince || c.statusSince > c.nextStatusAt) c.statusSince = c.nextStatusAt - 1000;
+    changed = true;
+  }
+  if (!Array.isArray(c.statusSchedule)) { c.statusSchedule = []; changed = true; }
+  if (!Array.isArray(c.pendingReplies)) { c.pendingReplies = []; changed = true; }
+  if (c.statusSchedule.length > 50) { c.statusSchedule = c.statusSchedule.slice(-50); changed = true; }
+  if (changed) await saveContact(c);
+  return c;
+}
+// 作息表写入（单次内存追加；随联系人一次保存落库；最多 50 条）
+export function recordStatusWindow(c, statusId, from, to) {
+  if (!statusId || !from || !to || to <= from) return false;
+  c.statusSchedule = c.statusSchedule || [];
+  c.statusSchedule.push({ statusId, from, to });
+  if (c.statusSchedule.length > 50) c.statusSchedule = c.statusSchedule.slice(-50);
+  return true;
+}
+
+
 export function createEmptyContact(name) {
   return {
     id: uid(),
     name: name || '新联系人',
     avatar: DEFAULT_AVATAR,
-    // 默认内置贴近生活的状态（不用「在线/离线」这类没人味的词）
-    status: '在身边',
+    // 默认状态从共享池的内置项里随机取（不再固定第一个）
+    status: pick(DEFAULT_STATUSES).name,
+    statusId: '', // 由 normalizeContactStatus 对齐共享池
     statusAuto: true,
-    nextStatusChangeAt: now() + randInt(30, 180) * 60 * 1000,
+    statusSince: now(),
+    nextStatusAt: now() + randInt(120, 480) * 60 * 1000,
+    nextStatusChangeAt: now() + randInt(120, 480) * 60 * 1000,
+    statusSchedule: [], // 最近 50 段作息 { statusId, from, to }
+    pendingReplies: [], // 挂起队列 { id, sectionId, msgIds, sentAt, statusId, windows }
     statusList: [
-      { id: uid(), name: '在身边', replyRate: 100 },
-      { id: uid(), name: '吃饭中', replyRate: 50 },
-      { id: uid(), name: '睡觉中', replyRate: 5 },
-      { id: uid(), name: '忙碌中', replyRate: 20 },
+      { id: uid(), name: '在身边', category: 'present', replyRate: 100 },
+      { id: uid(), name: '吃饭中', category: 'leisure', replyRate: 50 },
+      { id: uid(), name: '睡觉中', category: 'sleep', replyRate: 5 },
+      { id: uid(), name: '忙碌中', category: 'event', replyRate: 20 },
     ],
     settings: {
       fastSec: 5, slowMin: 3, replyCount: 1,
+      replyCountMin: 1, replyCountMax: 1,
       incomingCall: true, proactiveMsg: false,
       proactiveMin: 1, proactiveMax: 3,
       nextProactiveAt: now() + randInt(2, 8) * 3600 * 1000,
@@ -149,7 +292,17 @@ export async function renderMeBrief() {
 }
 
 // ============ 页面切换 ============
+// A25：保留底部导航的一级页（其余页面隐藏导航；一级页不加顶部返回键）
+const NAV_KEEP_PAGES = ['page-home', 'page-love', 'page-letter', 'page-me', 'page-setting'];
+// 六个伪应用：记录「点开之前的那一页」，返回时回到来源
+const PSEUDO_APP_PAGES = ['page-mood', 'page-inspiration', 'page-divine', 'page-reader', 'page-music', 'page-diy'];
+
 export function openPage(id, pushPrev=false) {
+  const prevId = state.lastPage;
+  if (pushPrev && prevId && prevId !== id) state.prevPage = prevId;
+  if (PSEUDO_APP_PAGES.includes(id) && prevId && prevId !== id && !PSEUDO_APP_PAGES.includes(prevId)) {
+    state.appReturnPage = prevId;
+  }
   // 关闭聊天菜单等
   $('chat-menu').classList.add('hide');
   $('sticker-panel').classList.add('hide');
@@ -158,8 +311,8 @@ export function openPage(id, pushPrev=false) {
   if (pg) pg.classList.add('active');
   // 聊天页激活时手机端隐藏底部导航栏
   document.body.classList.toggle('page-chat-active', id === 'page-chat');
-  // 所有二级页面隐藏底部导航栏（首页/联系人列表为一级页，保留导航）
-  document.body.classList.toggle('nav-hidden-page', id !== 'page-home' && id !== 'page-love');
+  // 其余二级页隐藏底部导航栏；五个一级页保留导航
+  document.body.classList.toggle('nav-hidden-page', !NAV_KEEP_PAGES.includes(id));
   // 底部导航状态
   document.querySelectorAll('.bottom-nav .nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.page === id);
@@ -178,8 +331,23 @@ export function openPage(id, pushPrev=false) {
   if (id === 'page-love' || id === 'page-chat') renderContacts();
   if (id === 'page-home') { renderHomeAvatar(); renderTodos(); }
   state.lastPage = id;
+  // A26：切页触发一次补算（聊天页由 openChat 在进入前 await，避免二次插入）
+  if (id !== 'page-chat' && typeof window.__runCatchUp === 'function') {
+    try { window.__runCatchUp().catch(() => {}); } catch (e) { /* 静默 */ }
+  }
   // 页面切换后刷新迷你播放条（由 12-music.js 挂载）
   if (window.updateMusicMiniBar) window.updateMusicMiniBar();
+}
+// A25：伪应用返回 → 回到进入前的那一页；桌面下不能落到被隐藏的手机首页/联系人列表
+export function backFromApp(fallback='page-home') {
+  const isDesktop = window.matchMedia('(min-width: 900px)').matches;
+  const src = state.appReturnPage;
+  state.appReturnPage = null;
+  if (src && src !== state.lastPage && (!isDesktop || (src !== 'page-home' && src !== 'page-love'))) {
+    return openPage(src);
+  }
+  // 桌面端回到聊天区（有联系人则保持聊天，空态则显示选择联系人）
+  return openPage(isDesktop ? 'page-chat' : fallback);
 }
 export function getThemeSync() {
   // 用于页面渲染时快速获取（非异步），实际存储用async
@@ -190,6 +358,9 @@ export function getThemeSync() {
 export function filterContacts(query) { renderContacts(query); }
 export async function renderContacts(search='') {
   const list = await getAllContacts();
+  // A25：状态来自共享池；为空/不在池内时随机取一个并写回
+  const pool = await getStatusPool();
+  for (const c of list) await normalizeContactStatus(c, pool);
   const q = (search || '').trim().toLowerCase();
   const filtered = q ? list.filter(c => c.name.toLowerCase().includes(q)) : list;
   // 按最后消息时间倒序
@@ -210,7 +381,7 @@ export async function renderContacts(search='') {
       <div class="contact-card-info">
         <div class="contact-card-name">${escapeHtml(c.name)}${unread}</div>
         <div class="contact-card-status">
-          ${c.status ? `<span class="status-dot" style="background:var(--success);"></span>${escapeHtml(c.status)}` : '<span style="color:var(--text-secondary);">未设置状态</span>'}
+          ${c.status ? `<span class="status-dot" style="background:var(--success);"></span>${escapeHtml(c.status)}` : ''}
         </div>
         <div class="contact-card-preview ellipsis">${escapeHtml(preview)}</div>
         ${anniHtml}
@@ -289,9 +460,14 @@ export function exitChatMode() {
 }
 // ============ 打开聊天 ============
 export async function openChat(contactId) {
+  // A26：进入聊天页之前一次性完成补算并落库，进入后不再二次插入
+  if (typeof window.__runCatchUp === 'function') {
+    try { await window.__runCatchUp(); } catch (e) { console.warn('进入聊天前补算失败：', e); }
+  }
   state.currentContactId = contactId;
   const c = await getContact(contactId);
   if (!c) return;
+  await normalizeContactStatus(c);
   c.unread = 0;
   if (c.missedCalls && c.missedCalls.length > 0) {
     toast(`${c.name}有${c.missedCalls.length}个未接来电`);
@@ -319,7 +495,7 @@ export async function openChat(contactId) {
   const rate = getCurrentReplyRate(c);
   $('chat-header-status').innerHTML = c.status
     ? `<span class="status-dot" style="background:${rateColor(rate)};"></span>${escapeHtml(c.status)}`
-    : '未设置状态';
+    : '';
   state.loadMoreState[contactId] = { loaded: false, pageSize: 50 };
   await renderChatMessages(contactId, true);
   applyChatBg(c);
