@@ -579,8 +579,9 @@ a { text-decoration:none; color:inherit; }
 .insp-empty { text-align:center; color:var(--text-secondary); padding:40px 0; font-size:13px; }
 
 /* ========== 占卜（分步沉浸式） ========== */
-.divine-body { padding-bottom:20px; }
-.divine-step { display:flex; flex-direction:column; align-items:center; padding:26px 16px 20px; }
+/* 步骤容器自己滚动：牌阵数量多 / 结果牌阵高时都在内容区内滚动，不撑破页面 */
+.divine-body { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:20px; }
+.divine-step { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; align-items:center; padding:26px 16px 20px; }
 .dv-step-title { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:18px; text-align:center; }
 .dv-kind-grid { display:flex; gap:14px; width:100%; justify-content:center; }
 .dv-kind-card { flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:8px; padding:26px 10px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; box-shadow:var(--shadow); min-height:0; }
@@ -640,6 +641,49 @@ a { text-decoration:none; color:inherit; }
 .dv-hint { text-align:center; font-size:12px; color:var(--text-secondary); margin-top:10px; }
 .dv-actions { display:flex; gap:8px; margin-top:12px; }
 .dv-actions .btn { flex:1; font-size:13px; padding:0 6px; }
+
+/* 牌阵选择（塔罗：竖排列表，随所在步骤一起滚动；宽度自适应，320 不横向溢出） */
+.dv-spread-list { display:flex; flex-direction:column; gap:8px; width:100%; }
+.dv-spread-item { width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; min-height:52px; min-width:0; background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; box-shadow:var(--shadow); text-align:left; }
+.dv-spread-item.sel { border-color:var(--theme-color); background:var(--theme-light); }
+.dv-spread-item .dv-spread-name { font-size:14px; font-weight:600; color:var(--text-primary); word-break:break-word; }
+.dv-spread-item .dv-spread-meta { font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+.dv-spread-item.sel .dv-spread-meta { color:var(--theme-color); }
+.dv-q-slot { width:100%; }
+
+/* 结果牌阵：按牌阵自己的归一化坐标绝对定位；卡片宽 1 单位、高 1.6 单位 */
+.dv-board { position:relative; width:100%; max-width:600px; margin:0 auto 8px; }
+.dv-slot { position:absolute; }
+.dv-slot.rot { transform:rotate(90deg); }
+.dv-slot .dv-card { display:block; width:100%; }
+@media (min-width:900px) {
+  .dv-board { max-width:min(600px, calc(72vh * var(--dv-ratio))); }
+}
+
+/* 牌名 + 正/逆位行：文字不设固定宽度、不截断，点击打开牌义弹窗 */
+.dv-mean-rows { gap:8px; }
+.dv-mean-row { width:100%; display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; min-height:44px; min-width:0; background:var(--card-bg); border:1px solid var(--border-color); border-radius:10px; text-align:left; }
+.dv-mean-row .dv-mean-row-pos { font-size:11px; color:var(--text-secondary); }
+.dv-mean-row .dv-mean-row-name { font-size:14px; font-weight:600; color:var(--text-primary); word-break:break-word; }
+.dv-orient { font-size:11px; padding:2px 8px; border-radius:999px; flex-shrink:0; }
+.dv-orient.up { background:var(--theme-light); color:var(--theme-color); }
+.dv-orient.rev { background:color-mix(in srgb, var(--danger) 12%, #ffffff); color:var(--danger); }
+.dv-mean-row .dv-mean-chev { margin-left:auto; font-size:16px; line-height:1; color:var(--text-secondary); flex-shrink:0; }
+
+/* 牌义弹窗：正位 / 逆位两段都给出，当前正逆位高亮；长文由 .modal-body 滚动 */
+.dv-mean-modal { display:flex; flex-direction:column; gap:10px; }
+.dv-mean-base { font-size:12px; color:var(--text-secondary); line-height:1.6; }
+.dv-mean-block { border:1px solid var(--border-color); border-radius:10px; padding:10px 12px; background:var(--bg-color); }
+.dv-mean-block.is-current { border-color:var(--theme-color); background:var(--theme-light); }
+.dv-mean-head { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--theme-color); margin-bottom:6px; }
+.dv-mean-now { font-size:10px; font-weight:500; padding:1px 6px; border-radius:999px; background:var(--theme-color); color:#fff; }
+.dv-mean-body-text { font-size:13px; line-height:1.7; color:var(--text-primary); word-break:break-word; }
+
+/* 占卜历史：每条右侧删除按钮 */
+.dv-hist-list { max-height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+.dv-hist-row { display:flex; align-items:stretch; gap:8px; }
+.dv-hist-row .insp-item { flex:1; min-width:0; }
+.dv-hist-del { width:40px; min-width:40px; min-height:40px; border-radius:8px; background:var(--theme-light); color:var(--danger); flex-shrink:0; }
 
 /* ========== 阅读器（本地 TXT 分页渲染 + 划词笔记） ========== */
 .reader-shelf { flex:1; min-height:0; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
@@ -1865,7 +1909,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <div class="insp-list" id="insp-list"></div>
       </div>
 
-      <!-- ========== 占卜页（分步沉浸式：①选牌种 → ②选牌阵+输入问题 → ③牌面翻转结果） ========== -->
+      <!-- ========== 占卜页（分步沉浸式：①选牌种 → ②选牌阵 → ③输入问题 → ④牌面结果；雷诺曼在②一并输入问题） ========== -->
       <div class="page" id="page-divine">
         <div class="top-bar">
           <button class="chat-header-back" onclick="backFromApp()"><svg class="i"><use href="#icon-back"/></svg></button>
@@ -1891,16 +1935,27 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               </button>
             </div>
           </div>
-          <!-- 第二步：选牌阵 + 输入问题 -->
+          <!-- 第二步：选择牌阵（独立步骤；雷诺曼沿用旧流程，问题输入一并放在本步） -->
           <div class="divine-step hide" id="divine-step-2">
             <div class="dv-step-title" id="divine-step2-title">选择牌阵</div>
             <div class="divine-spread-bar" id="divine-spread-list"></div>
-            <textarea class="input" id="divine-question" rows="3" placeholder="输入你想问的问题（可不填）..." style="resize:none;line-height:1.5;"></textarea>
-            <button class="btn divine-draw-btn" onclick="startDivineDraw()"><svg class="i i-sm"><use href="#icon-sparkles"/></svg> 开始抽牌</button>
-            <button class="dv-back-link" onclick="divineRestart()">← 重新选择牌种</button>
+            <div id="divine-q-slot-2" class="dv-q-slot">
+              <div id="divine-question-block" style="width:100%;display:flex;flex-direction:column;">
+                <textarea class="input" id="divine-question" rows="3" placeholder="输入你想问的问题（可不填）..." style="resize:none;line-height:1.5;"></textarea>
+                <button class="btn divine-draw-btn" onclick="startDivineDraw()"><svg class="i i-sm"><use href="#icon-sparkles"/></svg> 开始抽牌</button>
+              </div>
+            </div>
+            <button class="btn divine-draw-btn hide" id="divine-spread-next" onclick="divineConfirmSpread()">下一步：输入问题</button>
+            <button class="dv-back-link" onclick="divineBackStep()">← 上一步</button>
           </div>
-          <!-- 第三步：展示结果 -->
+          <!-- 第三步（塔罗）：输入问题 -->
           <div class="divine-step hide" id="divine-step-3">
+            <div class="dv-step-title">静心默念，写下你的问题</div>
+            <div id="divine-q-slot-3" class="dv-q-slot"></div>
+            <button class="dv-back-link" onclick="divineBackStep()">← 上一步</button>
+          </div>
+          <!-- 第四步：展示结果 -->
+          <div class="divine-step hide" id="divine-step-4">
             <div class="divine-result" id="divine-result"></div>
             <div class="divine-restart-wrap">
               <button class="btn btn-outline" onclick="divineRestart()">重新抽牌</button>
