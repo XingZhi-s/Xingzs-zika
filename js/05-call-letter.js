@@ -454,21 +454,25 @@ export function rejectIncoming() {
 export function hangUpCall() { if (state.callState && state.callState.hang) state.callState.hang(); }
 
 // 记录一条未接来电（纯函数，不落库，调用方统一 saveContact）
-// 防雪崩：同一联系的未接来电系统消息最多保留 3 条，超出静默丢弃；missedCalls 计数照常累加
+// 防雪崩：最近 50 条内未接提示最多 3 条；用户尚未查看时多次来电合并为一条
 export function pushMissedCall(c, time) {
   const t = time || now();
   c.missedCalls = c.missedCalls || [];
   c.missedCalls.push(t);
+  const msgs = c.messages || (c.messages = []);
   const sysKey = 'missed:' + t;
-  if ((c.messages || []).some(m => m.sysKey === sysKey)) return false;
-  const exist = (c.messages || []).filter(m => m.type === 'text' && String(m.content).includes('（未接来电）'));
-  if (exist.length >= 3) return false;
+  if (msgs.some(m => m.sysKey === sysKey)) return false;
+  // 已有未查看的未接提示 → 只累加计数，不再插入第二条
+  if (msgs.some(m => m.sysKey && String(m.sysKey).startsWith('missed:') && !m.sysAck)) return false;
+  // 只看最近 50 条（与聊天页分页一致），避免旧提示把新提示挤到分页之外
+  const recent = msgs.slice(-50).filter(m => m.sysKey && String(m.sysKey).startsWith('missed:'));
+  if (recent.length >= 3) return false;
   // 系统提示写在“记录时刻”，避免补算时使用过去时间而落在最近 50 条之外
   const mt = now();
-  c.messages.push({
+  msgs.push({
     id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
     time: mt, replyTo: null, snapshot: null, read: true, readAt: mt, replyAt: 0, replied: true,
-    sysKey
+    sysKey, sysAck: false
   });
   c.unread = (c.unread||0)+1;
   return true;

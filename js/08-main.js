@@ -2,7 +2,7 @@
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
-import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickReplyCount, previewImg, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
+import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
@@ -188,6 +188,8 @@ export async function runCatchUp(onlyCid) {
     const cats = await getStatusCategories();
     let changed = false;
     for (let c of contacts) {
+      // 记录本轮补算开始时的消息长度：用于找出本轮新补出的回复，主动消息排在它们之后
+      const preReplyLen = (c.messages || []).length;
       // 0) 先与共享池/作息表/挂起队列对齐（状态为空或不在池内 → 池内随机并写回）
       await normalizeContactStatus(c, statusPool);
       // 1) 状态逐段回放（含离线期间错过的切换）+ 挂起消息按窗口判定
@@ -229,10 +231,27 @@ export async function runCatchUp(onlyCid) {
         msgsChanged = true; changed = true;
       }
 
+      // 2d) 「选择」提问到点补算：离线/切后台导致定时器丢失时补出结果
+      if (await processChoiceQuestions(c, t)) { msgsChanged = true; changed = true; }
+
+      // 本轮新补出的对方消息（回复/选择结果）中最晚的时间：主动消息必须排在它之后
+      let lastReplyAt = 0;
+      for (let i = preReplyLen; i < c.messages.length; i++) {
+        const m = c.messages[i];
+        if (m.from === 'other' && Number.isFinite(m.time)) lastReplyAt = Math.max(lastReplyAt, m.time);
+      }
+
       // 3) 主动消息（proactiveMsg）：条数用 proactiveMin ~ proactiveMax 之间随机
       if (c.settings.proactiveMsg) {
         if (!c.settings.nextProactiveAt || t >= c.settings.nextProactiveAt) {
-          if (curRate <= 20) {
+          // 还有未到点的回复排队：先等回复发出，避免主动消息抢在回复前面
+          const pendingReplyAt = myMsgs.reduce((mx, m) => {
+            if (m.judgement === 'reply' && !m.replyDone && m.replyAt && m.replyAt > t) return Math.max(mx, m.replyAt);
+            return mx;
+          }, 0);
+          if (pendingReplyAt) {
+            // 本轮不排，保持 nextProactiveAt 原值，等回复到点后的下一次检查再发
+          } else if (curRate <= 20) {
             // 低概率状态（睡觉 / 不理人等极不活跃）：跳过本次主动消息，仍推进下次时间防止死循环
             c.settings.nextProactiveAt = t + randInt(2, 8) * 3600 * 1000;
             changed = true;
@@ -241,20 +260,22 @@ export async function runCatchUp(onlyCid) {
             const pMin = c.settings.proactiveMin != null ? Math.max(0, c.settings.proactiveMin) : 1;
             const pMax = c.settings.proactiveMax != null ? Math.max(pMin, c.settings.proactiveMax) : 3;
             const cnt = cards.length ? (pMin === pMax ? pMin : randInt(pMin, pMax)) : 0;
-            const baseAt = c.settings.nextProactiveAt || t;
+            // 起点取「应发时刻」与「本轮回复最后时间」中较晚者：回复先出，主动消息后出
+            const baseAt = Math.max(c.settings.nextProactiveAt || t, lastReplyAt || 0);
             const useStickers = (c.stickers || []).length > 0;
             // 绝对递增 + 钳平到当前时刻，防止同一时刻连环轰炸或出现未来时间戳
             let lastAt = baseAt;
             for (let i = 0; i < cnt; i++) {
-              lastAt = lastAt + randInt(1, 3) * 1000;
-              const atT = Math.min(lastAt, t);
+              // 与上一条回复/主动消息留 1~2 秒（首条）或 1~3 秒（后续）间隔
+              lastAt = lastAt + (i === 0 && lastReplyAt ? randInt(1000, 2000) : randInt(1000, 3000));
+              let atT = Math.min(lastAt, t);
+              if (atT <= baseAt && i === 0) atT = Math.min(t, baseAt + 1);
+              lastAt = atT;
               let type = 'text', content = '';
               if (useStickers && Math.random() < 0.5) { type='sticker'; content = pick(c.stickers).data; }
               else if (cards.length) { type='text'; content = await applyNickname(pick(cards).content, c); }
               else continue;
-              let replyTo = null;
-              const history = (c.messages||[]).filter(x => x.type==='text'||x.type==='image'||x.type==='sticker'||x.type==='choice');
-              if (history.length && Math.random()<0.5) replyTo = pick(history).id;
+              const replyTo = Math.random() < 0.5 ? pickQuoteId(c) : null;
               c.messages.push({
                 id: uid(), from:'other', type, content,
                 time: atT, replyTo, snapshot: null,

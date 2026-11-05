@@ -471,6 +471,22 @@ export async function openChat(contactId) {
   c.unread = 0;
   if (c.missedCalls && c.missedCalls.length > 0) {
     toast(`${c.name}有${c.missedCalls.length}个未接来电`);
+    // 对齐：补算出问题或旧数据只有计数没有提示时，进入会话就补一条可见提示；
+    // 已有未查看提示则直接复用，并把它们标记为已查看，避免下次进来重复插入
+    const msgs = c.messages || (c.messages = []);
+    const pending = msgs.filter(m => m.sysKey && String(m.sysKey).startsWith('missed:') && !m.sysAck);
+    if (!pending.length) {
+      const mt = now();
+      msgs.push({
+        id: uid(), from: 'other', type: 'text', content: `${c.name}（未接来电）`,
+        time: mt, replyTo: null, snapshot: null, read: true, readAt: mt, replyAt: 0, replied: true,
+        sysKey: 'missed:' + c.missedCalls[c.missedCalls.length - 1], sysAck: false
+      });
+      c.unread = (c.unread || 0) + 1;
+    }
+    for (const m of msgs) {
+      if (m.sysKey && String(m.sysKey).startsWith('missed:')) m.sysAck = true;
+    }
     c.missedCalls = [];
   }
   await saveContact(c);

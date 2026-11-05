@@ -449,8 +449,6 @@ export async function checkTogetherInvites() {
     return false;
   }
   if (t < _together.nextInviteAt) return false;
-  _together.nextInviteAt = t + randInt(4, 12) * 3600 * 1000;
-  await saveTogether();
   if (!_index.length) {
     try { _index = await getIndex(); } catch (e) {}
   }
@@ -460,8 +458,24 @@ export async function checkTogetherInvites() {
   // 已有待处理邀请时不叠加，保证一次只处理一个
   const hasPending = contacts.some(c => (c.messages || []).some(m =>
     m.type === 'musicInvite' && m.musicInvite && m.musicInvite.status === 'pending'));
-  if (hasPending) return false;
-  const c = pick(contacts);
+  if (hasPending) {
+    _together.nextInviteAt = t + randInt(4, 12) * 3600 * 1000;
+    await saveTogether();
+    return false;
+  }
+  // 睡觉大类不主动发起邀请：排期时直接判定并跳过，不生成 pending；
+  // 也不推进 nextInviteAt，等醒来后下一次检查即可正常发起。
+  const pool = await getStatusPool();
+  const cats = await getStatusCategories();
+  const awake = contacts.filter(c => {
+    const st = pool.find(s => s.id === c.statusId) || pool.find(s => s.name === c.status);
+    const cat = st ? cats.find(x => x.id === st.category) : null;
+    return !(cat && cat.id === 'sleep');
+  });
+  if (!awake.length) return false;
+  _together.nextInviteAt = t + randInt(4, 12) * 3600 * 1000;
+  await saveTogether();
+  const c = pick(awake);
   const track = pick(_index);
   const ts = now();
   c.messages = c.messages || [];
@@ -508,6 +522,51 @@ export function updateMusicMiniBar() {
       : `独自听${t ? ' · ' + t.name : ''}`;
   }
   const use = $('music-mini-icon'); if (use) use.setAttribute('href', '#icon-pause');
+}
+// 迷你播放条拖动：按住拖动、松手停在原处（限制在可视区内）；未拖动时点击仍回音乐页。
+// 位置只在本会话内保持，不做刷新持久化（最小改动）。
+export function initMusicMiniDrag() {
+  const bar = $('music-mini');
+  if (!bar || bar._dragBound) return;
+  bar._dragBound = true;
+  let dragged = false, dragging = false, sx = 0, sy = 0, bl = 0, bt = 0, pid = null;
+  const clampPos = (v, max) => Math.max(4, Math.min(v, max));
+  const isBtn = t => !!(t && t.closest && t.closest('.music-mini-btn'));
+  bar.addEventListener('click', (e) => {
+    if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; }
+  }, true);
+  bar.addEventListener('pointerdown', (e) => {
+    dragged = false;
+    if (isBtn(e.target)) return;
+    const r = bar.getBoundingClientRect();
+    dragging = true; sx = e.clientX; sy = e.clientY; bl = r.left; bt = r.top; pid = e.pointerId;
+    try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  bar.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!dragged && Math.abs(dx) + Math.abs(dy) < 6) return;
+    dragged = true;
+    const nx = clampPos(bl + dx, window.innerWidth - bar.offsetWidth - 4);
+    const ny = clampPos(bt + dy, window.innerHeight - bar.offsetHeight - 4);
+    bar.style.left = nx + 'px'; bar.style.top = ny + 'px'; bar.style.right = 'auto';
+    e.preventDefault();
+  }, { passive: false });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    try { if (pid != null) bar.releasePointerCapture(pid); } catch (err) {}
+    pid = null;
+    // 没有产生 click 时也要解除抑制，避免吞掉下一次正常点击
+    if (dragged) setTimeout(() => { dragged = false; }, 600);
+  };
+  bar.addEventListener('pointerup', endDrag);
+  bar.addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', () => {
+    if (!bar.style.left) return;
+    bar.style.left = clampPos(parseFloat(bar.style.left) || 4, window.innerWidth - bar.offsetWidth - 4) + 'px';
+    bar.style.top = clampPos(parseFloat(bar.style.top) || 4, window.innerHeight - bar.offsetHeight - 4) + 'px';
+  });
 }
 function updateProgress(cur, dur) {
   const seek = $('music-seek');
@@ -656,6 +715,7 @@ export async function musicDelete(id) {
 export async function initMusicModule() {
   if (_inited) return;
   _inited = true;
+  initMusicMiniDrag();
   const a = audioEl();
   if (!a) return;
   // 恢复音量 / 循环设置

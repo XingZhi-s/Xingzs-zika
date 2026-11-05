@@ -334,38 +334,100 @@ export function previewImg(src) {
 export function closeImgPreview() { $('img-preview').classList.add('hide'); }
 
 // ============ 长按绑定（引用回复/删除） ============
+// 容器级事件委托：消息列表整体重建或增量插入新行都无需重新绑定；
+// 触摸滚动只在位移超过 12px 时取消，避免手指轻微抖动导致长按失效。
+const LP_HOLD_MS = 500;
+const LP_MOVE_TOL = 12;
+let _lpSuppressUntil = 0;
+let _lpSuppressRowId = null;
 export function bindLongpress(container) {
-  const rows = container.querySelectorAll('.msg-row');
-  rows.forEach(row => {
-    let t = null;
-    const start = (e) => {
-      clearTimeout(t);
-      const pt = (e.touches ? e.touches[0].clientX : e.clientX);
-      const py = (e.touches ? e.touches[0].clientY : e.clientY);
-      t = setTimeout(() => showLongpressMenu(row, pt, py), 500);
-    };
-    const cancel = () => clearTimeout(t);
-    row.addEventListener('mousedown', start);
-    row.addEventListener('touchstart', start, {passive:true});
-    row.addEventListener('mouseup', cancel);
-    row.addEventListener('mouseleave', cancel);
-    row.addEventListener('touchend', cancel);
-    row.addEventListener('touchmove', cancel);
-    row.addEventListener('contextmenu', (e) => { e.preventDefault(); showLongpressMenu(row, e.clientX, e.clientY); });
+  if (!container || container._lpBound) return;
+  container._lpBound = true;
+  let timer = null, row = null, startX = 0, startY = 0;
+  const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const point = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
+  const start = (e) => {
+    if (e.button != null && e.button !== 0) return;
+    const tgt = e.target.closest ? e.target.closest('.msg-row') : null;
+    if (!tgt || !container.contains(tgt)) return;
+    clear();
+    // 新手势开始：上一轮长按的吞点击窗口失效
+    _lpSuppressUntil = 0;
+    _lpSuppressRowId = null;
+    row = tgt;
+    const pt = point(e);
+    startX = pt ? pt.clientX : 0;
+    startY = pt ? pt.clientY : 0;
+    timer = setTimeout(() => {
+      timer = null;
+      if (!row) return;
+      _lpSuppressUntil = now() + 800;
+      _lpSuppressRowId = row.dataset.msgid;
+      showLongpressMenu(row, startX, startY);
+    }, LP_HOLD_MS);
+  };
+  const move = (e) => {
+    if (!row) return;
+    const pt = point(e);
+    if (!pt || pt.clientX == null) return;
+    if (Math.abs(pt.clientX - startX) > LP_MOVE_TOL || Math.abs(pt.clientY - startY) > LP_MOVE_TOL) {
+      clear();
+      row = null;
+    }
+  };
+  const end = () => { clear(); row = null; };
+  // 长按后紧跟的这一次 click 是松手产生的：仅吞掉同一条消息上的那一次，
+  // 不影响其它行的点击（图片查看/跳转等），也不会把刚弹出的菜单关掉。
+  const swallowClick = (e) => {
+    const tgt = e.target.closest ? e.target.closest('.msg-row') : null;
+    if (_lpSuppressRowId && tgt && tgt.dataset.msgid === _lpSuppressRowId && now() < _lpSuppressUntil) {
+      _lpSuppressUntil = 0;
+      _lpSuppressRowId = null;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const menu = $('lp-menu');
+    if (menu && !menu.classList.contains('hide') && !menu.contains(e.target)) menu.classList.add('hide');
+  };
+  container.addEventListener('mousedown', start);
+  container.addEventListener('pointerdown', start);
+  container.addEventListener('touchstart', start, {passive:true});
+  container.addEventListener('mousemove', move);
+  container.addEventListener('pointermove', move);
+  container.addEventListener('touchmove', move, {passive:true});
+  container.addEventListener('mouseup', end);
+  container.addEventListener('pointerup', end);
+  container.addEventListener('touchend', end);
+  container.addEventListener('touchcancel', end);
+  container.addEventListener('pointercancel', end);
+  container.addEventListener('mouseleave', end);
+  container.addEventListener('click', swallowClick, true);
+  container.addEventListener('contextmenu', (e) => {
+    const tgt = e.target.closest ? e.target.closest('.msg-row') : null;
+    if (!tgt) return;
+    e.preventDefault();
+    _lpSuppressUntil = now() + 800;
+    _lpSuppressRowId = tgt.dataset.msgid;
+    showLongpressMenu(tgt, e.clientX, e.clientY);
   });
+  // 菜单外按下即关闭（不用 click，避免松手那一下把刚弹出的菜单关掉）
+  document.addEventListener('pointerdown', (e) => {
+    const menu = $('lp-menu');
+    if (menu && !menu.classList.contains('hide') && !menu.contains(e.target)) menu.classList.add('hide');
+  }, true);
 }
 export function showLongpressMenu(row, x, y) {
+  if (!row) return;
   const id = row.dataset.msgid;
-  const from = row.dataset.from;
   const menu = $('lp-menu');
+  if (!menu) return;
   menu.innerHTML = `<div onclick="quoteReply('${id}')" style="display:flex;align-items:center;gap:8px;"><svg class="i i-sm" style="transform:scaleX(-1);"><use href="#icon-back"/></svg> 引用回复</div><div onclick="deleteMsg('${id}')" style="color:var(--danger);display:flex;align-items:center;gap:8px;"><svg class="i i-sm"><use href="#icon-trash"/></svg> 删除</div>`;
   menu.classList.remove('hide');
   // 定位
   const vw = window.innerWidth, vh = window.innerHeight;
   menu.style.left = Math.min(x, vw - 150) + 'px';
   menu.style.top = Math.min(y, vh - 120) + 'px';
-  const close = (e) => { if (!menu.contains(e.target)) { menu.classList.add('hide'); document.removeEventListener('click', close); } };
-  setTimeout(() => document.addEventListener('click', close), 0);
 }
 export async function quoteReply(msgId) {
   const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
@@ -467,6 +529,12 @@ export function pickReplyCount(c) {
   const { min, max } = replyCountRange(c);
   return min === max ? min : randInt(min, max);
 }
+// 引用候选：本条会话内最近 20 条消息（双方、系统提示、邀请卡都算），不足 20 条用全部
+export function pickQuoteId(c) {
+  const msgs = (c && c.messages) || [];
+  if (!msgs.length) return null;
+  return pick(msgs.slice(-20)).id;
+}
 // 生成一批回复（条数由调用方决定，不超上限；时间戳=命中时刻，按 1~3 秒递增且不晚于当前）
 export async function appendReplyMessages(c, anchor, count, atTime) {
   const cards = (c.cardGroups || []).flatMap(g => (g.cards || []).map(x => ({ content: x.content })));
@@ -481,9 +549,8 @@ export async function appendReplyMessages(c, anchor, count, atTime) {
     if (useSticker) { type = 'sticker'; content = pick(stickers).data; }
     else if (cards.length) { type = 'text'; content = await applyNickname(pick(cards).content, c); }
     else continue;
-    const history = (c.messages || []).filter(x => x.type === 'text' || x.type === 'image' || x.type === 'sticker' || x.type === 'choice');
     let replyTo = null;
-    if (history.length && Math.random() < 0.5) replyTo = pick(history).id;
+    if ((c.messages || []).length && Math.random() < 0.5) replyTo = pickQuoteId(c);
     const time = Math.min(now(), base + i * randInt(1000, 3000));
     c.messages.push({
       id: uid(), from: 'other', type, content,
@@ -589,7 +656,7 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   const c = await getContact(cid);
   if (!c) return;
 
-  if (type === 'choice' && choice && choice.result != null) {
+  if (type === 'choice' && choice && choice.result == null) {
     // 帮我选择：必回 + 延迟缩到 10秒~3分钟（独立流程不合并）
     return sendChoiceResponseFlow(c, choice);
   }
@@ -665,62 +732,103 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   scheduleJudgement(cid, judgeKey, group.map(m => m.id), judgement, readAt, replyAt, replyCount);
 }
 
+// 选择结果结算（幂等）：同一提问只补出一条结果，时间戳恒为「应回时刻」
+// 实时定时器与离线补算共用；已结算过（标记或已有结果消息）直接跳过。
+export function resolveChoiceQuestion(c, qMsg, atTime) {
+  if (!c || !qMsg || qMsg.type !== 'choice' || !qMsg.choice) return 0;
+  if (qMsg.choiceResolved || qMsg.choice.result != null) return 0;
+  if ((c.messages || []).some(m => m.from === 'other' && m.replyTo === qMsg.id)) return 0;
+  const choice = qMsg.choice;
+  const options = choice.options || [];
+  if (!options.length) return 0;
+  const at = Math.min(Number(atTime) || now(), now());
+  // 选择结果：允许对方多选时随机勾 2~N 项，否则单选一项
+  let letters;
+  if (choice.allowMulti && options.length >= 2) {
+    const arr = options.map((_, i) => i);
+    for (let k = arr.length - 1; k > 0; k--) { const j = randInt(0, k); const t = arr[k]; arr[k] = arr[j]; arr[j] = t; }
+    const n = randInt(2, options.length);
+    letters = arr.slice(0, n).sort((a, b) => a - b).map(i => String.fromCharCode(65 + i)).join('、');
+  } else {
+    letters = String.fromCharCode(65 + randInt(0, options.length - 1));
+  }
+  const all = (c.cardGroups || []).flatMap(g => g.cards || []);
+  let lead = '';
+  if (all.length) lead = pick(all).content + ' ';
+  c.messages.push({
+    id: uid(), from: 'other', type: 'choice',
+    choice: { question: choice.question, options, result: letters, allowMulti: !!choice.allowMulti, leadText: lead },
+    content: '',
+    time: at, replyTo: qMsg.id, snapshot: null,
+    read: true, readAt: at, replyAt: 0, replied: true
+  });
+  qMsg.replied = true;
+  qMsg.choiceResolved = true;
+  return 1;
+}
+// 补算入口：离线/切后台期间到点的选择提问统一结算
+export async function processChoiceQuestions(c, t) {
+  let changed = false;
+  for (const m of (c.messages || [])) {
+    if (m.from !== 'me' || m.type !== 'choice' || !m.choice) continue;
+    if (m.choiceResolved || m.choice.result != null) continue;
+    const at = Number(m.choiceReplyAt) || 0;
+    if (!at || t < at) continue;
+    if (resolveChoiceQuestion(c, m, at)) changed = true;
+  }
+  return changed;
+}
+
 // 选择流程：先发提问消息 → 10s~3min 后对方回复选择
 export async function sendChoiceResponseFlow(c, choice) {
   const cid = c.id;
+  const nowT = now();
+  // 延迟：10秒~3分钟；应回时刻落库，切后台/关页后由补算补出
+  const delay = randInt(10, 180);
+  const replyAt = nowT + delay * 1000;
   // 我的消息
   const qMsg = {
-    id: uid(), from:'me', type:'choice', choice, content:'', time:now(), replyTo:null,
+    id: uid(), from:'me', type:'choice', choice, content:'', time: nowT, replyTo:null,
     snapshot: { status: c.status, rate: getCurrentReplyRate(c), willReply: true },
-    read: false, readAt: now()+2000, replyAt: 0, replied: false
+    read: false, readAt: nowT + 2000, replyAt: 0, replied: false,
+    choiceReplyAt: replyAt, choiceResolved: false
   };
   c.messages.push(qMsg);
   await saveContact(c);
   state._animMsgId = qMsg.id;
   if (state.currentContactId === cid) renderChatMessages(cid, true);
-  // 延迟：10秒~3分钟
-  const delay = randInt(10, 180);
-  const replyAt = now() + delay*1000;
-  // 已读
-  setTimeout(async () => {
+  // 已读（实时）；定时器丢失时由补算 2a 按 readAt 兜底
+  const readKey = `choiceRead_${cid}_${qMsg.id}`;
+  state.chatTimers[readKey] = setTimeout(async () => {
+    delete state.chatTimers[readKey];
     const cc = await getContact(cid);
+    if (!cc) return;
     const m = cc.messages.find(x => x.id === qMsg.id);
-    if (m) { m.read = true; await saveContact(cc); if (state.currentContactId===cid) renderChatMessages(cid); }
-  }, 2000);
-  const repKey = `choice_${cid}_${qMsg.id}`;
-  state.chatTimers[repKey] = setTimeout(async () => {
-    const cc = await getContact(cid);
-    if (!cc) { delete state.chatTimers[repKey]; return; }
-    // 选择结果：允许对方多选时随机勾 2~N 项，否则单选一项
-    let letters;
-    if (choice.allowMulti && choice.options.length >= 2) {
-      const arr = choice.options.map((_, i) => i);
-      for (let k = arr.length - 1; k > 0; k--) { const j = randInt(0, k); const t = arr[k]; arr[k] = arr[j]; arr[j] = t; }
-      const n = randInt(2, choice.options.length);
-      letters = arr.slice(0, n).sort((a, b) => a - b).map(i => String.fromCharCode(65 + i)).join('、');
-    } else {
-      letters = String.fromCharCode(65 + randInt(0, choice.options.length-1));
+    if (m && !m.read) {
+      m.read = true;
+      await saveContact(cc);
+      if (state.currentContactId === cid) renderChatIncremental(cid);
     }
-    // 回复：choice 类型特殊消息
-    const all = cc.cardGroups.flatMap(g => g.cards);
-    let lead = '';
-    if (all.length) lead = pick(all).content + ' ';
-    const resultMsg = {
-      id: uid(), from:'other', type:'choice',
-      choice: { question: choice.question, options: choice.options, result: letters, allowMulti: !!choice.allowMulti, leadText: lead },
-      content: '',
-      time: replyAt, replyTo: qMsg.id, snapshot: null,
-      read: true, readAt: replyAt, replyAt: 0, replied: true
-    };
-    cc.messages.push(resultMsg);
-    const qm = cc.messages.find(x => x.id === qMsg.id);
-    if (qm) { qm.replied = true; qm.choice.result = letters; }
-    await saveContact(cc);
-    if (state.currentContactId === cid) renderChatMessages(cid, true);
-    else { cc.unread = (cc.unread||0)+1; await saveContact(cc); }
+  }, 2000);
+  // 结果（实时）；与补算共用同一幂等结算，时间戳=choiceReplyAt
+  const repKey = `choice_${cid}_${qMsg.id}`;
+  state.chatTimers[repKey] = setTimeout(() => {
     delete state.chatTimers[repKey];
-    renderContacts();
-  }, delay*1000);
+    const task = async () => {
+      const cc = await getContact(cid);
+      if (!cc) return;
+      const q = cc.messages.find(x => x.id === qMsg.id);
+      if (!q) return;
+      const sent = resolveChoiceQuestion(cc, q, q.choiceReplyAt || replyAt);
+      if (!sent) return;
+      if (state.currentContactId !== cid) cc.unread = (cc.unread || 0) + sent;
+      await saveContact(cc);
+      if (state.currentContactId === cid) renderChatIncremental(cid);
+      renderContacts();
+    };
+    // 与补算串行，避免定时器与补算同时补出两条结果
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
+  }, Math.max(0, replyAt - now()));
 }
 
 // 触发回复：从字卡库随机抽，条数按设置范围；50%引用历史，50%概率用表情包
