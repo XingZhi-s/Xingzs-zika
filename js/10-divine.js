@@ -1,6 +1,6 @@
 // 依赖：03-data.js
 import { state, uid } from './01-state.js';
-import { $, closeModal, dbGet, dbPut, escapeHtml, formatTime, now, showModal, toast } from './02-core.js';
+import { $, closeModal, confirmDialog, dbGet, dbPut, escapeHtml, formatTime, now, showModal, toast } from './02-core.js';
 import { getAllContacts, openPage, saveContact } from './03-data.js';
 
 /* ============ 占卜（塔罗 / 雷诺曼） ============
@@ -340,7 +340,18 @@ export async function openDivineHistory() {
     `<div class="it-text">${h.dtype === 'tarot' ? '塔罗牌' : '雷诺曼'} · ${escapeHtml(h.spread)}</div>` +
     `<div class="it-time">${formatTime(h.ts)}</div></div>`
   ).join('');
-  showModal('占卜历史', `<div style="max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">${body}</div>`);
+  showModal('占卜历史', `<div style="max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">${body}</div>`, [
+    { label: '清除历史', cls: 'btn-danger', onClick: clearDivineHistory },
+    { label: '关闭', cls: 'btn-outline', onClick: closeModal }
+  ]);
+}
+// 清除全部占卜历史（二次确认；只动 divine_history 这一个 meta 键）
+export async function clearDivineHistory() {
+  if (!await confirmDialog('确定清除全部占卜历史？清除后不可恢复。')) return;
+  await dbPut('meta', { k: 'divine_history', list: [] });
+  window._divineHist = [];
+  toast('占卜历史已清除');
+  openDivineHistory();
 }
 export function viewDivineHistory(i) {
   const h = (window._divineHist || [])[i]; if (!h) return;

@@ -199,7 +199,7 @@ async function saveTogether() {
 }
 async function renderTogetherBar() {
   const bar = $('music-together-bar'); if (!bar) return;
-  if (!_together.active) { bar.classList.add('hide'); return; }
+  if (!_together.active) { bar.classList.add('hide'); updateMusicMiniBar(); return; }
   const contacts = await getAllContacts();
   const c = contacts.find(x => x.id === _together.active.contactId);
   if (!c) { await markActiveInviteEnded(); return; }
@@ -209,6 +209,7 @@ async function renderTogetherBar() {
   const sub = $('music-together-sub');
   const tr = _index.find(t => t.id === _together.active.trackId);
   if (sub) sub.textContent = tr ? `《${tr.name}》` : '一起听';
+  updateMusicMiniBar();
 }
 // 结束一起听：把聊天里的邀请卡标成已结束，并清掉状态（不暂停当前播放）
 async function markActiveInviteEnded() {
@@ -279,7 +280,7 @@ export async function musicStartTogether(contactId) {
   c.messages = c.messages || [];
   c.messages.push(msg);
   await saveContact(c);
-  _together.active = { contactId: c.id, since: ts, trackId: track.id, inviteMsgId: msg.id };
+  _together.active = { contactId: c.id, contactName: c.name, since: ts, trackId: track.id, inviteMsgId: msg.id };
   await saveTogether();
   await rejectOtherPendingInvites(null);
   if (_currentId !== track.id || !_url) await loadTrack(track, true);
@@ -306,7 +307,7 @@ export async function musicAcceptInvite(contactId, msgId) {
   m.musicInvite.trackName = track.name;
   await saveContact(c);
   const ts = now();
-  _together.active = { contactId: c.id, since: ts, trackId: track.id, inviteMsgId: m.id };
+  _together.active = { contactId: c.id, contactName: c.name, since: ts, trackId: track.id, inviteMsgId: m.id };
   await saveTogether();
   await rejectOtherPendingInvites(m.id);
   if (_currentId !== track.id || !_url) await loadTrack(track, true);
@@ -473,7 +474,14 @@ export function updateMusicMiniBar() {
   document.body.classList.toggle('music-mini-on', show);
   if (!show) return;
   const t = _index.find(x => x.id === _currentId);
-  const title = $('music-mini-title'); if (title) title.textContent = t ? t.name : '正在播放';
+  const title = $('music-mini-title');
+  if (title) {
+    const active = _together && _together.active;
+    // 一起听优先显示联系人名；独自听只显示“独自听 + 歌名”（不加歌手，最小信息量）
+    title.textContent = active
+      ? `和 ${active.contactName || 'Ta'} 一起听`
+      : `独自听${t ? ' · ' + t.name : ''}`;
+  }
   const use = $('music-mini-icon'); if (use) use.setAttribute('href', '#icon-pause');
 }
 function updateProgress(cur, dur) {

@@ -7,7 +7,7 @@ import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLe
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
-import { copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
+import { clearDivineHistory, copyDivineResult, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
 import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
 import { checkTogetherInvites, initMusicModule, musicAcceptInvite, musicBack, musicDelete, musicExitTogether, musicNext, musicOpenTogetherPicker, musicPickFiles, musicPlayId, musicPrev, musicRejectInvite, musicSeek, musicSetVolume, musicStartTogether, musicToggleLoop, musicTogglePlay, openMusicPage, renderGlobalStorage, requestPersistStorage, updateMusicMiniBar } from './12-music.js';
 import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
@@ -175,12 +175,14 @@ async function processJudgedMessages(c, t) {
   }
   return changed;
 }
-export async function runCatchUp() {
+export async function runCatchUp(onlyCid) {
   return enqueueTask(async () => {
     const t = now();
     if (!await acquireCatchUpLock()) return false;
     try {
-    const contacts = await getAllContacts();
+    // B1：进入单个聊天时只补该联系人，避免每次点击都全量扫描 20 个联系人
+    let contacts = await getAllContacts();
+    if (onlyCid) contacts = contacts.filter(c => c.id === onlyCid);
     // A25/A26：状态共享池（内置 + 自定义，所有联系人通用）
     const statusPool = await getStatusPool();
     const cats = await getStatusCategories();
@@ -312,7 +314,7 @@ export async function runCatchUp() {
           c.settings.nextLetterAt = t + randInt(2, 8) * 3600 * 1000;
           changed = true;
         } else {
-          const letter = { id: uid(), direction: 'in', title: `${c.name}的来信`, content: await genLetterContent(c), time: t };
+          const letter = { id: uid(), direction: 'in', title: `${c.name}的来信`, content: await genLetterContent(c), time: t, read: false };
           c.letters = c.letters || [];
           c.letters.push(letter);
           c.settings.nextLetterAt = null;
@@ -535,6 +537,7 @@ window.backFromChat = backFromChat;
 window.backFromContactSetting = backFromContactSetting;
 window.backFromStickerLib = backFromStickerLib;
 window.backLetterList = backLetterList;
+window.renderLetterList = renderLetterList;
 window.clearHomeDecos = clearHomeDecos;
 window.closeDecoEditor = closeDecoEditor;
 window.closeDIY = closeDIY;
@@ -609,6 +612,7 @@ window.openContactSettingsFromChatDirect = openContactSettingsFromChatDirect;
 window.openContactSettingsList = openContactSettingsList;
 window.openDecoEditor = openDecoEditor;
 window.openDivineHistory = openDivineHistory;
+window.clearDivineHistory = clearDivineHistory;
 window.openDivinePage = openDivinePage;
 window.openDiyPage = openDiyPage;
 window.openHomeStickerUploader = openHomeStickerUploader;

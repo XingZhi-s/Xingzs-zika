@@ -31,6 +31,7 @@ let _book = null;      // 当前打开的书对象
 let _pageIdx = 0;      // 当前页码
 let _selQuote = '';    // 当前划词选中的原文
 let _selInited = false;
+let _selTimer = null;
 
 // ---- 数据读写 ----
 async function getBooks() { const r = await dbGet('meta', 'reader_books'); return (r && r.list) || []; }
@@ -209,6 +210,17 @@ function initReaderSelection() {
   content.addEventListener('mouseup', () => setTimeout(handleReaderSelect, 10));
   // 手机端长按选词后，选区稍晚才确定，延迟再读
   content.addEventListener('touchend', () => setTimeout(handleReaderSelect, 350));
+  // 部分机型长按/拖动选择柄结束后不再触发 touchend，选区只在 selectionchange 时稳定：
+  // 这里只负责“出现菜单”，不主动隐藏，避免点菜单时选区被清空导致按钮先消失
+  document.addEventListener('selectionchange', () => {
+    if (!_book) return;
+    clearTimeout(_selTimer);
+    _selTimer = setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.toString().trim()) return;
+      handleReaderSelect();
+    }, 250);
+  });
   // 点击护眼下划线高亮 → 查看笔记
   content.addEventListener('click', (e) => {
     const hl = e.target.closest('.reader-highlight');

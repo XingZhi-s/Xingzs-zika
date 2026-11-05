@@ -622,16 +622,24 @@ export async function renderLetterList() {
     box.innerHTML = `<div class="empty">还没有信件，点击右上角 <svg class="i i-sm" style="vertical-align:-2px;"><use href="#icon-pencil"/></svg> 写新信</div>`;
     return;
   }
-  box.innerHTML = all.map(l => {
+  const card = l => {
     const dir = l.direction === 'out' ? 'out' : 'in';
     const from = l.direction === 'out' ? `我 → ${escapeHtml(l.contactName)}` : `${escapeHtml(l.contactName)} → 我`;
-    return `<div class="letter-card ${dir}" onclick="openLetterDetail('${escapeHtml(l.contactId)}','${escapeHtml(l.id)}')">
+    const unread = dir === 'in' && l.read === false;
+    return `<div class="letter-card ${dir}${unread ? ' unread' : ''}" onclick="openLetterDetail('${escapeHtml(l.contactId)}','${escapeHtml(l.id)}')">
       <div class="letter-time">${formatTime(l.time)}</div>
-      <div class="letter-title">${escapeHtml(l.title || '(无标题)')}</div>
+      <div class="letter-title">${escapeHtml(l.title || '(无标题)')}${unread ? '<span class="letter-unread">未读</span>' : ''}</div>
       <div class="letter-from">${from}</div>
       <div class="letter-preview multi-ellipsis">${escapeHtml(l.content)}</div>
     </div>`;
-  }).join('');
+  };
+  const incoming = all.filter(l => l.direction !== 'out');
+  const outgoing = all.filter(l => l.direction === 'out');
+  box.innerHTML =
+    `<div class="letter-section-title">收信箱${incoming.length ? `（${incoming.length}）` : ''}</div>` +
+    (incoming.length ? incoming.map(card).join('') : '<div class="letter-empty-line">还没有来信</div>') +
+    `<div class="letter-section-title">寄出的信${outgoing.length ? `（${outgoing.length}）` : ''}</div>` +
+    (outgoing.length ? outgoing.map(card).join('') : '<div class="letter-empty-line">还没有寄出信件</div>');
 }
 export function openLetterCompose() {
   // 填充收件人选框
@@ -684,7 +692,7 @@ export async function sendLetter() {
     c._pendingLetters = c._pendingLetters || [];
     c._pendingLetters.push({
       replyAt,
-      letter: { id: uid(), direction:'in', title: title ? `Re: ${title}` : '回信', content: replyContent, time: replyAt }
+      letter: { id: uid(), direction:'in', title: title ? `Re: ${title}` : '回信', content: replyContent, time: replyAt, read: false }
     });
   }
   await saveContact(c);
@@ -696,6 +704,11 @@ export async function openLetterDetail(cid, lid) {
   if (!c) return;
   const l = (c.letters || []).find(x => x.id === lid);
   if (!l) return;
+  // 收信箱：打开即视为已读（复用信件自身的 read 字段）
+  if (l.direction !== 'out' && l.read === false) {
+    l.read = true;
+    await saveContact(c);
+  }
   state.currentLetterId = lid;
   state.currentLetterContactId = cid;
   $('letter-detail-title').textContent = l.title || '(无标题)';

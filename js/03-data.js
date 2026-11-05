@@ -462,7 +462,7 @@ export function exitChatMode() {
 export async function openChat(contactId) {
   // A26：进入聊天页之前一次性完成补算并落库，进入后不再二次插入
   if (typeof window.__runCatchUp === 'function') {
-    try { await window.__runCatchUp(); } catch (e) { console.warn('进入聊天前补算失败：', e); }
+    try { await window.__runCatchUp(contactId); } catch (e) { console.warn('进入聊天前补算失败：', e); }
   }
   state.currentContactId = contactId;
   const c = await getContact(contactId);

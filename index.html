@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <title>星之匙</title>
 <style>
 /* ========== 全局变量与重置 ========== */
@@ -743,11 +743,7 @@ a { text-decoration:none; color:inherit; }
   body.nav-hidden-page .main { padding-bottom: env(safe-area-inset-bottom, 0px) !important; }
   /* 聊天搜索页原为导航预留的底部空间，导航隐藏后收回 */
   body.nav-hidden-page .chat-search-body { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
-  /* 迷你播放条：导航隐藏后贴近底部；聊天页让开固定输入栏 */
-  body.nav-hidden-page .music-mini { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-  body.nav-hidden-page.page-chat-active .music-mini { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
-  body.nav-hidden-page.music-mini-on .main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important; }
-  body.nav-hidden-page.page-chat-active.music-mini-on #chat-content-wrap .chat-messages { padding-bottom: 122px !important; }
+  /* 迷你播放条已移至顶部，导航隐藏后无需再为它预留底部空间 */
 }
 
 /* ========== 主体布局：电脑版（双栏） ========== */
@@ -1116,6 +1112,10 @@ a { text-decoration:none; color:inherit; }
 .letter-from { font-size:12px; color:var(--text-secondary); margin-bottom:8px; }
 .letter-preview { color:var(--text-secondary); font-size:13px; }
 .letter-time { position:absolute; top:16px; right:16px; font-size:11px; color:var(--text-secondary); }
+.letter-section-title { font-size:13px; font-weight:600; color:var(--text-secondary); padding:4px 2px; }
+.letter-empty-line { font-size:13px; color:var(--text-secondary); padding:2px 2px 6px; }
+.letter-card.unread { box-shadow:0 0 0 1px color-mix(in srgb, var(--theme-color) 45%, transparent), var(--shadow); }
+.letter-unread { display:inline-block; margin-left:8px; font-size:11px; font-weight:500; color:#fff; background:var(--theme-color); border-radius:8px; padding:1px 7px; vertical-align:2px; }
 
 .letter-compose { padding:16px; display:flex; flex-direction:column; gap:14px; }
 
@@ -1433,7 +1433,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .reminder-icon-btn.del { background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); }
 
 /* ========== 音乐页（第二页伪应用入口 → 独立二级界面） ========== */
-.music-body { flex:1; min-height:0; display:flex; flex-direction:column; }
+.music-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 .music-shelf { flex:1; min-height:0; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
 .music-empty { text-align:center; padding:46px 20px; color:var(--text-secondary); font-size:13px; line-height:1.9; }
 .music-empty svg { width:46px; height:46px; opacity:0.4; margin:0 auto 10px; display:block; }
@@ -1453,7 +1453,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-track-name { font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .music-track-meta { font-size:11px; color:var(--text-secondary); margin-top:2px; }
 .music-track-del { width:32px; height:32px; min-width:32px; min-height:32px; border-radius:8px; background:color-mix(in srgb, var(--danger) 12%, transparent); color:var(--danger); flex-shrink:0; }
-.music-player {
+.music-player { position:relative; z-index:5;
   flex-shrink:0; border-top:1px solid var(--border-color);
   padding:14px 16px calc(16px + env(safe-area-inset-bottom));
   background:color-mix(in srgb, var(--card-bg) 86%, transparent);
@@ -1501,10 +1501,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-together-info { flex:1; min-width:0; }
 .music-together-name { font-size:13px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .music-together-sub { font-size:11px; color:var(--text-secondary); }
-/* 迷你播放条：退出音乐页后仍有可见控制；细条、半透明、遵守背景优先级 */
+/* 迷你播放条：移到顶部，避免遮挡返回键/标题（内容区整体下移让位） */
 .music-mini {
   position:fixed; left:50%; transform:translateX(-50%);
-  bottom:calc(var(--nav-height) + 26px + env(safe-area-inset-bottom, 0px));
+  top:calc(8px + env(safe-area-inset-top, 0px));
   width:min(calc(100% - 24px), 520px); z-index:1200;
   display:flex; align-items:center; gap:8px; padding:5px 8px 5px 12px;
   border-radius:14px;
@@ -1525,11 +1525,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
   background:color-mix(in srgb, var(--theme-color) 12%, transparent);
   color:var(--theme-color);
 }
-body.music-mini-on .main { padding-bottom:calc(var(--nav-height) + 24px + 54px + env(safe-area-inset-bottom, 0px)); }
-@media (min-width: 900px) {
-  .music-mini { bottom:14px; }
-  body.music-mini-on .main { padding-bottom:64px; }
-}
+body.music-mini-on .main { padding-top:calc(62px + env(safe-area-inset-top, 0px)); }
 .music-together-exit { flex-shrink:0; padding:6px 12px; min-height:32px; font-size:12px; }
 .msg-music-invite { border-left:3px solid var(--theme-color); }
 .msg-invite-actions { display:flex; gap:8px; margin-top:8px; }

@@ -165,17 +165,13 @@ export async function renderContactSetting(id) {
   // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
   const currentSid = (c.statusId && pool.some(s => s.id === c.statusId))
     ? c.statusId : (pool.find(s => s.name === c.status)?.id);
-  const statusGroupHtml = cats.map(cat => {
-    const items = pool.filter(s => s.category === cat.id);
-    if (!items.length) return '';
-    const rows = items.map(s => {
-      const rate = (typeof s.replyRate === 'number') ? s.replyRate : 50;
-      const isCurrent = !!currentSid && s.id === currentSid;
-      return `
+  // B1：只显示状态名与「当前」标记；大类与拆分比例仅在新建/编辑弹窗内设置
+  const statusRows = pool.map(s => {
+    const isCurrent = !!currentSid && s.id === currentSid;
+    return `
       <div class="status-item${isCurrent ? ' current' : ''}">
         <div class="status-info">
-          <div class="status-name">${escapeHtml(s.name)} ${isCurrent ? '<span class="tag tier-秒回" style="background:'+rateColor(rate)+';color:#fff;border:none;">当前</span>' : ''}</div>
-          <div class="status-tier" style="color:var(--text-secondary);font-size:12px;">已读并回复的概率 ${rate}%</div>
+          <div class="status-name">${escapeHtml(s.name)} ${isCurrent ? '<span class="tag" style="background:var(--theme-color);color:#fff;border:none;">当前</span>' : ''}</div>
         </div>
         <div class="status-actions">
           <button onclick="setStatusCurrent('${escapeHtml(s.id)}')" title="设为当前" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-check"/></svg></button>
@@ -183,18 +179,7 @@ export async function renderContactSetting(id) {
           <button style="background:#fee2e2;color:#991b1b;display:flex;align-items:center;justify-content:center;" onclick="deleteStatus('${escapeHtml(s.id)}')" title="删除"><svg class="i i-sm" style="stroke:#991b1b;"><use href="#icon-trash"/></svg></button>
         </div>
       </div>`;
-    }).join('');
-    return `
-      <div class="status-group">
-        <div class="status-group-title">${escapeHtml(cat.name)}</div>
-        ${rows}
-        <div class="status-split">
-          <label>未读 <input type="number" min="0" max="100" value="${cat.unread}" onchange="csSetSplit('${escapeHtml(cat.id)}','unread',this.value)"> %</label>
-          <label>已读不回 <input type="number" min="0" max="100" value="${cat.readNoReply}" onchange="csSetSplit('${escapeHtml(cat.id)}','readNoReply',this.value)"> %</label>
-        </div>
-      </div>`;
   }).join('');
-  const statusRows = statusGroupHtml;
   const autoMode = c.statusAuto !== false;
   box.innerHTML = `
     <div class="cs-section">
