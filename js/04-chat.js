@@ -267,12 +267,12 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
     </div></div>`;
   }
   else if (m.type === 'musicInvite') {
-    // 一起听邀请卡：联系人不发言，只保留邀请/接受/拒绝/结束这几种状态
+    // 一起听邀请卡：名片式（左侧大号音乐图标，右侧邀请文案/歌名/状态）
     const inv = m.musicInvite || {};
     const isOut = m.from === 'me';
     const song = escapeHtml(inv.trackName || '本地歌曲');
     let statusText = '';
-    if (inv.status === 'pending') statusText = isOut ? '等待回应…' : `${escapeHtml(contactName)} 邀请你一起听`;
+    if (inv.status === 'pending') statusText = isOut ? '等待回应…' : '等待你的回应';
     else if (inv.status === 'accepted') statusText = '正在一起听';
     else if (inv.status === 'rejected') statusText = '已拒绝';
     else if (inv.status === 'ended') statusText = '一起听已结束';
@@ -282,11 +282,17 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
           <button class="btn-outline btn" onclick="musicRejectInvite('${contactId}','${m.id}')">拒绝</button>
         </div>`
       : '';
-    contentHtml = `<div class="msg-bubble"><div class="msg-choice msg-music-invite">
-      <div class="msg-reminder-head"><svg class="i"><use href="#icon-headphones"/></svg> 一起听</div>
-      <div class="msg-reminder-text">${isOut ? '你邀请' + escapeHtml(contactName) : escapeHtml(contactName) + '想和你'}一起听《${song}》</div>
-      <div class="msg-invite-status">${statusText}</div>
-      ${actions}
+    const title = isOut
+      ? `你邀请${escapeHtml(contactName)}一起听`
+      : `${escapeHtml(contactName)} 邀请你一起听`;
+    contentHtml = `<div class="msg-bubble msg-music-bubble"><div class="msg-music-card">
+      <div class="msg-music-card-icon"><svg class="i"><use href="#icon-music"/></svg></div>
+      <div class="msg-music-card-body">
+        <div class="msg-music-card-title">${title}</div>
+        <div class="msg-music-card-song">《${song}》</div>
+        <div class="msg-invite-status">${statusText}</div>
+        ${actions}
+      </div>
     </div></div>`;
   }
   const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing"><span class="msg-typing-text">${escapeHtml(contactName)}正在输入</span><span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
@@ -548,6 +554,35 @@ function scheduleJudgement(cid, key, msgIds, judgement, readAt, replyAt, replyCo
     if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
   }, Math.max(800, replyAt - now()));
 }
+// 已读/回复判定链的公共排程：普通消息与一起听邀请共用同一套时间与规则
+export function computeReadPlan(c, st, cat, baseTime, nowT) {
+  const fastSec = Math.max(1, c.settings.fastSec || 5);
+  const slowMin = Math.max(1, c.settings.slowMin || 3);
+  const maxSec = Math.max(fastSec, slowMin * 60);
+  const rate = st ? st.replyRate : 50;
+  const readDelay = maxSec > fastSec ? randInt(fastSec, maxSec - 1) : maxSec;
+  // 第一个骰子：该状态的 replyRate 判回不回
+  const willReply = Math.random() * 100 < rate;
+  let judgement = 'unread', readAt = 0, replyAt = 0, replyCount = 0;
+  if (willReply) {
+    const replyDelay = readDelay < maxSec ? randInt(readDelay + 1, maxSec) : readDelay;
+    readAt = baseTime + readDelay * 1000;
+    replyAt = baseTime + replyDelay * 1000;
+    if (readAt <= nowT) { readAt = nowT + 1000; replyAt = Math.max(replyAt, readAt + 1000); }
+    judgement = 'reply';
+    replyCount = pickReplyCount(c);
+  } else {
+    // 第二个骰子：所属大类拆分判「未读 / 已读不回」
+    const unreadRoll = Math.random() * 100 < (cat ? cat.unread : 100);
+    if (unreadRoll) { judgement = 'unread'; readAt = 0; }
+    else {
+      judgement = 'readNoReply';
+      readAt = baseTime + readDelay * 1000;
+      if (readAt <= nowT) readAt = nowT + 1000;
+    }
+  }
+  return { judgement, readAt, replyAt, replyCount, readDelay, maxSec, fastSec, slowMin, rate };
+}
 // 发送消息核心：状态驱动判定链（分节 + 两个骰子 + 挂起队列）
 export async function sendMessageCore({ type, content, choice, replyTo }) {
   const cid = state.currentContactId;
@@ -599,32 +634,9 @@ export async function sendMessageCore({ type, content, choice, replyTo }) {
   const rate = st ? st.replyRate : 50; // status.replyRate = 已读并回复的概率（0-100）
   const cat = cats.find(x => x.id === (st && st.category)) || cats[0];
 
-  const fastSec = Math.max(1, c.settings.fastSec || 5);
-  const slowMin = Math.max(1, c.settings.slowMin || 3);
-  const maxSec = Math.max(fastSec, slowMin * 60);
   const baseTime = isSection ? group[0].time : nowT;
-  const readDelay = maxSec > fastSec ? randInt(fastSec, maxSec - 1) : maxSec;
-
-  // 3) 第一个骰子：该状态的 replyRate 判回不回
-  const willReply = Math.random() * 100 < rate;
-  let judgement = 'unread', readAt = 0, replyAt = 0, replyCount = 0;
-  if (willReply) {
-    const replyDelay = readDelay < maxSec ? randInt(readDelay + 1, maxSec) : readDelay;
-    readAt = baseTime + readDelay * 1000;
-    replyAt = baseTime + replyDelay * 1000;
-    if (readAt <= nowT) { readAt = nowT + 1000; replyAt = Math.max(replyAt, readAt + 1000); }
-    judgement = 'reply';
-    replyCount = pickReplyCount(c);
-  } else {
-    // 4) 第二个骰子：所属大类拆分判「未读 / 已读不回」
-    const unreadRoll = Math.random() * 100 < (cat ? cat.unread : 100);
-    if (unreadRoll) { judgement = 'unread'; readAt = 0; }
-    else {
-      judgement = 'readNoReply';
-      readAt = baseTime + readDelay * 1000;
-      if (readAt <= nowT) readAt = nowT + 1000;
-    }
-  }
+  const plan = computeReadPlan(c, st, cat, baseTime, nowT);
+  const judgement = plan.judgement, readAt = plan.readAt, replyAt = plan.replyAt, replyCount = plan.replyCount;
   for (const m of group) {
     m.snapshot = { status: st ? st.name : '', statusId: c.statusId, rate, category: st ? st.category : '' };
     m.judgeKey = judgeKey;

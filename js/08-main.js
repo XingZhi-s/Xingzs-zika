@@ -318,11 +318,15 @@ export async function runCatchUp(onlyCid) {
           c.letters = c.letters || [];
           c.letters.push(letter);
           c.settings.nextLetterAt = null;
-          c.messages.push({
-            id: uid(), from: 'other', type: 'text', content: 'Ta 寄来了一封信，快去信箱看看吧。',
-            time: t, replyTo: null, snapshot: null, read: true, readAt: t, replyAt: 0, replied: true
-          });
-          c.unread = (c.unread || 0) + 1;
+          const letterSysKey = 'letter:' + letter.id;
+          if (!(c.messages || []).some(m => m.sysKey === letterSysKey)) {
+            c.messages.push({
+              id: uid(), from: 'other', type: 'text', content: 'Ta 寄来了一封信，快去信箱看看吧。',
+              time: t, replyTo: null, snapshot: null, read: true, readAt: t, replyAt: 0, replied: true,
+              sysKey: letterSysKey
+            });
+            c.unread = (c.unread || 0) + 1;
+          }
           changed = true;
         }
       }
@@ -345,6 +349,8 @@ export async function runCatchUp(onlyCid) {
 
 // 供 03-data.openChat 在进入聊天页之前调用（一次完成补算并落库）
 window.__runCatchUp = runCatchUp;
+// 供调试/测试直接构造系统消息（纯函数，不落库）
+window.pushMissedCall = pushMissedCall;
 // 供 04-chat 的定时器复用串行队列，避免与补算并发写同一联系人
 window.__enqueueTask = enqueueTask;
 
@@ -510,7 +516,39 @@ export function initHomeSwiper() {
 }
 
 // ============ 启动 ============
+// 全局只保留输入框的原生菜单；阅读正文等区域由自建选区/笔记菜单处理原生 contextmenu
+// Android Chrome 的「点按搜索/放大镜/复制菜单」都由 contextmenu 触发，这里统一拦截
+function installSelectionGuards() {
+  document.addEventListener('contextmenu', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+    e.preventDefault();
+  }, { capture: true });
+}
+
+// 顶栏固定：把每个页面顶栏之后的内容收进独立滚动容器，滚动条只出现在内容区
+function setupPageScrollContainers() {
+  document.querySelectorAll('.page').forEach(page => {
+    if (page.id === 'page-chat') return; // 聊天页已有 chat-messages 独立滚动
+    if (page.querySelector('.page-scroll')) return;
+    let top = null;
+    for (const ch of Array.from(page.children)) {
+      if (ch.classList && ch.classList.contains('top-bar')) { top = ch; break; }
+    }
+    if (!top) return;
+    const box = document.createElement('div');
+    box.className = 'page-scroll';
+    const siblings = [];
+    let node = top.nextElementSibling;
+    while (node) { siblings.push(node); node = node.nextElementSibling; }
+    for (const n of siblings) box.appendChild(n);
+    page.appendChild(box);
+  });
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+  installSelectionGuards();
+  setupPageScrollContainers();
   initApp().catch(e => {
     console.error(e);
     toast('初始化失败：' + e.message);

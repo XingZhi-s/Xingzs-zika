@@ -459,11 +459,16 @@ export function pushMissedCall(c, time) {
   const t = time || now();
   c.missedCalls = c.missedCalls || [];
   c.missedCalls.push(t);
+  const sysKey = 'missed:' + t;
+  if ((c.messages || []).some(m => m.sysKey === sysKey)) return false;
   const exist = (c.messages || []).filter(m => m.type === 'text' && String(m.content).includes('（未接来电）'));
   if (exist.length >= 3) return false;
+  // 系统提示写在“记录时刻”，避免补算时使用过去时间而落在最近 50 条之外
+  const mt = now();
   c.messages.push({
     id: uid(), from:'other', type:'text', content: `${c.name}（未接来电）`,
-    time: t, replyTo: null, snapshot: null, read: true, readAt: t, replyAt: 0, replied: true
+    time: mt, replyTo: null, snapshot: null, read: true, readAt: mt, replyAt: 0, replied: true,
+    sysKey
   });
   c.unread = (c.unread||0)+1;
   return true;

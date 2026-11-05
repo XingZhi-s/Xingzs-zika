@@ -1,8 +1,8 @@
 // 依赖：01-state.js / 02-core.js / 03-data.js / 04-chat.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, confirmDialog, dbDel, dbGet, dbPut, escapeHtml, now, pick, randInt, showModal, toast } from './02-core.js';
-import { backFromApp, getAllContacts, getContact, openPage, saveContact } from './03-data.js';
-import { renderChatMessages } from './04-chat.js';
+import { backFromApp, getAllContacts, getContact, getStatusCategories, getStatusPool, openPage, saveContact } from './03-data.js';
+import { cascadeReadFromMe, computeReadPlan, renderChatIncremental, renderChatMessages } from './04-chat.js';
 
 /* ============ 本地音乐（纯本地文件，空盒子形态） ============
    索引： meta.music_index_v1  = { k, list:[{ id, name, size, addTime }] }
@@ -272,17 +272,42 @@ export async function musicStartTogether(contactId) {
   if (!_index.length) return toast('先导入一首本地音乐');
   const track = _index.find(t => t.id === _currentId) || _index[0];
   const ts = now();
+  // 邀请卡与普通我发消息共用同一套已读判定：先未读，读到后才级联已读并接受
+  const pool = await getStatusPool();
+  const cats = await getStatusCategories();
+  const st = pool.find(s => s.id === c.statusId) || null;
+  const cat = cats.find(x => x.id === (st && st.category)) || cats[0];
+  const plan = computeReadPlan(c, st, cat, ts, ts);
+  const readAt = plan.readAt > 0 ? plan.readAt : ts + Math.max(1000, plan.readDelay * 1000);
+  const msgId = uid();
   const msg = {
-    id: uid(), from: 'me', type: 'musicInvite', content: '', time: ts,
-    replyTo: null, snapshot: null, read: true, readAt: ts, replyAt: 0, replied: true,
-    musicInvite: { status: 'accepted', trackId: track.id, trackName: track.name }
+    id: msgId, from: 'me', type: 'musicInvite', content: '', time: ts,
+    replyTo: null, snapshot: null, read: false, readAt, replyAt: 0, replied: true,
+    judgement: plan.judgement, judgeKey: msgId, queued: false,
+    musicInvite: { status: 'pending', trackId: track.id, trackName: track.name }
   };
   c.messages = c.messages || [];
   c.messages.push(msg);
   await saveContact(c);
+  const readKey = 'mi_' + c.id + '_' + msgId;
+  const fireRead = async () => {
+    const cc = await getContact(c.id); if (!cc) return;
+    const mm = (cc.messages || []).find(x => x.id === msgId); if (!mm) return;
+    let changed = false;
+    if (!mm.read) { mm.read = true; changed = true; }
+    if (cascadeReadFromMe(cc, msgId)) changed = true;
+    if (mm.musicInvite && mm.musicInvite.status === 'pending') { mm.musicInvite.status = 'accepted'; changed = true; }
+    if (changed) await saveContact(cc);
+    if (state.currentContactId === c.id) renderChatIncremental(c.id);
+  };
+  if (readAt <= now()) fireRead();
+  else state.chatTimers[readKey] = setTimeout(() => {
+    delete state.chatTimers[readKey];
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(fireRead); else fireRead();
+  }, readAt - now());
   _together.active = { contactId: c.id, contactName: c.name, since: ts, trackId: track.id, inviteMsgId: msg.id };
   await saveTogether();
-  await rejectOtherPendingInvites(null);
+  await rejectOtherPendingInvites(msg.id);
   if (_currentId !== track.id || !_url) await loadTrack(track, true);
   else {
     const a = audioEl();

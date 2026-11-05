@@ -27,7 +27,10 @@
   --nav-height: 60px;
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html,body { height:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color:var(--text-primary); background:var(--theme-bg-light); font-size:14px; overflow:hidden; }
+html,body { height:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color:var(--text-primary); background:var(--theme-bg-light); font-size:14px; overflow:hidden; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+/* 只允许真正需要选字的区域保留原生选择；其余界面禁止点按搜索/选择 */
+input, textarea, select, [contenteditable="true"], .reader-content { -webkit-user-select:text; user-select:text; }
+input, textarea, select, [contenteditable="true"] { -webkit-touch-callout:default; }
 input, textarea, button { font-family:inherit; font-size:14px; outline:none; border:none; background:transparent; }
 button { cursor:pointer; min-height:44px; min-width:44px; display:flex; align-items:center; justify-content:center; }
 button:active { opacity:0.7; }
@@ -195,13 +198,15 @@ a { text-decoration:none; color:inherit; }
 .i-xl { width:28px; height:28px; }
 .i-sm { width:16px; height:16px; }
 /* ========== 主体布局：手机版 ========== */
-.app { height:100vh; display:flex; flex-direction:column; background:var(--theme-bg-light); }
+.app { height:100vh; height:100dvh; display:flex; flex-direction:column; background:var(--theme-bg-light); }
 /* 内容包装容器约束（手机端也生效）：让 .main 的 flex:1 生效，长页面在 .page 内部滚动而非撑破布局 */
 .content-wrap { flex:1; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--theme-bg-light); }
 .main { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:calc(var(--nav-height) + 24px + env(safe-area-inset-bottom, 0px)); }
-.page { display:none; flex:1; min-height:0; overflow-y:auto; flex-direction:column; background:var(--theme-bg-light); }
+.page { display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; background:var(--theme-bg-light); }
 .page.active { display:flex; }
 .page > .top-bar { flex-shrink:0; }
+/* 顶栏固定，只有内容区滚动；滚动条轨道不会出现在顶栏右侧 */
+.page-scroll { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; }
 
 /* ========== 底部导航（手机版：悬浮白色胶囊 + 4个蓝色圆角方块图标，无文字） ========== */
 .nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#8ba4cb; font-size:11px; background:transparent; }
@@ -926,8 +931,9 @@ a { text-decoration:none; color:inherit; }
 .top-bar-btn { width:40px; height:40px; min-width:40px; min-height:40px; border-radius:50%; font-size:20px; background:transparent; }
 
 /* ========== LOVE 页 - 联系人列表 ========== */
-.contact-card { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; position:relative; border-bottom:1px solid var(--border-color); background:var(--card-bg); }
-.contact-card:hover { background:var(--theme-light); }
+.contact-card { display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; position:relative; border-bottom:1px solid var(--border-color); background:var(--card-bg); touch-action:manipulation; }
+/* 触摸设备没有 hover，避免点按/长按后高亮驻留 */
+@media (hover:hover) and (pointer:fine) { .contact-card:hover { background:var(--theme-light); } }
 .contact-card-info { flex:1; min-width:0; }
 .contact-card-name { font-weight:600; font-size:15px; display:flex; align-items:center; gap:6px; }
 .contact-card-status { font-size:12px; color:var(--text-secondary); display:flex; align-items:center; }
@@ -1172,10 +1178,10 @@ a { text-decoration:none; color:inherit; }
 .cs-search-bar { display:flex; align-items:center; gap:8px; margin:-6px 0 18px; padding:8px 12px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; box-shadow:var(--shadow); }
 .cs-search-input { flex:1; min-width:0; border:none; background:transparent; font-size:14px; color:var(--text-primary); }
 .cs-card { background:var(--card-bg); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); }
-.cs-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; }
+.cs-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; gap:10px; flex-wrap:wrap; }
 .cs-row + .cs-row { border-top:1px solid var(--border-color); }
 .cs-label { color:var(--text-secondary); flex-shrink:0; }
-.cs-value { flex:1; min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:10px; text-align:right; word-break:break-all; }
+.cs-value { flex:1; min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:10px; text-align:right; word-break:break-all; flex-wrap:wrap; }
 /* 开关行：标签靠左，开关紧贴标签右侧，整行从左起排 */
 .cs-row-switch { justify-content:flex-start; }
 .cs-row-switch .cs-value { flex:0 0 auto; justify-content:flex-start; gap:0; }
@@ -1483,6 +1489,21 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-side.left { left:0; }
 .music-side.right { right:0; }
 .music-side input[type=range] { width:64px; }
+/* 320px 窄屏：收紧控制行，避免中间组与左右侧控件重叠 */
+@media (max-width:360px) {
+  .music-player { padding-left:12px; padding-right:12px; }
+  .music-controls { gap:8px; }
+  .music-ctrl { width:38px; height:38px; min-width:38px; min-height:38px; }
+  .music-play { width:48px; height:48px; min-width:48px; min-height:48px; }
+  .music-side.left .music-ctrl { width:34px; height:34px; min-width:34px; min-height:34px; }
+  .music-side.right input[type=range] { width:44px; }
+  .music-progress span { width:32px; }
+}
+@media (max-width:899px) {
+  .page-scroll { padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px)); }
+  /* 音乐页播放器本身贴底且自带安全区内边距，不再叠加滚动容器的底部留白 */
+  #page-music .page-scroll { padding-bottom:0; }
+}
 .music-track.playing .music-track-name { color:var(--theme-color); }
 
 /* ========== 音乐：导入进度 / 存储用量 / 一起听 / 邀请卡片 ========== */
@@ -1501,13 +1522,13 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .music-together-info { flex:1; min-width:0; }
 .music-together-name { font-size:13px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .music-together-sub { font-size:11px; color:var(--text-secondary); }
-/* 迷你播放条：移到顶部，避免遮挡返回键/标题（内容区整体下移让位） */
+/* 迷你播放条：悬浮短胶囊，不占布局；位于顶栏（54px）下方，避开返回键/标题/关闭按钮 */
 .music-mini {
-  position:fixed; left:50%; transform:translateX(-50%);
-  top:calc(8px + env(safe-area-inset-top, 0px));
-  width:min(calc(100% - 24px), 520px); z-index:1200;
-  display:flex; align-items:center; gap:8px; padding:5px 8px 5px 12px;
-  border-radius:14px;
+  position:fixed; right:12px; left:auto; transform:none;
+  top:calc(62px + env(safe-area-inset-top, 0px));
+  width:auto; max-width:min(calc(100vw - 24px), 300px); z-index:1200;
+  display:flex; align-items:center; gap:8px; padding:4px 6px 4px 10px;
+  border-radius:999px;
   background:color-mix(in srgb, var(--card-bg) 78%, transparent);
   border:1px solid color-mix(in srgb, var(--theme-color) 22%, transparent);
   box-shadow:0 4px 16px color-mix(in srgb, var(--theme-color) 18%, transparent);
@@ -1515,8 +1536,11 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 @supports (backdrop-filter: blur(1px)) {
   .music-mini { backdrop-filter:blur(14px) saturate(1.2); -webkit-backdrop-filter:blur(14px) saturate(1.2); }
 }
+@media (min-width:900px) {
+  .music-mini { top:calc(110px + env(safe-area-inset-top, 0px)); right:24px; }
+}
 .music-mini-main {
-  flex:1; min-width:0; min-height:36px; display:flex; align-items:center; gap:8px;
+  flex:0 1 auto; min-width:0; min-height:36px; display:flex; align-items:center; gap:8px;
   color:var(--text-primary);
 }
 .music-mini-title { flex:1; min-width:0; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1525,8 +1549,26 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
   background:color-mix(in srgb, var(--theme-color) 12%, transparent);
   color:var(--theme-color);
 }
-body.music-mini-on .main { padding-top:calc(62px + env(safe-area-inset-top, 0px)); }
 .music-together-exit { flex-shrink:0; padding:6px 12px; min-height:32px; font-size:12px; }
+/* 一起听邀请：名片式卡片（左侧大号音乐图标，右侧文案） */
+.msg-music-bubble { padding:0; background:transparent; box-shadow:none; }
+.msg-music-card {
+  display:flex; align-items:center; gap:12px; padding:12px; max-width:100%;
+  border:1px solid color-mix(in srgb, var(--theme-color) 28%, var(--border-color));
+  border-radius:14px;
+  background:color-mix(in srgb, var(--card-bg) 90%, transparent);
+  box-sizing:border-box;
+}
+.msg-music-card-icon {
+  width:44px; height:44px; min-width:44px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  background:color-mix(in srgb, var(--theme-color) 16%, var(--card-bg));
+  color:var(--theme-color);
+}
+.msg-music-card-icon svg { width:24px; height:24px; stroke:var(--theme-color); }
+.msg-music-card-body { flex:1; min-width:0; }
+.msg-music-card-title { font-size:13px; line-height:1.5; word-break:break-word; }
+.msg-music-card-song { font-size:13px; font-weight:600; margin-top:2px; word-break:break-word; }
 .msg-music-invite { border-left:3px solid var(--theme-color); }
 .msg-invite-actions { display:flex; gap:8px; margin-top:8px; }
 .msg-invite-actions .btn { padding:6px 14px; min-height:32px; font-size:12px; }
