@@ -616,39 +616,71 @@ export function ensureLetterDay(c, t) {
   }
   return c;
 }
+// 未读标记：来信（direction !== out）中 read === false 的数量；0 时隐藏
+function updateInboxBadge(all) {
+  const badge = $('letter-inbox-badge');
+  if (!badge) return;
+  const n = all.filter(l => l.direction !== 'out' && l.read === false).length;
+  badge.textContent = n > 99 ? '99+' : String(n);
+  badge.classList.toggle('hide', n === 0);
+}
+function collectLetters(contacts) {
+  const all = [];
+  contacts.forEach(c => (c.letters || []).forEach(l => all.push({ ...l, contactId: c.id, contactName: c.name })));
+  all.sort((a, b) => b.time - a.time);
+  return all;
+}
+function letterCardHtml(l) {
+  const dir = l.direction === 'out' ? 'out' : 'in';
+  const from = l.direction === 'out' ? `我 → ${escapeHtml(l.contactName)}` : `${escapeHtml(l.contactName)} → 我`;
+  const unread = dir === 'in' && l.read === false;
+  return `<div class="letter-card ${dir}${unread ? ' unread' : ''}" onclick="openLetterDetail('${escapeHtml(l.contactId)}','${escapeHtml(l.id)}')">
+    <div class="letter-time">${formatTime(l.time)}</div>
+    <div class="letter-title">${escapeHtml(l.title || '(无标题)')}${unread ? '<span class="letter-unread">未读</span>' : ''}</div>
+    <div class="letter-from">${from}</div>
+    <div class="letter-preview multi-ellipsis">${escapeHtml(l.content)}</div>
+  </div>`;
+}
 export async function renderLetterList() {
   const contacts = await getAllContacts();
-  // 汇总所有联系人的信件
-  let all = [];
-  for (const c of contacts) {
-    const list = c.letters || [];
-    list.forEach(l => all.push({ ...l, contactId: c.id, contactName: c.name }));
-  }
-  all.sort((a,b) => b.time - a.time);
+  const all = collectLetters(contacts);
+  updateInboxBadge(all);
   const box = $('letter-list');
   if (!box) return;
-  if (!all.length) {
-    box.innerHTML = `<div class="empty">还没有信件，点击右上角 <svg class="i i-sm" style="vertical-align:-2px;"><use href="#icon-pencil"/></svg> 写新信</div>`;
+  // 首界面只显示我寄出的信；收信箱改由顶栏入口进入
+  const outgoing = all.filter(l => l.direction === 'out');
+  if (!outgoing.length) {
+    box.innerHTML = `<div class="empty">还没有寄出的信，点击右上角 <svg class="i i-sm" style="vertical-align:-2px;"><use href="#icon-pencil"/></svg> 写新信</div>`;
     return;
   }
-  const card = l => {
-    const dir = l.direction === 'out' ? 'out' : 'in';
-    const from = l.direction === 'out' ? `我 → ${escapeHtml(l.contactName)}` : `${escapeHtml(l.contactName)} → 我`;
-    const unread = dir === 'in' && l.read === false;
-    return `<div class="letter-card ${dir}${unread ? ' unread' : ''}" onclick="openLetterDetail('${escapeHtml(l.contactId)}','${escapeHtml(l.id)}')">
-      <div class="letter-time">${formatTime(l.time)}</div>
-      <div class="letter-title">${escapeHtml(l.title || '(无标题)')}${unread ? '<span class="letter-unread">未读</span>' : ''}</div>
-      <div class="letter-from">${from}</div>
-      <div class="letter-preview multi-ellipsis">${escapeHtml(l.content)}</div>
-    </div>`;
-  };
+  box.innerHTML = outgoing.map(letterCardHtml).join('');
+}
+// 收信箱：联系人主动来信与回信
+export async function renderLetterInbox() {
+  const contacts = await getAllContacts();
+  const all = collectLetters(contacts);
+  updateInboxBadge(all);
+  const box = $('letter-inbox-list');
+  if (!box) return;
   const incoming = all.filter(l => l.direction !== 'out');
-  const outgoing = all.filter(l => l.direction === 'out');
-  box.innerHTML =
-    `<div class="letter-section-title">收信箱${incoming.length ? `（${incoming.length}）` : ''}</div>` +
-    (incoming.length ? incoming.map(card).join('') : '<div class="letter-empty-line">还没有来信</div>') +
-    `<div class="letter-section-title">寄出的信${outgoing.length ? `（${outgoing.length}）` : ''}</div>` +
-    (outgoing.length ? outgoing.map(card).join('') : '<div class="letter-empty-line">还没有寄出信件</div>');
+  box.innerHTML = incoming.length
+    ? incoming.map(letterCardHtml).join('')
+    : '<div class="empty">还没有来信</div>';
+}
+export async function openLetterInbox() {
+  // 打开收信箱即置已读（沿用信件自身的 read 字段）
+  const contacts = await getAllContacts();
+  for (const c of contacts) {
+    const unread = (c.letters || []).filter(l => l.direction !== 'out' && l.read === false);
+    if (!unread.length) continue;
+    unread.forEach(l => { l.read = true; });
+    await saveContact(c);
+  }
+  $('letter-list-view').classList.add('hide');
+  $('letter-compose-view').classList.add('hide');
+  $('letter-detail-view').classList.add('hide');
+  $('letter-inbox-view').classList.remove('hide');
+  await renderLetterInbox();
 }
 export function openLetterCompose() {
   // 填充收件人选框
@@ -664,12 +696,14 @@ export function openLetterCompose() {
     $('letter-title').value = '';
     $('letter-content').value = '';
     $('letter-list-view').classList.add('hide');
+    $('letter-inbox-view').classList.add('hide');
     $('letter-compose-view').classList.remove('hide');
     $('letter-detail-view').classList.add('hide');
   });
 }
 export function backLetterList() {
   $('letter-list-view').classList.remove('hide');
+  $('letter-inbox-view').classList.add('hide');
   $('letter-compose-view').classList.add('hide');
   $('letter-detail-view').classList.add('hide');
   renderLetterList();
@@ -717,6 +751,7 @@ export async function openLetterDetail(cid, lid) {
   if (l.direction !== 'out' && l.read === false) {
     l.read = true;
     await saveContact(c);
+    getAllContacts().then(cs => updateInboxBadge(collectLetters(cs)));
   }
   state.currentLetterId = lid;
   state.currentLetterContactId = cid;
@@ -732,6 +767,7 @@ export async function openLetterDetail(cid, lid) {
     `<div class="lp-body">${escapeHtml(l.content).replace(/\n/g, '<br>')}</div>` +
     `<div class="lp-sign">—— ${escapeHtml(signName)} · ${formatTime(l.time)}</div></div>`;
   $('letter-list-view').classList.add('hide');
+  $('letter-inbox-view').classList.add('hide');
   $('letter-compose-view').classList.add('hide');
   $('letter-detail-view').classList.remove('hide');
 }

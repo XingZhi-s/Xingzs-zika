@@ -3,7 +3,7 @@ import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
-import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
+import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
@@ -480,6 +480,22 @@ async function initApp() {
       try { await restoreCallState(); } catch (e) { console.warn('恢复通话状态失败：', e); }
     }
   });
+  // 冻结恢复 / bfcache 恢复 / 窗口重新聚焦：手机熄屏、切出网站后可能不触发
+  // visibilitychange（或定时器被冻结丢弃），这里统一补一次补算，保证「选择」结果等
+  // 到点内容能补出，而不是一直缺失。
+  let _resumeSyncAt = 0;
+  const resumeSync = async (reason) => {
+    const t = now();
+    if (t - _resumeSyncAt < 1500) return;
+    _resumeSyncAt = t;
+    try { await runCatchUp(); } catch (e) { console.warn(`恢复补算失败(${reason})：`, e); }
+    try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
+    try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
+    renderContacts();
+    if (state.currentContactId) renderChatIncremental(state.currentContactId);
+  };
+  document.addEventListener('resume', () => { resumeSync('resume'); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) resumeSync('pageshow'); });
   // 页面关闭/刷新前兜底持久化通话状态
   window.addEventListener('pagehide', () => { persistCallState(); });
   // 绑定导出选项点击
@@ -683,6 +699,7 @@ window.openInspirationPage = openInspirationPage;
 window.inspSearch = inspSearch;
 window.inspClearSearch = inspClearSearch;
 window.openLetterCompose = openLetterCompose;
+window.openLetterInbox = openLetterInbox;
 window.openLetterDetail = openLetterDetail;
 window.openMoodDay = openMoodDay;
 window.openMoodPage = openMoodPage;

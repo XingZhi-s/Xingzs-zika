@@ -766,6 +766,36 @@ export function resolveChoiceQuestion(c, qMsg, atTime) {
   qMsg.choiceResolved = true;
   return 1;
 }
+// 选择结果实时定时器（幂等挂载）：文档冻结/切后台可能丢弃定时器，
+// 补算入口在扫描时用同一函数把未到点的提问重新挂上，避免回来早于应回时刻就永远不结算。
+export function armChoiceResultTimer(c, qMsg, replyAt) {
+  if (!c || !qMsg) return false;
+  const cid = c.id;
+  const key = `choice_${cid}_${qMsg.id}`;
+  if (state.chatTimers[key]) return false;
+  const at = Number(replyAt != null ? replyAt : qMsg.choiceReplyAt) || 0;
+  if (!at) return false;
+  const remain = at - now();
+  if (remain <= 0) return false;
+  state.chatTimers[key] = setTimeout(() => {
+    delete state.chatTimers[key];
+    const task = async () => {
+      const cc = await getContact(cid);
+      if (!cc) return;
+      const q = cc.messages.find(x => x.id === qMsg.id);
+      if (!q) return;
+      const sent = resolveChoiceQuestion(cc, q, q.choiceReplyAt || at);
+      if (!sent) return;
+      if (state.currentContactId !== cid) cc.unread = (cc.unread || 0) + sent;
+      await saveContact(cc);
+      if (state.currentContactId === cid) renderChatIncremental(cid);
+      renderContacts();
+    };
+    // 与补算串行，避免定时器与补算同时补出两条结果
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
+  }, remain);
+  return true;
+}
 // 补算入口：离线/切后台期间到点的选择提问统一结算
 export async function processChoiceQuestions(c, t) {
   let changed = false;
@@ -773,7 +803,8 @@ export async function processChoiceQuestions(c, t) {
     if (m.from !== 'me' || m.type !== 'choice' || !m.choice) continue;
     if (m.choiceResolved || m.choice.result != null) continue;
     const at = Number(m.choiceReplyAt) || 0;
-    if (!at || t < at) continue;
+    if (!at) continue;
+    if (t < at) { armChoiceResultTimer(c, m, at); continue; }
     if (resolveChoiceQuestion(c, m, at)) changed = true;
   }
   return changed;
@@ -811,24 +842,7 @@ export async function sendChoiceResponseFlow(c, choice) {
     }
   }, 2000);
   // 结果（实时）；与补算共用同一幂等结算，时间戳=choiceReplyAt
-  const repKey = `choice_${cid}_${qMsg.id}`;
-  state.chatTimers[repKey] = setTimeout(() => {
-    delete state.chatTimers[repKey];
-    const task = async () => {
-      const cc = await getContact(cid);
-      if (!cc) return;
-      const q = cc.messages.find(x => x.id === qMsg.id);
-      if (!q) return;
-      const sent = resolveChoiceQuestion(cc, q, q.choiceReplyAt || replyAt);
-      if (!sent) return;
-      if (state.currentContactId !== cid) cc.unread = (cc.unread || 0) + sent;
-      await saveContact(cc);
-      if (state.currentContactId === cid) renderChatIncremental(cid);
-      renderContacts();
-    };
-    // 与补算串行，避免定时器与补算同时补出两条结果
-    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
-  }, Math.max(0, replyAt - now()));
+  armChoiceResultTimer(c, qMsg, replyAt);
 }
 
 // 触发回复：从字卡库随机抽，条数按设置范围；50%引用历史，50%概率用表情包

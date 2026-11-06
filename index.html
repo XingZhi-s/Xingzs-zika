@@ -670,6 +670,16 @@ a { text-decoration:none; color:inherit; }
 .dv-orient.rev { background:color-mix(in srgb, var(--danger) 12%, #ffffff); color:var(--danger); }
 .dv-mean-row .dv-mean-chev { margin-left:auto; font-size:16px; line-height:1; color:var(--text-secondary); flex-shrink:0; }
 
+/* 密集牌阵（7/8/10 张）：牌面缩小，牌名与正逆位直接排在每张牌正下方（不截断、不省略号） */
+.dv-board-dense .dv-slot-cards { position:relative; width:80%; margin:0 auto; aspect-ratio:1 / 1.6; }
+.dv-board-dense .dv-card-hold { position:absolute; inset:0; }
+.dv-board-dense .dv-card-hold.rot { transform:rotate(90deg); }
+.dv-slot-label { display:block; width:100%; min-height:0; min-width:0; margin:2px 0 0; padding:0; background:transparent; border:none; font-size:10px; line-height:1.25; text-align:center; }
+.dv-slot-label .dv-slot-name { display:block; font-weight:600; color:var(--text-primary); word-break:break-word; }
+.dv-slot-label .dv-slot-orient { display:block; font-size:10px; margin-top:0; }
+.dv-slot-label .dv-slot-orient.up { color:var(--theme-color); }
+.dv-slot-label .dv-slot-orient.rev { color:var(--danger); }
+
 /* 牌义弹窗：正位 / 逆位两段都给出，当前正逆位高亮；长文由 .modal-body 滚动 */
 .dv-mean-modal { display:flex; flex-direction:column; gap:10px; }
 .dv-mean-base { font-size:12px; color:var(--text-secondary); line-height:1.6; }
@@ -1155,6 +1165,11 @@ a { text-decoration:none; color:inherit; }
 
 /* ========== 写信页 ========== */
 .letter-list { padding:16px; display:flex; flex-direction:column; gap:12px; }
+.letter-top-actions { display:flex; align-items:center; gap:4px; }
+.letter-inbox-btn { position:relative; }
+.letter-inbox-badge { position:absolute; top:3px; right:1px; min-width:15px; height:15px; padding:0 4px; border-radius:8px; background:var(--danger); color:#fff; font-size:10px; line-height:15px; font-weight:600; text-align:center; }
+#letter-main { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; }
+.letter-inbox-head { display:flex; align-items:center; padding:6px 8px 0; flex-shrink:0; }
 .letter-card { background:var(--card-bg); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); cursor:pointer; position:relative; }
 .letter-card.out { border-left:4px solid var(--theme-color); }
 .letter-card.in { border-left:4px solid var(--success); }
@@ -1675,6 +1690,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
     <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
     <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></symbol>
+    <symbol id="icon-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
     <symbol id="icon-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
     <symbol id="icon-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.04a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.04a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
     <symbol id="icon-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
@@ -2161,13 +2177,26 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
       <div class="page" id="page-letter">
         <div class="top-bar between">
           <div class="top-bar-title">写信</div>
-          <button class="top-bar-btn" onclick="openLetterCompose()" title="写新信">
-            <svg class="i"><use href="#icon-pencil"/></svg>
-          </button>
+          <div class="letter-top-actions">
+            <button class="top-bar-btn letter-inbox-btn" id="letter-inbox-btn" onclick="openLetterInbox()" title="收信箱">
+              <svg class="i"><use href="#icon-inbox"/></svg>
+              <span class="letter-inbox-badge hide" id="letter-inbox-badge">0</span>
+            </button>
+            <button class="top-bar-btn" onclick="openLetterCompose()" title="写新信">
+              <svg class="i"><use href="#icon-pencil"/></svg>
+            </button>
+          </div>
         </div>
         <div id="letter-main">
           <div id="letter-list-view">
             <div class="letter-list" id="letter-list"></div>
+          </div>
+          <div id="letter-inbox-view" class="hide">
+            <div class="letter-inbox-head">
+              <button class="chat-header-back" onclick="backLetterList()"><svg class="i"><use href="#icon-back"/></svg></button>
+              <div class="grow" style="padding:0 8px;font-weight:600;">收信箱</div>
+            </div>
+            <div class="letter-list" id="letter-inbox-list"></div>
           </div>
           <div id="letter-compose-view" class="hide">
             <div class="letter-compose">

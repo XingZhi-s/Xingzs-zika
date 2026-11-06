@@ -319,7 +319,7 @@ export function divineResultHtml(r) {
     const cardImg = `<img class="dv-card-img${isTarot && !c.upright ? ' is-rev' : ''}" src="./assets/divine/${dir}/${c.name}.webp" alt="${escapeHtml(c.name)}" onerror="dvImgError(this)">`;
     const frontCls = isTarot ? 'dv-face dv-front' : 'dv-face dv-front lenormand-front';
     const frontInner = (isTarot ? '' : `<img class="dv-front-img" src="./assets/divine/lenormand/back.webp" alt="" onerror="dvImgError(this)">`) +
-      sparkle + `<span class="dv-front-pos">${escapeHtml(badge)}</span>`;
+      sparkle + (badge ? `<span class="dv-front-pos">${escapeHtml(badge)}</span>` : '');
     return `<button class="dv-card" onclick="flipDivineCard(this)"><div class="dv-card-inner">` +
       `<div class="${frontCls}">${frontInner}</div>` +
       `<div class="dv-face dv-back"><span class="dv-back-name">${escapeHtml(c.name)}</span>${cardImg}</div>` +
@@ -330,6 +330,75 @@ export function divineResultHtml(r) {
     const sp = TAROT_SPREADS.find(s => s.name === r.spread) || TAROT_SPREADS[0];
     const L = sp.layout;
     const cw = 100 / L.cols;
+    const hint = `<div class="dv-hint">点击牌面翻转；点击下方牌名查看正位 / 逆位释义</div>`;
+    const actions = `<div class="dv-actions">` +
+      `<button class="btn btn-outline" onclick="copyDivineResult()">复制结果</button>` +
+      `<button class="btn btn-outline" onclick="sendDivineToChat()">发送到聊天</button>` +
+      `<button class="btn" onclick="divineToInspiration()">存入灵感随记</button></div>`;
+    // 密集牌阵（7/8/10 张）：取消牌上序号 + 牌阵下方清单，改为牌面正下方直接显示牌名与正逆位
+    if (r.cards.length >= 7) {
+      const CARD_SCALE = 0.8;
+      const LABEL_PX = 27; // 两行 10px 小字 + 与牌面 2px 间距（用于按实际可用宽度估算纵向留白）
+      const groups = [];
+      const gmap = new Map();
+      L.slots.forEach((s, i) => {
+        const key = `${s[0]}|${s[1]}`;
+        if (!gmap.has(key)) { const g = { x: s[0], y: s[1], items: [] }; gmap.set(key, g); groups.push(g); }
+        gmap.get(key).items.push({ i, rot: +(s[2] || 0) });
+      });
+      // 同一行的文字宽度与左偏移：与相邻文字块留空隙、且不越出牌阵左右边界
+      groups.forEach(g => {
+        const center = g.x + 0.5;
+        let nearest = Infinity;
+        groups.forEach(o => {
+          if (o === g || Math.abs(o.y - g.y) > 0.01) return;
+          nearest = Math.min(nearest, Math.abs(o.x + 0.5 - center));
+        });
+        const w = Math.max(0.6, Math.min(1.8, nearest === Infinity ? 1.8 : nearest - 0.1));
+        const left = Math.min(Math.max(center - w / 2, 0.05), L.cols - w - 0.05);
+        g.label = { w, left };
+      });
+      // 纵向留白：牌面缩小后，为下方文字撑出空间；同一位置叠两张牌时文字更多
+      // 桌面端牌阵高度受 72vh 限制，牌阵越窄文字占比越大，故按实际可用宽度迭代收敛纵向量
+      const resEl = document.getElementById('divine-result');
+      let availW = Math.min(600, (resEl && resEl.clientWidth) || Math.max(0, window.innerWidth - 32));
+      let ky = 1;
+      for (let pass = 0; pass < 4; pass++) {
+        let boardW = availW;
+        if (window.innerWidth >= 900) boardW = Math.min(boardW, 0.72 * window.innerHeight * (L.cols / (L.rows * ky)));
+        const unitPx = Math.max(20, boardW / L.cols);
+        const labelUnits = Math.max(0.3, LABEL_PX / unitPx);
+        let next = 1;
+        groups.forEach(a => {
+          groups.forEach(b => {
+            if (b.y <= a.y) return;
+            const lb = a.label.left, rb = a.label.left + a.label.w;
+            const cb = b.x + (1 - CARD_SCALE) / 2, ce = cb + CARD_SCALE;
+            if (rb <= cb + 0.02 || lb >= ce - 0.02) return;
+            const need = 1.6 * CARD_SCALE + labelUnits * a.items.length + 0.04;
+            next = Math.max(next, need / (b.y - a.y));
+          });
+        });
+        ky = next;
+      }
+      const slotHtml = groups.map(g => {
+        const cards = g.items.map(it =>
+          `<div class="dv-card-hold${it.rot ? ' rot' : ''}">${cardInner(r.cards[it.i], it.i, '')}</div>`).join('');
+        const labels = g.items.map(it => {
+          const c = r.cards[it.i];
+          return `<button class="dv-slot-label"` +
+            ` style="width:${(g.label.w * 100).toFixed(2)}%;margin-left:${((g.label.left - g.x) * 100).toFixed(2)}%;"` +
+            ` onclick="openDivineCardMeaning(${it.i})">` +
+            `<span class="dv-slot-name">${escapeHtml(c.name)}</span>` +
+            `<span class="dv-slot-orient ${c.upright ? 'up' : 'rev'}">${c.upright ? '正位' : '逆位'}</span></button>`;
+        }).join('');
+        return `<div class="dv-slot" data-index="${g.items[0].i}"` +
+          ` style="left:${(g.x / L.cols * 100).toFixed(3)}%;top:${(g.y / L.rows * 100).toFixed(3)}%;width:${cw.toFixed(3)}%">` +
+          `<div class="dv-slot-cards">${cards}</div>${labels}</div>`;
+      }).join('');
+      const rowsTotal = L.rows * ky;
+      return `<div class="dv-board dv-board-dense" style="--dv-ratio:${(L.cols / rowsTotal).toFixed(4)};aspect-ratio:${L.cols}/${rowsTotal.toFixed(3)}">${slotHtml}</div>` + hint + actions;
+    }
     const cardHtml = r.cards.map((c, i) => {
       const [x, y, rot] = L.slots[i] || [0, 0];
       return `<div class="dv-slot${rot ? ' rot' : ''}" data-index="${i}"` +
@@ -345,11 +414,7 @@ export function divineResultHtml(r) {
     ).join('');
     return `<div class="dv-board" style="--dv-ratio:${(L.cols / L.rows).toFixed(4)};aspect-ratio:${L.cols}/${L.rows}">${cardHtml}</div>` +
       `<div class="dv-mean-list dv-mean-rows">${rows}</div>` +
-      `<div class="dv-hint">点击牌面翻转；点击下方牌名查看正位 / 逆位释义</div>` +
-      `<div class="dv-actions">` +
-      `<button class="btn btn-outline" onclick="copyDivineResult()">复制结果</button>` +
-      `<button class="btn btn-outline" onclick="sendDivineToChat()">发送到聊天</button>` +
-      `<button class="btn" onclick="divineToInspiration()">存入灵感随记</button></div>`;
+      hint + actions;
   }
   // 雷诺曼维持现状：卡片横向排列 + 牌阵下方折叠释义
   const cards = r.cards.map((c, i) => `<div class="dv-card-wrap" data-index="${i}">${cardInner(c, i, c.pos)}</div>`).join('');
