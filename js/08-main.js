@@ -3,13 +3,14 @@ import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
-import { answerIncoming, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
+import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
-import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
+import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
 import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
 import { checkTogetherInvites, initMusicModule, musicAcceptInvite, musicBack, musicDelete, musicExitTogether, musicNext, musicOpenTogetherPicker, musicPickFiles, musicPlayId, musicPrev, musicRejectInvite, musicSeek, musicSetVolume, musicStartTogether, musicToggleLoop, musicTogglePlay, openMusicPage, renderGlobalStorage, requestPersistStorage, updateMusicMiniBar } from './12-music.js';
+import { checkPeriodReminders, openPeriodPage, periodAddPast, periodSaveSettings, periodToday, renderPeriodPage } from './13-period.js';
 import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
 
 export function enqueueTask(fn) {
@@ -415,6 +416,8 @@ async function periodicCheck() {
   try { await enqueueTask(() => checkReminders(false)); } catch (e) { console.warn('提醒检查失败：', e); }
   // 联系人的「一起听」邀请（同样串行，避免并发写联系人）
   try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
+  // 经期提醒（每个周期 2 条；过期不补，仅在预约当天窗口内发送）
+  try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
 }
 
 // ============ 初始化 ============
@@ -442,6 +445,7 @@ async function initApp() {
   try { await runCatchUp(); } catch (e) { console.warn('补算失败：', e); }
   // 启动补发：应用关闭期间到点的联系人提醒，明确标注为「补发 / 错过」
   try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
+  try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
   // 全应用请求持久化存储（不阻塞启动，失败只记录）
   requestPersistStorage().catch(() => {});
   // 渲染联系人列表
@@ -474,6 +478,7 @@ async function initApp() {
       await runCatchUp();
       try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
       try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
+      try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
       renderContacts();
       if (state.currentContactId) renderChatIncremental(state.currentContactId);
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
@@ -491,6 +496,7 @@ async function initApp() {
     try { await runCatchUp(); } catch (e) { console.warn(`恢复补算失败(${reason})：`, e); }
     try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
     try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
+    try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
     renderContacts();
     if (state.currentContactId) renderChatIncremental(state.currentContactId);
   };
@@ -612,6 +618,7 @@ window.backFromChat = backFromChat;
 window.backFromContactSetting = backFromContactSetting;
 window.backFromStickerLib = backFromStickerLib;
 window.backLetterList = backLetterList;
+window.backLetterDetail = backLetterDetail;
 window.renderLetterList = renderLetterList;
 window.clearHomeDecos = clearHomeDecos;
 window.closeDecoEditor = closeDecoEditor;
@@ -741,6 +748,7 @@ window.previewDIYFontSize = previewDIYFontSize;
 window.saveDIYFontSize = saveDIYFontSize;
 window.setStatusCurrent = setStatusCurrent;
 window.startDivineDraw = startDivineDraw;
+window.setDivineDrawMode = setDivineDrawMode;
 window.switchStkTab = switchStkTab;
 window.switchMoodRole = switchMoodRole;
 window.switchDivineType = switchDivineType;
@@ -783,6 +791,13 @@ window.editReminder = editReminder;
 window.deleteReminder = deleteReminder;
 // 本地音乐
 window.openMusicPage = openMusicPage;
+// 经期记录
+window.openPeriodPage = openPeriodPage;
+window.periodToday = periodToday;
+window.periodAddPast = periodAddPast;
+window.periodSaveSettings = periodSaveSettings;
+window.renderPeriodPage = renderPeriodPage;
+window.checkPeriodReminders = checkPeriodReminders;
 window.musicBack = musicBack;
 window.musicPickFiles = musicPickFiles;
 window.musicTogglePlay = musicTogglePlay;

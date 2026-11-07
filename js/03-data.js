@@ -179,6 +179,7 @@ export function createEmptyContact(name) {
   return {
     id: uid(),
     name: name || '新联系人',
+    createdAt: now(), // 用于「经期提醒过期不补」：在这轮提醒时间点之后新建的联系人不补发
     avatar: DEFAULT_AVATAR,
     // 默认状态从共享池的内置项里随机取（不再固定第一个）
     status: pick(DEFAULT_STATUSES).name,
@@ -294,8 +295,8 @@ export async function renderMeBrief() {
 // ============ 页面切换 ============
 // A25：保留底部导航的一级页（其余页面隐藏导航；一级页不加顶部返回键）
 const NAV_KEEP_PAGES = ['page-home', 'page-love', 'page-letter', 'page-me', 'page-setting'];
-// 六个伪应用：记录「点开之前的那一页」，返回时回到来源
-const PSEUDO_APP_PAGES = ['page-mood', 'page-inspiration', 'page-divine', 'page-reader', 'page-music', 'page-diy'];
+// 七个伪应用：记录「点开之前的那一页」，返回时回到来源
+const PSEUDO_APP_PAGES = ['page-mood', 'page-inspiration', 'page-divine', 'page-reader', 'page-music', 'page-diy', 'page-period'];
 
 export function openPage(id, pushPrev=false) {
   const prevId = state.lastPage;

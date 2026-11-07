@@ -634,9 +634,13 @@ function letterCardHtml(l) {
   const dir = l.direction === 'out' ? 'out' : 'in';
   const from = l.direction === 'out' ? `我 → ${escapeHtml(l.contactName)}` : `${escapeHtml(l.contactName)} → 我`;
   const unread = dir === 'in' && l.read === false;
+  // 来信明确标出未读 / 已读；寄出的信没有「对方是否已读」概念，不加标记
+  const readTag = dir === 'in'
+    ? (unread ? '<span class="letter-unread">未读</span>' : '<span class="letter-read">已读</span>')
+    : '';
   return `<div class="letter-card ${dir}${unread ? ' unread' : ''}" onclick="openLetterDetail('${escapeHtml(l.contactId)}','${escapeHtml(l.id)}')">
     <div class="letter-time">${formatTime(l.time)}</div>
-    <div class="letter-title">${escapeHtml(l.title || '(无标题)')}${unread ? '<span class="letter-unread">未读</span>' : ''}</div>
+    <div class="letter-title">${escapeHtml(l.title || '(无标题)')}${readTag}</div>
     <div class="letter-from">${from}</div>
     <div class="letter-preview multi-ellipsis">${escapeHtml(l.content)}</div>
   </div>`;
@@ -668,14 +672,7 @@ export async function renderLetterInbox() {
     : '<div class="empty">还没有来信</div>';
 }
 export async function openLetterInbox() {
-  // 打开收信箱即置已读（沿用信件自身的 read 字段）
-  const contacts = await getAllContacts();
-  for (const c of contacts) {
-    const unread = (c.letters || []).filter(l => l.direction !== 'out' && l.read === false);
-    if (!unread.length) continue;
-    unread.forEach(l => { l.read = true; });
-    await saveContact(c);
-  }
+  // 不在打开收信箱时整箱置已读：保留每封的未读状态供列表展示，只有点开单封才置已读
   $('letter-list-view').classList.add('hide');
   $('letter-compose-view').classList.add('hide');
   $('letter-detail-view').classList.add('hide');
@@ -707,6 +704,16 @@ export function backLetterList() {
   $('letter-compose-view').classList.add('hide');
   $('letter-detail-view').classList.add('hide');
   renderLetterList();
+}
+// 从信件详情返回：来自收信箱则回收信箱（刷新未读/已读标记），否则回信件列表
+export function backLetterDetail() {
+  if (state.letterFromInbox) {
+    $('letter-detail-view').classList.add('hide');
+    $('letter-inbox-view').classList.remove('hide');
+    renderLetterInbox();
+    return;
+  }
+  backLetterList();
 }
 export async function sendLetter() {
   const cid = $('letter-recipient').value;
@@ -747,6 +754,8 @@ export async function openLetterDetail(cid, lid) {
   if (!c) return;
   const l = (c.letters || []).find(x => x.id === lid);
   if (!l) return;
+  // 记录来源：从收信箱点开则返回收信箱（便于看到未读→已读的变化），否则回首界面信件列表
+  state.letterFromInbox = !$('letter-inbox-view').classList.contains('hide');
   // 收信箱：打开即视为已读（复用信件自身的 read 字段）
   if (l.direction !== 'out' && l.read === false) {
     l.read = true;
