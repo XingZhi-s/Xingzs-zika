@@ -169,7 +169,11 @@ const LENORMAND_SPREADS = [
     layout:{ cols:4.1, rows:3.8, slots:[[0.2,0.2],[1.55,0.2],[2.9,0.2],[0.2,2.0],[1.55,2.0],[2.9,2.0]] } },
   { name:'选择牌阵 · 三选一', n:9,
     positions:['选择A·1','选择A·2','选择A·3','选择B·1','选择B·2','选择B·3','选择C·1','选择C·2','选择C·3'],
-    layout:{ cols:4.1, rows:5.4, slots:[[0.2,0.2],[1.55,0.2],[2.9,0.2],[0.2,2.0],[1.55,2.0],[2.9,2.0],[0.2,3.8],[1.55,3.8],[2.9,3.8]] } }
+    layout:{ cols:4.1, rows:5.4, slots:[[0.2,0.2],[1.55,0.2],[2.9,0.2],[0.2,2.0],[1.55,2.0],[2.9,2.0],[0.2,3.8],[1.55,3.8],[2.9,3.8]] } },
+  // 五张牌：一行横排，五张同尺寸（列宽固定，空间不足时整排随牌阵等比缩小，不出现大小混排）
+  { name:'五张牌阵', n:5,
+    positions:['牌位一','牌位二','牌位三','牌位四','牌位五'],
+    layout:{ cols:5.8, rows:2.3, slots:[[0.2,0.2],[1.35,0.2],[2.5,0.2],[3.65,0.2],[4.8,0.2]] } }
 ];
 const DIVINE_SPREADS = {
   tarot: TAROT_SPREADS,
@@ -290,12 +294,17 @@ function dvLater(fn, ms) {
   state._dvTimers.push(id);
   return id;
 }
-function dvBackArt() {
-  return '<svg class="dv-front-art" viewBox="0 0 64 100" aria-hidden="true"><use href="#dv-card-back"/></svg>';
+// 牌背：塔罗 / 雷诺曼各用各的，绝不串种
+const DV_BACK_LENORMAND = './assets/divine/lenormand/back.webp';
+function dvBackArt(dtype) {
+  if (dtype === 'tarot') {
+    return '<svg class="dv-front-art" viewBox="0 0 64 100" aria-hidden="true"><use href="#dv-card-back-tarot"/></svg>';
+  }
+  return `<img class="dv-back-art-img" src="${DV_BACK_LENORMAND}" alt="" draggable="false" onerror="dvImgError(this)">`;
 }
 function shuffleMarkup() {
   const cards = Array.from({ length: 7 }, (_, i) =>
-    `<div class="dv-shuffle-card" style="--i:${i}">${dvBackArt()}</div>`).join('');
+    `<div class="dv-shuffle-card" style="--i:${i}">${dvBackArt(state.divineType)}</div>`).join('');
   return `<div class="dv-draw-head"><span class="dv-draw-status" id="dv-draw-status">正在洗牌…</span>` +
     `<button class="dv-skip-btn" data-act="skip" type="button">跳过洗牌</button></div>` +
     `<div class="dv-shuffle on" id="dv-shuffle">${cards}</div>`;
@@ -319,7 +328,8 @@ function dvFanSchedule() {
   if (dvFanRAF) return;
   dvFanRAF = requestAnimationFrame(() => { dvFanRAF = 0; dvFanApply(); });
 }
-// 牌扇尺寸：卡宽随容器宽走；扇高只露牌的上半截；轨道总宽 = 步进 × (张数-1) + 一张整卡宽
+// 牌扇尺寸：整副牌绕下方圆心按角度旋转、沿弧铺开；每张只露左侧一条窄边
+// 半径由牌数与露出步进反算（扇面两端张角约 ±13°），扇高只留牌的上半截
 function dvFanLayout(stage) {
   const wrap = stage.querySelector('.dv-fan-wrap');
   const track = stage.querySelector('.dv-fan-track');
@@ -327,13 +337,35 @@ function dvFanLayout(stage) {
   if (!wrap || !track || !d) return;
   const w = wrap.clientWidth || stage.clientWidth;
   if (!w) return;
-  const cw = Math.max(52, Math.min(76, Math.round(w * 0.17)));
-  const fanH = Math.round(cw * 1.6 * 0.62);
+  const n = d.pool.length;
+  const cw = Math.max(46, Math.min(76, Math.round(w * 0.15)));
+  const ch = Math.round(cw * 1.6);
+  const halfX = (n - 1) * DV_FAN_STEP / 2;
+  const maxA = 35 * Math.PI / 180;
+  const R = Math.max(520, Math.round(halfX / Math.sin(maxA)));
+  const pad = Math.ceil((ch / 2) * Math.sin(maxA)) + 2;   // 旋转后左右顶点超出量
+  const trackW = (n - 1) * DV_FAN_STEP + cw + pad * 2;
+  const dropRaw = R * (1 - Math.cos(Math.asin(Math.min(1, halfX / R))));
+  // 扇面的纵向落差按舞台高度控制（扇形透视压扁），既保留旋转角度，又不把中区牌阵挤没
+  const drop = Math.min(dropRaw, Math.max(64, Math.round((stage.clientHeight || 0) * 0.19)));
+  const vs = dropRaw > 0 ? drop / dropRaw : 1;
+  // 每张牌只露顶部一段（等高的“牌头”），沿弧线排开 → 上下缘都是同一弧线，才是扇面
+  const peek = Math.round(ch * 0.68);
+  const fanH = Math.round(drop + peek + 8);
   stage.style.setProperty('--dv-cw', `${cw}px`);
+  stage.style.setProperty('--dv-peek', `${peek}px`);
   wrap.style.height = `${fanH}px`;
-  const trackW = (d.pool.length - 1) * DV_FAN_STEP + cw;
   track.style.width = `${trackW}px`;
   track.style.marginLeft = `${Math.max(0, Math.round((w - trackW) / 2))}px`;
+  track.querySelectorAll('.dv-pool-card').forEach((el, i) => {
+    const dx = (i - (n - 1) / 2) * DV_FAN_STEP;
+    const a = Math.asin(Math.max(-1, Math.min(1, dx / R)));
+    el.style.left = `${pad + i * DV_FAN_STEP}px`;
+    el.style.top = `${Math.round(vs * R * (1 - Math.cos(a)) + 6)}px`;
+    el.style.transform = `rotate(${(a * 180 / Math.PI).toFixed(2)}deg)`;
+    el.style.clipPath = `inset(0 0 calc(100% - ${peek}px) 0)`;
+  });
+  if (typeof d.fanX !== 'number') d.fanX = Math.round((trackW - w) / 2);   // 初始停在扇面正中
   d.fanX = Math.max(0, Math.min(d.fanX || 0, Math.max(0, trackW - w)));
   dvFanApply();
 }
@@ -400,7 +432,7 @@ function renderDivineDrawStage() {
   const board = divineResultHtml(skeleton, { interactive: false, drawing: true, bare: true });
   const pool = manual
     ? `<div class="dv-fan-wrap" id="dv-fan-wrap"><div class="dv-fan-track" id="dv-fan-track">${d.pool.map((c, i) =>
-        `<button class="dv-pool-card" type="button" data-pool="${i}" style="left:${i * DV_FAN_STEP}px;z-index:${i + 1}">${dvBackArt()}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
+        `<button class="dv-pool-card" type="button" data-pool="${i}" style="z-index:${i + 1}">${dvBackArt(d.type)}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
     : '';
   stage.innerHTML =
     `<div class="dv-draw-head"><span class="dv-draw-status" id="dv-draw-status">` +
@@ -475,13 +507,13 @@ function finishDivineFlip() {
   els.forEach(el => el.classList.add('flipped'));
   const isTarot = d.type === 'tarot';
   const dir = isTarot ? 'tarot' : 'lenormand';
-  dvLater(() => {
-    els.forEach((el, i) => {
-      const c = cards[i]; if (!c) return;
-      const img = el.querySelector('.dv-card-img');
-      if (img) { img.src = `./assets/divine/${dir}/${c.name}.webp`; img.classList.toggle('is-rev', isTarot && !c.upright); }
-    });
-  }, 260);
+  // 翻牌动画开始即挂上牌面图：.dv-back 面被 backface-visibility 挡住，转到 90° 前不可见，
+  // 因此既不会提前透出牌面，也不会在背面转正时出现空面或别的牌种牌背
+  els.forEach((el, i) => {
+    const c = cards[i]; if (!c) return;
+    const img = el.querySelector('.dv-card-img');
+    if (img) { img.src = `./assets/divine/${dir}/${c.name}.webp`; img.hidden = false; img.classList.toggle('is-rev', isTarot && !c.upright); }
+  });
   dvLater(() => {
     els.forEach((el, i) => {
       const c = cards[i]; if (!c) return;
@@ -509,7 +541,7 @@ export async function startDivineDraw() {
   const shuffled = shuffleArr(deck);
   // 整副牌全部铺进底部牌扇：塔罗 78 张、雷诺曼 36 张；同副牌不重复
   const poolCount = deck.length;
-  state._dvDraw = { type, spread, pool: shuffled.slice(0, poolCount), picked: [], phase: 'shuffle', fanX: 0 };
+  state._dvDraw = { type, spread, pool: shuffled.slice(0, poolCount), picked: [], phase: 'shuffle', fanX: null };
   state._dvRevealed = false;
   // 清掉上一局的结果 DOM，避免翻牌前旧牌名残留在隐藏节点里
   const oldResult = $('divine-result'); if (oldResult) oldResult.innerHTML = '';
@@ -573,8 +605,8 @@ export function divineResultHtml(r, opts = {}) {
   const interactive = opts.interactive !== false;
   const revealed = !!opts.revealed;
   const drawing = !!opts.drawing;
-  const backArt = '<svg class="dv-front-art" viewBox="0 0 64 100" aria-hidden="true"><use href="#dv-card-back"/></svg>';
-  // 单张卡牌（牌背 + 牌面）：牌背复用同一张 SVG；翻牌前 DOM 中不出现牌名（文字、alt、src、class、data 一律不带牌名）
+  const backArt = dvBackArt(r.dtype);
+  // 单张卡牌（牌背 + 牌面）：牌背按牌种取，翻牌前 DOM 中不出现牌名（文字、alt、src、class、data 一律不带牌名）
   const cardInner = (c, i, badge) => {
     const showName = revealed && c && c.name ? c.name : '';
     const up = isTarot ? !!(c && c.upright) : true;
@@ -582,8 +614,10 @@ export function divineResultHtml(r, opts = {}) {
     const inner = `<div class="dv-face dv-front">${frontInner}</div>` +
       `<div class="dv-face dv-back"><span class="dv-back-name">${showName ? escapeHtml(showName) : ''}</span>` +
       `<img class="dv-card-img${showName && isTarot && !up ? ' is-rev' : ''}"` +
-      ` src="${showName ? `./assets/divine/${dir}/${showName}.webp` : './assets/divine/lenormand/back.webp'}"` +
-      ` alt="${showName ? escapeHtml(showName) : ''}" onerror="dvImgError(this)"></div>`;
+      (showName
+        ? ` src="./assets/divine/${dir}/${showName}.webp" alt="${escapeHtml(showName)}"`
+        : ' hidden') +
+      ` onerror="dvImgError(this)"></div>`;
     const cls = `dv-card${showName ? ' flipped' : ''}`;
     return interactive
       ? `<button class="${cls}" data-ci="${i}" onclick="flipDivineCard(this)"><div class="dv-card-inner">${inner}</div></button>`
@@ -698,6 +732,7 @@ export function flipDivineCard(el) {
   const up = isTarot ? !!c.upright : true;
   if (flipped) {
     // 翻牌后才写入牌面图片与牌名，翻牌前这些信息不在 DOM 中
+    img.hidden = false;
     img.src = `./assets/divine/${dir}/${c.name}.webp`;
     img.alt = c.name;
     img.classList.toggle('is-rev', isTarot && !up);
@@ -707,7 +742,9 @@ export function flipDivineCard(el) {
         (isTarot ? `<span class="dv-slot-orient ${up ? 'up' : 'rev'}">${up ? '正位' : '逆位'}</span>` : '');
     }
   } else {
-    img.src = './assets/divine/lenormand/back.webp';
+    // 盖回牌背：隐藏牌面图，露出本牌种牌背
+    img.hidden = true;
+    img.removeAttribute('src');
     img.alt = '';
     img.classList.remove('is-rev');
     if (backName) backName.textContent = '';
