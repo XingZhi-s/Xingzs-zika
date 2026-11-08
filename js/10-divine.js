@@ -282,7 +282,7 @@ export function setDivineDrawMode(m) {
 function dvClearTimers() {
   (state._dvTimers || []).forEach(id => clearTimeout(id));
   state._dvTimers = [];
-  dvRingCancel();
+  dvFanCancel();
 }
 function dvLater(fn, ms) {
   const id = setTimeout(fn, ms);
@@ -300,101 +300,95 @@ function shuffleMarkup() {
     `<button class="dv-skip-btn" data-act="skip" type="button">跳过洗牌</button></div>` +
     `<div class="dv-shuffle on" id="dv-shuffle">${cards}</div>`;
 }
-// 环形牌池：固定 16 张、绕圆心铺开；拖动只写环容器一个 transform，rAF 节流
-let dvRing = null;      // { pointerId, wrap, rect, rot, vel, lastAngle, lastT, downX, downY, moved, card }
-let dvRingRAF = 0;
-function dvRingStop() { if (dvRingRAF) cancelAnimationFrame(dvRingRAF); dvRingRAF = 0; }
-function dvRingCancel() { dvRingStop(); dvRing = null; }
-function dvRingAngle(e, rect) {
-  return Math.atan2(e.clientY - (rect.top + rect.height / 2), e.clientX - (rect.left + rect.width / 2)) * 180 / Math.PI;
+// 底部牌扇：整副牌横向叠压，每张只露左侧一条窄边；拖动只平移 track 一个 transform，rAF 节流
+const DV_FAN_STEP = 12;     // 每张牌露出的可点宽度（px）
+let dvFanDrag = null;       // { pointerId, wrap, startX, startY, startFanX, moved, card }
+let dvFanRAF = 0;
+function dvFanStop() { if (dvFanRAF) cancelAnimationFrame(dvFanRAF); dvFanRAF = 0; }
+function dvFanCancel() { dvFanStop(); dvFanDrag = null; }
+function dvFanMax() {
+  const wrap = $('dv-fan-wrap'), track = $('dv-fan-track');
+  if (!wrap || !track) return 0;
+  return Math.max(0, track.offsetWidth - wrap.clientWidth);
 }
-function dvRingApply() {
-  const r = $('dv-ring'); const d = state._dvDraw;
-  if (r && d) r.style.transform = `rotate(${d.ringRot || 0}deg)`;
+function dvFanApply() {
+  const t = $('dv-fan-track'), d = state._dvDraw;
+  if (t && d) t.style.transform = `translate3d(${-Math.round(d.fanX || 0)}px, 0, 0)`;
 }
-function dvRingSchedule() {
-  if (dvRingRAF) return;
-  dvRingRAF = requestAnimationFrame(() => { dvRingRAF = 0; dvRingApply(); });
+function dvFanSchedule() {
+  if (dvFanRAF) return;
+  dvFanRAF = requestAnimationFrame(() => { dvFanRAF = 0; dvFanApply(); });
 }
-function dvRingInertia(v) {
-  dvRingStop();
-  if (Math.abs(v) < 0.02) return;
-  let last = performance.now();
-  const step = t => {
-    const d = state._dvDraw;
-    const r = $('dv-ring');
-    if (!d || !r) { dvRingRAF = 0; return; }
-    const dt = Math.min(48, Math.max(1, t - last)); last = t;
-    d.ringRot = (d.ringRot || 0) + v * dt;
-    v *= Math.pow(0.9, dt / 16.7);
-    r.style.transform = `rotate(${d.ringRot}deg)`;
-    if (Math.abs(v) > 0.02) dvRingRAF = requestAnimationFrame(step);
-    else dvRingRAF = 0;
-  };
-  dvRingRAF = requestAnimationFrame(step);
+// 牌扇尺寸：卡宽随容器宽走；扇高只露牌的上半截；轨道总宽 = 步进 × (张数-1) + 一张整卡宽
+function dvFanLayout(stage) {
+  const wrap = stage.querySelector('.dv-fan-wrap');
+  const track = stage.querySelector('.dv-fan-track');
+  const d = state._dvDraw;
+  if (!wrap || !track || !d) return;
+  const w = wrap.clientWidth || stage.clientWidth;
+  if (!w) return;
+  const cw = Math.max(52, Math.min(76, Math.round(w * 0.17)));
+  const fanH = Math.round(cw * 1.6 * 0.62);
+  stage.style.setProperty('--dv-cw', `${cw}px`);
+  wrap.style.height = `${fanH}px`;
+  const trackW = (d.pool.length - 1) * DV_FAN_STEP + cw;
+  track.style.width = `${trackW}px`;
+  track.style.marginLeft = `${Math.max(0, Math.round((w - trackW) / 2))}px`;
+  d.fanX = Math.max(0, Math.min(d.fanX || 0, Math.max(0, trackW - w)));
+  dvFanApply();
+}
+// 牌阵按可用区域等比缩放，保证牌阵与底部牌扇在同一屏内都能看到
+function dvFitBoard(stage) {
+  const target = stage.querySelector('.dv-target');
+  const board = target && target.querySelector('.dv-board');
+  if (!target || !board) return;
+  const tw = target.clientWidth, th = target.clientHeight;
+  if (!tw || !th) return;
+  const ratio = parseFloat(getComputedStyle(board).getPropertyValue('--dv-ratio')) || 0.6;
+  let w = Math.min(tw, 600);
+  const availH = Math.max(120, th - 6);
+  if (w / ratio > availH) w = availH * ratio;
+  board.style.width = `${Math.floor(w)}px`;
+  board.style.maxWidth = '100%';
 }
 // 点选 / 拖动事件都只在 stage 上委托一次，不给每张牌单独挂监听
 function bindDrawStage() {
   const stage = $('divine-draw-stage');
   if (!stage || stage.dataset.bound === '1') return;
   stage.dataset.bound = '1';
+  // 牌扇只认「轻点」：松手位移小于阈值才选中；拖动只做横向平移，不会误选
   stage.addEventListener('click', e => {
-    if (performance.now() < (stage._ringGuard || 0)) return;
-    const pick = e.target.closest('.dv-pool-card');
-    if (pick) { pickDivinePool(pick); return; }
     const t = e.target.closest('[data-act]');
     if (t && t.dataset.act === 'skip') finishDivineShuffle();
   });
   stage.addEventListener('pointerdown', e => {
-    const wrap = e.target.closest('.dv-ring-wrap');
+    const wrap = e.target.closest('.dv-fan-wrap');
     const d = state._dvDraw;
     if (!wrap || !d || d.phase !== 'pick' || state.divineMode !== 'manual') return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    dvRingCancel();
-    const rect = wrap.getBoundingClientRect();
-    const a = dvRingAngle(e, rect);
-    dvRing = { pointerId: e.pointerId, wrap, rect, rot: d.ringRot || 0, vel: 0, lastAngle: a, lastT: performance.now(), downX: e.clientX, downY: e.clientY, moved: 0, card: e.target.closest('.dv-pool-card') };
+    dvFanCancel();
+    dvFanDrag = { pointerId: e.pointerId, wrap, startX: e.clientX, startY: e.clientY, startFanX: d.fanX || 0, moved: 0, card: e.target.closest('.dv-pool-card') };
     try { wrap.setPointerCapture(e.pointerId); } catch (_) {}
   });
   stage.addEventListener('pointermove', e => {
-    const s = dvRing; const d = state._dvDraw;
+    const s = dvFanDrag; const d = state._dvDraw;
     if (!s || s.pointerId !== e.pointerId || !d) return;
-    const dx = e.clientX - s.downX, dy = e.clientY - s.downY;
+    const dx = e.clientX - s.startX, dy = e.clientY - s.startY;
     s.moved = Math.max(s.moved, Math.hypot(dx, dy));
-    const a = dvRingAngle(e, s.rect);
-    let da = a - s.lastAngle;
-    while (da > 180) da -= 360;
-    while (da < -180) da += 360;
-    const t = performance.now();
-    const dt = Math.max(1, t - s.lastT);
-    s.rot += da;
-    s.vel = s.vel * 0.65 + (da / dt) * 0.35;
-    s.lastAngle = a; s.lastT = t;
-    d.ringRot = s.rot;
-    dvRingSchedule();
+    d.fanX = Math.max(0, Math.min(dvFanMax(), s.startFanX - dx));
+    dvFanSchedule();
   });
   const endDrag = e => {
-    const s = dvRing; const stage2 = $('divine-draw-stage');
+    const s = dvFanDrag;
     if (!s || s.pointerId !== e.pointerId) return;
-    dvRing = null;
+    dvFanDrag = null;
     try { if (s.wrap.hasPointerCapture(e.pointerId)) s.wrap.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (s.moved < 8 && s.card) { pickDivinePool(s.card); return; }
-    if (stage2) stage2._ringGuard = performance.now() + 350;
-    dvRingInertia(Math.max(-0.6, Math.min(0.6, s.vel)));
+    if (s.moved < 8) {
+      if (s.card) pickDivinePool(s.card);
+    }
   };
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
-}
-// 环的半径按容器宽度现算：卡宽约容器 10%，保证 16 张互不重叠且整圈落在屏内
-function dvRingLayout(stage) {
-  const wrap = stage.querySelector('.dv-ring-wrap');
-  if (!wrap) return;
-  const w = wrap.clientWidth;
-  if (!w) return;
-  const cw = Math.max(30, Math.min(44, Math.round(w * 0.10)));
-  const r = Math.max(60, w / 2 - cw * 0.8 - 4);
-  stage.style.setProperty('--dv-cw', `${cw}px`);
-  stage.style.setProperty('--dv-r', `${r}px`);
 }
 function renderDivineDrawStage() {
   const d = state._dvDraw; if (!d) return;
@@ -404,24 +398,22 @@ function renderDivineDrawStage() {
   // 目标牌位只渲染牌背；翻牌前不给任何牌名
   const skeleton = { dtype: d.type, spread: d.spread.name, cards: Array.from({ length: d.spread.n }, () => ({ name: '', upright: true })) };
   const board = divineResultHtml(skeleton, { interactive: false, drawing: true, bare: true });
-  const angle = 360 / d.pool.length;
   const pool = manual
-    ? `<div class="dv-ring-wrap" id="dv-ring-wrap"><div class="dv-ring" id="dv-ring">${d.pool.map((c, i) =>
-        `<button class="dv-pool-card" type="button" data-pool="${i}" style="--a:${(i * angle).toFixed(2)}deg">${dvBackArt()}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
+    ? `<div class="dv-fan-wrap" id="dv-fan-wrap"><div class="dv-fan-track" id="dv-fan-track">${d.pool.map((c, i) =>
+        `<button class="dv-pool-card" type="button" data-pool="${i}" style="left:${i * DV_FAN_STEP}px;z-index:${i + 1}">${dvBackArt()}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
     : '';
   stage.innerHTML =
     `<div class="dv-draw-head"><span class="dv-draw-status" id="dv-draw-status">` +
-      (manual ? `请从牌环上依次点选 ${d.spread.n} 张牌` : '正在自动抽牌…') + `</span>` +
+      (manual ? `左右滑动下方牌扇，轻点依次选 ${d.spread.n} 张牌` : '正在自动抽牌…') + `</span>` +
       `<span class="dv-draw-count" id="dv-draw-count">` +
       (manual ? `已选 0 / ${d.spread.n}` : `已选 ${d.spread.n} / ${d.spread.n}`) + `</span></div>` +
-    `${pool}<div class="dv-target">${board}</div>`;
-  if (manual) {
-    dvRingLayout(stage);
-    dvRingApply();
-    const step = stage.closest('.divine-step');
-    if (step) step.scrollTop = 0;
-    return;
-  }
+    `<div class="dv-target">${board}</div>${pool}`;
+  // 先定扇高（决定剩余高度），再按剩余高度缩放牌阵
+  if (manual) dvFanLayout(stage);
+  dvFitBoard(stage);
+  const step = stage.closest('.divine-step');
+  if (step) step.scrollTop = 0;
+  if (manual) return;
   // 自动抽：按顺序落位，再统一翻牌
   d.picked = Array.from({ length: d.spread.n }, (_, i) => i);
   d.picked.forEach((pi, i) => dvLater(() => {
@@ -515,10 +507,9 @@ export async function startDivineDraw() {
   const deck = type === 'tarot' ? TAROT_DECK : LENORMAND_DECK;
   const spread = DIVINE_SPREADS[type][state.divineSpreadIdx[type]];
   const shuffled = shuffleArr(deck);
-  // 环形牌池固定 16 张：最大牌阵 10 张仍余 6 张，16 等分约 22.5°，
-  // 环的形状和拖动手感在所有牌阵一致；同副牌不重复
-  const poolCount = Math.min(deck.length, 16);
-  state._dvDraw = { type, spread, pool: shuffled.slice(0, poolCount), picked: [], phase: 'shuffle', ringRot: 0 };
+  // 整副牌全部铺进底部牌扇：塔罗 78 张、雷诺曼 36 张；同副牌不重复
+  const poolCount = deck.length;
+  state._dvDraw = { type, spread, pool: shuffled.slice(0, poolCount), picked: [], phase: 'shuffle', fanX: 0 };
   state._dvRevealed = false;
   // 清掉上一局的结果 DOM，避免翻牌前旧牌名残留在隐藏节点里
   const oldResult = $('divine-result'); if (oldResult) oldResult.innerHTML = '';

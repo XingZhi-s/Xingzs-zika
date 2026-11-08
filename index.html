@@ -705,8 +705,9 @@ a { text-decoration:none; color:inherit; }
 .dv-mode-row { display:flex; gap:8px; width:100%; margin-bottom:10px; }
 .dv-mode-btn { flex:1; min-height:40px; border-radius:10px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-secondary); font-size:13px; }
 .dv-mode-btn.sel { border-color:var(--theme-color); background:var(--theme-light); color:var(--theme-color); font-weight:600; }
-.dv-draw-stage { width:100%; display:flex; flex-direction:column; align-items:center; }
-.dv-target { width:100%; }
+/* 抽牌舞台：占满第三步剩余高度；中间牌阵区弹性伸缩，底部牌扇贴底 */
+.dv-draw-stage { flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; }
+.dv-target { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 .dv-draw-head { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:10px; }
 .dv-draw-status { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
 .dv-draw-count { flex-shrink:0; font-size:13px; font-weight:600; color:var(--theme-color); }
@@ -723,13 +724,13 @@ a { text-decoration:none; color:inherit; }
 .dv-board.dv-drawing .dv-card { opacity:0; transform:scale(.72); transition:transform .3s ease, opacity .3s ease; }
 .dv-board.dv-drawing .dv-card.is-placed { opacity:1; transform:scale(1); }
 .dv-board.dv-drawing .dv-slot-label { opacity:0; }
-/* 环形牌池：牌背沿圆周铺开，整环拖动旋转；touch-action:none 只作用在环内，环外仍可滚动 */
-.dv-ring-wrap { position:relative; width:min(100%, 380px); aspect-ratio:1 / 1; margin:4px auto 6px; touch-action:none; user-select:none; -webkit-user-select:none; }
-.dv-ring { position:absolute; inset:0; will-change:transform; transform:rotate(0deg); }
-.dv-pool-card { position:absolute; left:50%; top:50%; width:var(--dv-cw, 36px); min-width:0; min-height:0; aspect-ratio:1 / 1.6; padding:0; border:none; border-radius:9px; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); transform:translate(-50%,-50%) rotate(var(--a, 0deg)) translateY(calc(-1 * var(--dv-r, 130px))); transition:opacity .2s ease; }
-.dv-pool-card.is-picked { opacity:.35; pointer-events:none; }
-.dv-pool-no { position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; border-radius:50%; background:var(--theme-color); color:#fff; font-size:11px; line-height:20px; text-align:center; opacity:0; transform:scale(.6); transition:opacity .2s ease, transform .2s ease; }
-.dv-pool-card.is-picked .dv-pool-no { opacity:1; transform:scale(1); }
+/* 底部牌扇：整副牌横向叠压，只露左侧窄边；横向滑动只发生在扇内，整页不横向溢出 */
+.dv-fan-wrap { position:relative; flex-shrink:0; width:100%; margin:8px 0 0; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; height:64px; }
+.dv-fan-track { position:relative; height:100%; will-change:transform; transform:translate3d(0,0,0); }
+.dv-pool-card { position:absolute; top:0; width:var(--dv-cw, 60px); height:calc(var(--dv-cw, 60px) * 1.6); min-width:0; min-height:0; padding:0; border:none; border-radius:10px 10px 4px 4px; overflow:hidden; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); box-shadow:-1px 0 0 rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.12), inset 1px 0 0 rgba(255,255,255,.5); transition:opacity .2s ease; }
+.dv-pool-card.is-picked { opacity:.3; }
+.dv-pool-no { position:absolute; left:0; top:0; width:12px; height:14px; background:#fff; color:var(--theme-color); font-size:9px; line-height:14px; text-align:center; opacity:0; }
+.dv-pool-card.is-picked .dv-pool-no { opacity:1; }
 
 /* 牌义弹窗：正位 / 逆位两段都给出，当前正逆位高亮；长文由 .modal-body 滚动 */
 .dv-mean-modal { display:flex; flex-direction:column; gap:10px; }
