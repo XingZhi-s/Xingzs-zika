@@ -706,6 +706,7 @@ a { text-decoration:none; color:inherit; }
 .dv-mode-btn { flex:1; min-height:40px; border-radius:10px; border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-secondary); font-size:13px; }
 .dv-mode-btn.sel { border-color:var(--theme-color); background:var(--theme-light); color:var(--theme-color); font-weight:600; }
 .dv-draw-stage { width:100%; display:flex; flex-direction:column; align-items:center; }
+.dv-target { width:100%; }
 .dv-draw-head { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:10px; }
 .dv-draw-status { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
 .dv-draw-count { flex-shrink:0; font-size:13px; font-weight:600; color:var(--theme-color); }
@@ -722,10 +723,11 @@ a { text-decoration:none; color:inherit; }
 .dv-board.dv-drawing .dv-card { opacity:0; transform:scale(.72); transition:transform .3s ease, opacity .3s ease; }
 .dv-board.dv-drawing .dv-card.is-placed { opacity:1; transform:scale(1); }
 .dv-board.dv-drawing .dv-slot-label { opacity:0; }
-.dv-pool-wrap { width:100%; margin:8px 0 0; }
-.dv-pool { display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:8px 2px 12px; -webkit-overflow-scrolling:touch; }
-.dv-pool-card { flex:0 0 auto; width:clamp(52px, 17vw, 74px); aspect-ratio:1 / 1.6; border-radius:9px; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); border:none; position:relative; transition:transform .22s ease, opacity .22s ease; }
-.dv-pool-card.is-picked { opacity:.38; transform:translateY(-6px) scale(.9); pointer-events:none; }
+/* 环形牌池：牌背沿圆周铺开，整环拖动旋转；touch-action:none 只作用在环内，环外仍可滚动 */
+.dv-ring-wrap { position:relative; width:min(100%, 380px); aspect-ratio:1 / 1; margin:4px auto 6px; touch-action:none; user-select:none; -webkit-user-select:none; }
+.dv-ring { position:absolute; inset:0; will-change:transform; transform:rotate(0deg); }
+.dv-pool-card { position:absolute; left:50%; top:50%; width:var(--dv-cw, 36px); min-width:0; min-height:0; aspect-ratio:1 / 1.6; padding:0; border:none; border-radius:9px; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); transform:translate(-50%,-50%) rotate(var(--a, 0deg)) translateY(calc(-1 * var(--dv-r, 130px))); transition:opacity .2s ease; }
+.dv-pool-card.is-picked { opacity:.35; pointer-events:none; }
 .dv-pool-no { position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; border-radius:50%; background:var(--theme-color); color:#fff; font-size:11px; line-height:20px; text-align:center; opacity:0; transform:scale(.6); transition:opacity .2s ease, transform .2s ease; }
 .dv-pool-card.is-picked .dv-pool-no { opacity:1; transform:scale(1); }
 
