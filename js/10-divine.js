@@ -309,10 +309,13 @@ function shuffleMarkup() {
     `<button class="dv-skip-btn" data-act="skip" type="button">跳过洗牌</button></div>` +
     `<div class="dv-shuffle on" id="dv-shuffle">${cards}</div>`;
 }
-// 底部牌扇：整副牌沿弧铺开，弧的弯曲固定在视口上（中间那张竖直、越靠视口两侧越斜）。
-// 拖动只改连续位置 fanX，每张牌按「当前屏幕横向位置」重算倾角与弧高 → 沿弧滚动，像拨动转盘。
-const DV_FAN_STEP = 12;                      // 相邻两张的横向步进（露出的可点宽度）
-const DV_FAN_MAXA = 35 * Math.PI / 180;      // 视口最外侧那张的倾角上限
+// 底部牌扇：整副牌是洗好的一条循环队列，屏幕上只保留 21 个连续牌位（中间 1 + 左右各 10）。
+// 拖动/惯性只改窗口在队列上的浮点位置 fanX（单位=牌位），21 个槽位按「离中心的槽距」重算倾角与弧高 →
+// 牌沿弧滚动、越靠两侧越斜，像拨动转盘；因为队列循环取模，任意牌都能转到任意位上。
+const DV_SLOTS = 21;                          // 屏幕上保留的牌位数
+const DV_PEEK = 17;                           // 相邻牌位的横向步进目标（露出的可点宽度），窄屏按可容纳宽度收缩
+const DV_FAN_MAXA = 24;                       // 最外侧牌位的倾角（度）
+const DV_ARC_H = 116;                         // 弧线落差：中间最低、两侧最高
 let dvFanDrag = null;       // { pointerId, wrap, startX, startY, startFanX, moved, card, lastX, lastT, vx }
 let dvFanRAF = 0;           // 位置刷新 rAF
 let dvFanGlideRAF = 0;      // 松手惯性 rAF
@@ -321,39 +324,39 @@ function dvFanStop() {
   if (dvFanGlideRAF) cancelAnimationFrame(dvFanGlideRAF); dvFanGlideRAF = 0;
 }
 function dvFanCancel() { dvFanStop(); dvFanDrag = null; }
-function dvFanMax() {
-  const wrap = $('dv-fan-wrap'), track = $('dv-fan-track');
-  if (!wrap || !track) return 0;
-  return Math.max(0, track.offsetWidth - wrap.clientWidth);
-}
-// 按当前 fanX 把每张牌落到弧上：倾角 = 它在视口中偏离中心的横向距离对应的圆心角
+function dvFanMod(v, n) { return ((v % n) + n) % n; }
+// 把 21 个槽位按当前窗口位置落到弧上；槽位上的牌是从队列里循环取的一段连续牌
 function dvFanPlace() {
-  const wrap = $('dv-fan-wrap'), track = $('dv-fan-track'), d = state._dvDraw;
+  const track = $('dv-fan-track'), d = state._dvDraw;
   const m = d && d._fan;
-  if (!wrap || !track || !m) return;
-  const w = wrap.clientWidth || m.w;
-  const fanX = d.fanX || 0;
+  if (!track || !m) return;
+  const n = m.n;
+  const pos = dvFanMod(d.fanX || 0, n);
+  const q0 = Math.floor(pos), frac = pos - q0;
   const cards = track.children;
-  for (let i = 0; i < cards.length; i++) {
-    const el = cards[i];
-    const x = m.off + m.pad + i * DV_FAN_STEP - fanX;
-    if (x < -m.cw - 8 || x > w + 8) {
-      if (el._dvOff !== 1) { el._dvOff = 1; el.style.visibility = 'hidden'; }
-      continue;
+  for (let k = 0; k < cards.length; k++) {
+    const el = cards[k];
+    const qi = (q0 + k) % n;
+    // 槽距（含小数部分）→ 归一化到 [-1,1]：中间竖直、两侧 ±24°，纵向按落差抛物线抬起
+    const t = Math.max(-1, Math.min(1, (k - (DV_SLOTS - 1) / 2 - frac) / ((DV_SLOTS - 1) / 2)));
+    const x = m.base + (k - frac) * m.step;
+    const y = DV_ARC_H * t * t;
+    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${(t * DV_FAN_MAXA).toFixed(2)}deg)`;
+    if (el._qi !== qi) {
+      el._qi = qi;
+      el.dataset.pool = String(qi);
+      const idx = d.picked.indexOf(qi);
+      el.classList.toggle('is-picked', idx >= 0);
+      const no = el.querySelector('.dv-pool-no');
+      if (no) no.textContent = idx >= 0 ? String(idx + 1) : '';
     }
-    if (el._dvOff === 1) { el._dvOff = 0; el.style.visibility = ''; }
-    const dx = x + m.cw / 2 - w / 2;
-    const a = Math.max(-DV_FAN_MAXA, Math.min(DV_FAN_MAXA, Math.asin(Math.max(-1, Math.min(1, dx / m.R)))));
-    el.style.left = `${Math.round(x)}px`;
-    el.style.top = `${Math.round(6 + m.vs * m.R * (1 - Math.cos(a)))}px`;
-    el.style.transform = `rotate(${(a * 180 / Math.PI).toFixed(2)}deg)`;
   }
 }
 function dvFanSchedule() {
   if (dvFanRAF) return;
   dvFanRAF = requestAnimationFrame(() => { dvFanRAF = 0; dvFanPlace(); });
 }
-// 松手惯性：按横向速度继续沿弧滑，指数衰减到静止或在两端边界停下
+// 松手惯性：按横向速度继续拨动窗口，指数衰减到静止（队列循环，没有端点）
 function dvFanGlideStart(vx) {
   if (!isFinite(vx) || Math.abs(vx) < 0.05) return;
   if (dvFanGlideRAF) cancelAnimationFrame(dvFanGlideRAF);
@@ -362,12 +365,8 @@ function dvFanGlideStart(vx) {
     const dt = Math.max(1, Math.min(64, ts - last)); last = ts;
     const d = state._dvDraw;
     if (!d) { dvFanGlideRAF = 0; return; }
-    const max = dvFanMax();
-    let nx = (d.fanX || 0) - v * dt;
-    if (nx <= 0 || nx >= max) {
-      d.fanX = Math.max(0, Math.min(max, nx)); dvFanPlace(); dvFanGlideRAF = 0; return;
-    }
-    d.fanX = nx;
+    const stp = (d._fan && d._fan.step) || DV_PEEK;
+    d.fanX = dvFanMod((d.fanX || 0) - (v * dt) / stp, d.pool.length);
     dvFanPlace();
     v *= Math.pow(0.9955, dt);      // 阻尼：约每 100ms 衰减到原来的 64%
     acc += dt;
@@ -376,7 +375,7 @@ function dvFanGlideStart(vx) {
   };
   dvFanGlideRAF = requestAnimationFrame(step);
 }
-// 牌扇几何：卡宽/弧半径/每张露出的等高「牌头」；弧半径让视口最外侧正好倾到 ±35°
+// 牌扇几何：卡宽按视口宽取值（桌面封顶 96），21 个牌位居中排开、两侧出血；扇区高度 = 弧线落差 + 牌头高
 function dvFanLayout(stage) {
   const wrap = stage.querySelector('.dv-fan-wrap');
   const track = stage.querySelector('.dv-fan-track');
@@ -384,34 +383,30 @@ function dvFanLayout(stage) {
   if (!wrap || !track || !d) return;
   const w = wrap.clientWidth || stage.clientWidth;
   if (!w) return;
-  const n = d.pool.length;
-  const cw = Math.max(46, Math.min(76, Math.round(w * 0.15)));
+  const vw = window.innerWidth || w;
+  const cw = Math.max(72, Math.min(96, Math.round(vw * 0.22)));
   const ch = Math.round(cw * 1.6);
-  const edge = w / 2 + cw / 2;                                   // 视口最外侧那张的中心偏移
-  const R = Math.max(300, Math.round(edge / Math.sin(DV_FAN_MAXA)));
-  const pad = Math.ceil((ch / 2) * Math.sin(DV_FAN_MAXA)) + 2;   // 旋转后左右顶点超出量
-  const trackW = (n - 1) * DV_FAN_STEP + cw + pad * 2;
-  const dropRaw = R * (1 - Math.cos(DV_FAN_MAXA));
-  // 扇面的纵向落差按舞台高度控制（扇形透视压扁），既保留倾角，又不把中区牌阵挤没
-  const drop = Math.min(dropRaw, Math.max(64, Math.round((stage.clientHeight || 0) * 0.19)));
-  const vs = dropRaw > 0 ? drop / dropRaw : 1;
-  // 每张牌只露顶部一段（等高的“牌头”），沿弧排开 → 上下缘都是同一弧线，才是扇面
-  const peek = Math.round(ch * 0.68);
-  const fanH = Math.round(drop + peek + 8);
+  // 21 个牌位必须整排落在屏幕内：窄屏把露边从 17px 收到 12/15px，宽屏保持 17px
+  const step = Math.max(11, Math.min(DV_PEEK, Math.floor((w - cw) / (DV_SLOTS - 1))));
+  const fanW = (DV_SLOTS - 1) * step + cw;
+  const base = Math.round((w - fanW) / 2);
+  // 每张牌只露顶部一段等高的「牌头」；扇区高度按最外侧牌位旋转后的实际下沿计算，底部不留空白
+  const head = Math.max(48, Math.min(86, Math.round(cw * 0.72)));
+  const rad = DV_FAN_MAXA * Math.PI / 180;
+  const sinA = Math.sin(rad), cosA = Math.cos(rad);
+  const edgeBottom = DV_ARC_H + ch / 2 + (cw / 2) * sinA + (head - ch / 2) * cosA;
+  const fanH = Math.ceil(Math.max(head, edgeBottom) * 100) / 100;
   stage.style.setProperty('--dv-cw', `${cw}px`);
-  stage.style.setProperty('--dv-peek', `${peek}px`);
   wrap.style.height = `${fanH}px`;
-  track.style.width = `${trackW}px`;
-  // 整副牌比视口窄时居中摆（off 参与每张牌的 x 计算；track 自身不再位移，避免双重偏移）
-  const off = Math.max(0, Math.round((w - trackW) / 2));
-  const cards = track.children;
-  for (let i = 0; i < cards.length; i++) {
-    cards[i].style.clipPath = `inset(0 0 calc(100% - ${peek}px) 0)`;
-    cards[i].style.zIndex = String(i + 1);
+  track.style.width = `${fanW + step}px`;
+  for (let k = 0; k < track.children.length; k++) {
+    const el = track.children[k];
+    el.style.clipPath = `inset(0 0 calc(100% - ${head}px) 0)`;
+    el.style.zIndex = String(DV_SLOTS - Math.abs(k - (DV_SLOTS - 1) / 2));
   }
-  d._fan = { cw, ch, R, pad, trackW, vs, peek, w, off };
-  if (typeof d.fanX !== 'number') d.fanX = Math.round((trackW - w) / 2);   // 初始停在扇面正中
-  d.fanX = Math.max(0, Math.min(d.fanX || 0, Math.max(0, trackW - w)));
+  d._fan = { n: d.pool.length, cw, ch, step, base, head, fanH, w };
+  if (typeof d.fanX !== 'number') d.fanX = Math.floor((d.pool.length - DV_SLOTS) / 2);  // 默认窗口居中
+  d.fanX = dvFanMod(d.fanX || 0, d.pool.length);
   dvFanPlace();
 }
 // 牌阵按可用区域等比缩放，保证牌阵与底部牌扇在同一屏内都能看到
@@ -460,7 +455,8 @@ function bindDrawStage() {
     const ts = performance.now();
     const dt = ts - s.lastT;
     if (dt > 0) { s.vx = (e.clientX - s.lastX) / dt; s.lastX = e.clientX; s.lastT = ts; }
-    d.fanX = Math.max(0, Math.min(dvFanMax(), s.startFanX - dx));
+    const stp = (d._fan && d._fan.step) || DV_PEEK;
+    d.fanX = dvFanMod(s.startFanX - dx / stp, d.pool.length);   // 窗口在循环队列上平移
     dvFanSchedule();
   });
   const endDrag = e => {
@@ -486,9 +482,11 @@ function renderDivineDrawStage() {
   // 目标牌位只渲染牌背；翻牌前不给任何牌名
   const skeleton = { dtype: d.type, spread: d.spread.name, cards: Array.from({ length: d.spread.n }, () => ({ name: '', upright: true })) };
   const board = divineResultHtml(skeleton, { interactive: false, drawing: true, bare: true });
+  // 只渲染 21 个牌位；每位的牌号（data-pool=队列下标）由 dvFanPlace 按窗口位置动态写入，
+  // 牌背全同，换位时不必重建 DOM
   const pool = manual
-    ? `<div class="dv-fan-wrap" id="dv-fan-wrap"><div class="dv-fan-track" id="dv-fan-track">${d.pool.map((c, i) =>
-        `<button class="dv-pool-card" type="button" data-pool="${i}" style="z-index:${i + 1}">${dvBackArt(d.type)}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
+    ? `<div class="dv-fan-wrap" id="dv-fan-wrap"><div class="dv-fan-track" id="dv-fan-track">${Array.from({ length: DV_SLOTS }, () =>
+        `<button class="dv-pool-card" type="button" data-pool="">${dvBackArt(d.type)}<span class="dv-pool-no"></span></button>`).join('')}</div></div>`
     : '';
   stage.innerHTML =
     `<div class="dv-draw-head"><span class="dv-draw-status" id="dv-draw-status">` +
@@ -521,8 +519,9 @@ function pickDivinePool(el) {
   const d = state._dvDraw;
   if (!d || d.phase !== 'pick' || state.divineMode !== 'manual') return;
   if (d.picked.length >= d.spread.n) return;
+  if (el.dataset.pool === '') return;                    // 槽位还没绑定牌（尚未布局）
   const pi = Number(el.dataset.pool);
-  if (!Number.isInteger(pi) || d.picked.includes(pi)) return;
+  if (!Number.isInteger(pi) || pi < 0 || pi >= d.pool.length || d.picked.includes(pi)) return;
   d.picked.push(pi);
   el.classList.add('is-picked');
   const no = el.querySelector('.dv-pool-no');

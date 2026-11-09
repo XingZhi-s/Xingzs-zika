@@ -602,7 +602,7 @@ a { text-decoration:none; color:inherit; }
 /* ========== 占卜（分步沉浸式） ========== */
 /* 步骤容器自己滚动：牌阵数量多 / 结果牌阵高时都在内容区内滚动，不撑破页面 */
 .divine-body { flex:1; min-height:0; display:flex; flex-direction:column; padding-bottom:20px; }
-.divine-step { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; align-items:center; padding:26px 16px 20px; }
+.divine-step { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; align-items:center; padding:26px 16px 20px; }
 .dv-step-title { font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:18px; text-align:center; }
 .dv-kind-grid { display:flex; gap:14px; width:100%; justify-content:center; }
 .dv-kind-card { flex:1; max-width:160px; display:flex; flex-direction:column; align-items:center; gap:8px; padding:26px 10px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; box-shadow:var(--shadow); min-height:0; }
@@ -708,6 +708,9 @@ a { text-decoration:none; color:inherit; }
 /* 抽牌舞台：占满第三步剩余高度；中间牌阵区弹性伸缩，底部牌扇贴底 */
 .dv-draw-stage { flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; }
 .dv-target { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+/* 抽牌阶段：牌阵贴住牌扇上沿，扇区高度由 JS 按弧线实际落差给定，不留底部空白 */
+.dv-draw-stage .dv-target { align-items:flex-end; }
+.dv-draw-stage .dv-board { margin-bottom:0; }
 .dv-draw-head { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:10px; }
 .dv-draw-status { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
 .dv-draw-count { flex-shrink:0; font-size:13px; font-weight:600; color:var(--theme-color); }
@@ -724,10 +727,12 @@ a { text-decoration:none; color:inherit; }
 .dv-board.dv-drawing .dv-card { opacity:0; transform:scale(.72); transition:transform .3s ease, opacity .3s ease; }
 .dv-board.dv-drawing .dv-card.is-placed { opacity:1; transform:scale(1); }
 .dv-board.dv-drawing .dv-slot-label { opacity:0; }
-/* 底部牌扇：整副牌横向叠压，只露左侧窄边；横向滑动只发生在扇内，整页不横向溢出 */
-.dv-fan-wrap { position:relative; flex-shrink:0; width:100%; margin:8px 0 0; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; height:64px; }
-.dv-fan-track { position:relative; height:100%; will-change:transform; transform:translate3d(0,0,0); }
-.dv-pool-card { position:absolute; top:0; width:var(--dv-cw, 60px); height:calc(var(--dv-cw, 60px) * 1.6); min-width:0; min-height:0; padding:0; border:none; border-radius:10px 10px 4px 4px; overflow:hidden; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); box-shadow:-1px 0 0 rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.12), inset 1px 0 0 rgba(255,255,255,.5); transition:opacity .2s ease; }
+/* 底部牌扇：21 个牌位沿弧排开，左右两侧出血到屏幕边（扇内裁切，整页不横向溢出） */
+.dv-fan-wrap { position:relative; flex-shrink:0; width:100%; margin:0; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; height:64px; }
+/* 牌扇满宽出血：抵消 .divine-step 的左右 16px 内边距，让扇面铺到屏幕两侧 */
+.dv-draw-stage .dv-fan-wrap { width:calc(100% + 32px); margin-left:-16px; margin-right:-16px; }
+.dv-fan-track { position:relative; height:100%; }
+.dv-pool-card { position:absolute; left:0; top:0; width:var(--dv-cw, 60px); height:calc(var(--dv-cw, 60px) * 1.6); min-width:0; min-height:0; padding:0; border:none; border-radius:10px 10px 4px 4px; overflow:hidden; transform-origin:50% 50%; will-change:transform; background:linear-gradient(135deg, color-mix(in srgb, var(--theme-color) 72%, #ffffff), var(--theme-color)); box-shadow:-1px 0 0 rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.12), inset 1px 0 0 rgba(255,255,255,.5); }
 .dv-pool-card.is-picked { opacity:.3; }
 .dv-pool-no { position:absolute; left:0; top:0; width:12px; height:14px; background:#fff; color:var(--theme-color); font-size:9px; line-height:14px; text-align:center; opacity:0; }
 .dv-pool-card.is-picked .dv-pool-no { opacity:1; }
