@@ -320,7 +320,17 @@ export async function renderContactSetting(id) {
             <div class="switch ${c.settings.incomingCall?'on':''}" onclick="csToggleIncomingCall()"></div>
           </span>
         </div>
-        <div class="cs-hint">每天每联系人 3 次，时间间隔 ≥30 分钟</div>
+        <div class="cs-row">
+          <span class="cs-label">来电概率</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;">
+              <input type="number" min="0" max="100" step="1" value="${(c.settings && Number.isFinite(Number(c.settings.callRate))) ? Math.max(0, Math.min(100, Math.round(Number(c.settings.callRate)))) : 50}" id="cs-callrate">
+              <span class="cs-unit">%</span>
+            </div>
+          </span>
+        </div>
+        <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveCallRate()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存来电设置</button>
+        <div class="cs-hint">每个联系人每天按此概率来电一次，睡觉类状态会顺延</div>
       </div>
     </div>
 
@@ -596,6 +606,23 @@ export async function csToggleProactive() {
   }
   await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
+}
+// 来电概率：0–100 整数，非法/空回落到默认 50；今天还没触发过来电则立即按新概率重掷，已打过则明天生效
+export async function csSaveCallRate() {
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  const el = $('cs-callrate');
+  let v = parseInt(el ? el.value : '', 10);
+  if (isNaN(v)) v = 50;
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  c.settings.callRate = v;
+  const d = new Date(now());
+  const todayStr = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  const fired = !!(c.callSlots && c.callSlots.date === todayStr && (c.callSlots.triggered || []).length);
+  if (c.callSlots && c.callSlots.date === todayStr && !fired) c.callSlots = null;
+  await saveContact(c);
+  if (el) el.value = String(v); // 回填夹取后的值，避免输入框里留着非法值
+  toast(`来电概率已保存：${v}%`);
 }
 export async function csToggleIncomingCall() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;

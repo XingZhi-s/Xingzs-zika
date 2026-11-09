@@ -4,7 +4,7 @@ import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pic
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
@@ -308,20 +308,28 @@ export async function runCatchUp(onlyCid) {
         const today = new Date(t); const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
         if (c.callSlots.date === todayStr) {
           const triggered = c.callSlots.triggered || [];
+          const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+          const dayEnd = dayStart + 24 * 3600 * 1000;
           for (let i = 0; i < c.callSlots.slots.length; i++) {
             const slot = c.callSlots.slots[i];
-            if (!triggered.includes(i) && t >= slot.time) {
-              // 触发（如果停留在该联系人对话页则弹，否则记未接）
-              triggered.push(i);
-              // 低概率状态（睡觉 / 不理人）不弹来电，只记未接，模拟「Ta 没空打」
-              if (curRate > 20 && state.currentContactId === c.id && !state.callState) {
-                // 弹窗
-                showIncomingCall(c, Math.random()<0.5 ? 'video' : 'voice');
-              } else {
-                // 记未接（多个联系人的未接都留下，不作废；同一联系人最多 3 条系统消息防雪崩）
-                pushMissedCall(c, slot.time);
-                changed = true;
-              }
+            if (triggered.includes(i) || t < slot.time) continue;
+            // 睡觉类状态不打扰（沿用现有作息限制）：顺延 1~3 小时，当天排不下就作废
+            if (isSleepingStatus(c)) {
+              const next = slot.time + randInt(60, 180) * 60 * 1000;
+              if (next < dayEnd) { slot.time = next; changed = true; }
+              else triggered.push(i);
+              continue;
+            }
+            // 触发（如果停留在该联系人对话页则弹，否则记未接）
+            triggered.push(i);
+            // 低概率状态（睡觉 / 不理人）不弹来电，只记未接，模拟「Ta 没空打」
+            if (curRate > 20 && state.currentContactId === c.id && !state.callState) {
+              // 弹窗
+              showIncomingCall(c, Math.random()<0.5 ? 'video' : 'voice');
+            } else {
+              // 记未接（多个联系人的未接都留下，不作废；同一联系人最多 3 条系统消息防雪崩）
+              pushMissedCall(c, slot.time);
+              changed = true;
             }
           }
           c.callSlots.triggered = triggered;
@@ -376,33 +384,38 @@ window.pushMissedCall = pushMissedCall;
 // 供 04-chat 的定时器复用串行队列，避免与补算并发写同一联系人
 window.__enqueueTask = enqueueTask;
 
-// 分槽法排期：当天24h每30分钟一个槽，每人3个，互不重叠
+// 来访概率：读联系人各自的设置，缺省/非法按 50，夹到 0–100 整数
+function contactCallRate(c) {
+  const raw = c && c.settings ? c.settings.callRate : null;
+  if (raw === null || raw === undefined || raw === '') return 50;
+  const v = Number(raw);
+  if (!Number.isFinite(v)) return 50;
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+// 当天排期：每个联系人每天独立按「来电概率」掷一次 —— 命中才在当天随机一个时刻打一通，没中当天不打
 function ensureCallSlots(c, t) {
-  if (!c.settings.incomingCall) return c;
+  if (!c.settings || !c.settings.incomingCall) return c;
   const today = new Date(t);
   const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
-  if (c.callSlots && c.callSlots.date === todayStr) return c; // 已排
-  const slots = [];
-  // 从0..47中挑3个，彼此间隔≥1（≥30分钟）
-  const candidates = [];
-  for (let i = 0; i < 48; i++) candidates.push(i);
-  for (let attempt = 0; attempt < 3 && candidates.length; attempt++) {
-    const idx = randInt(0, candidates.length-1);
-    const s = candidates[idx];
-    // 移除相邻
-    const newCand = [];
-    for (const ca of candidates) { if (Math.abs(ca - s) < 2) continue; newCand.push(ca); }
-    candidates.length = 0; candidates.push(...newCand);
-    slots.push(s);
-  }
-  slots.sort((a,b)=>a-b);
+  if (c.callSlots && c.callSlots.date === todayStr) return c; // 今天已掷过，绝不重复掷骰 / 重复打
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  c.callSlots = {
-    date: todayStr,
-    slots: slots.map(s => ({ index: s, time: startOfDay + s * 30 * 60 * 1000 + randInt(0, 29*60*1000) })),
-    triggered: []
-  };
+  const rate = contactCallRate(c);
+  const slots = [];
+  if (rate > 0 && Math.random() * 100 < rate) {
+    // 命中：时刻按 30 分钟槽随机（同一时段多人也各自独立抽，不会压在同一点）
+    const s = randInt(0, 47);
+    slots.push({ index: s, time: startOfDay + s * 30 * 60 * 1000 + randInt(0, 29 * 60 * 1000) });
+  }
+  c.callSlots = { date: todayStr, slots, triggered: [] };
   return c;
+}
+
+// 当前是否处于「睡觉」大类状态（沿用现有作息限制：睡觉类不打扰）
+function isSleepingStatus(c) {
+  if (!c.statusList || !c.status) return false;
+  const s = c.statusList.find(x => x.name === c.status);
+  return !!(s && s.category === 'sleep');
 }
 
 // 周期性检查（保持低频 60s；更重要的是用户打开页面/切页/回到前台时补算一次）
@@ -637,6 +650,7 @@ window.csSearchJump = csSearchJump;
 window.csEditMyNickname = csEditMyNickname;
 window.csEditName = csEditName;
 window.csResetBg = csResetBg;
+window.csSaveCallRate = csSaveCallRate;
 window.csSaveProactive = csSaveProactive;
 window.csSaveReply = csSaveReply;
 window.csSetSplit = csSetSplit;

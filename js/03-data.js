@@ -200,6 +200,7 @@ export function createEmptyContact(name) {
       fastSec: 5, slowMin: 3, replyCount: 1,
       replyCountMin: 1, replyCountMax: 1,
       incomingCall: true, proactiveMsg: false,
+      callRate: 50, // 每天主动来电概率（0–100 整数，默认 50；老数据缺省按 50 处理）
       proactiveMin: 1, proactiveMax: 3,
       nextProactiveAt: now() + randInt(2, 8) * 3600 * 1000,
       chatBackground: null,
