@@ -217,6 +217,13 @@ function applyDivineStep() {
   if (block) block.classList.toggle('hide', drawing);
   const back3 = $('divine-back-3');
   if (back3) back3.classList.toggle('hide', drawing);
+  // 抽牌中收起底部留白，让牌扇底边贴近页面底部
+  const step3 = $('divine-step-3');
+  if (step3) step3.classList.toggle('dv-drawing', drawing);
+  const body = document.querySelector('.divine-body');
+  if (body) body.classList.toggle('dv-drawing', drawing);
+  const scroller = step3 && step3.closest('.page-scroll');
+  if (scroller) scroller.classList.toggle('dv-drawing', drawing);
   document.querySelectorAll('.dv-mode-btn').forEach(b => b.classList.toggle('sel', b.dataset.mode === (state.divineMode || 'auto')));
 }
 // 问题输入块始终是同一个实例，固定放在第三步（已输入内容不丢）
@@ -315,7 +322,7 @@ function shuffleMarkup() {
 const DV_SLOTS = 21;                          // 屏幕上保留的牌位数
 const DV_PEEK = 17;                           // 相邻牌位的横向步进目标（露出的可点宽度），窄屏按可容纳宽度收缩
 const DV_FAN_MAXA = 24;                       // 最外侧牌位的倾角（度）
-const DV_ARC_H = 116;                         // 弧线落差：中间最低、两侧最高
+const DV_ARC_H = 116;                         // 弧线落差：中间那张最高（y=0），向两侧逐渐降低到 116
 let dvFanDrag = null;       // { pointerId, wrap, startX, startY, startFanX, moved, card, lastX, lastT, vx }
 let dvFanRAF = 0;           // 位置刷新 rAF
 let dvFanGlideRAF = 0;      // 松手惯性 rAF
@@ -375,7 +382,7 @@ function dvFanGlideStart(vx) {
   };
   dvFanGlideRAF = requestAnimationFrame(step);
 }
-// 牌扇几何：卡宽按视口宽取值（桌面封顶 96），21 个牌位居中排开、两侧出血；扇区高度 = 弧线落差 + 牌头高
+// 牌扇几何：卡宽按视口宽取值（桌面封顶 96），21 个牌位居中排开、两侧留出旋转外溢；扇区高度 = 弧线落差 + 整张牌高 + 旋转外扩
 function dvFanLayout(stage) {
   const wrap = stage.querySelector('.dv-fan-wrap');
   const track = stage.querySelector('.dv-fan-track');
@@ -386,25 +393,25 @@ function dvFanLayout(stage) {
   const vw = window.innerWidth || w;
   const cw = Math.max(72, Math.min(96, Math.round(vw * 0.22)));
   const ch = Math.round(cw * 1.6);
-  // 21 个牌位必须整排落在屏幕内：窄屏把露边从 17px 收到 12/15px，宽屏保持 17px
-  const step = Math.max(11, Math.min(DV_PEEK, Math.floor((w - cw) / (DV_SLOTS - 1))));
-  const fanW = (DV_SLOTS - 1) * step + cw;
-  const base = Math.round((w - fanW) / 2);
-  // 每张牌只露顶部一段等高的「牌头」；扇区高度按最外侧牌位旋转后的实际下沿计算，底部不留空白
-  const head = Math.max(48, Math.min(86, Math.round(cw * 0.72)));
   const rad = DV_FAN_MAXA * Math.PI / 180;
   const sinA = Math.sin(rad), cosA = Math.cos(rad);
-  const edgeBottom = DV_ARC_H + ch / 2 + (cw / 2) * sinA + (head - ch / 2) * cosA;
-  const fanH = Math.ceil(Math.max(head, edgeBottom) * 100) / 100;
+  // 整张牌旋转后会比牌宽多出 overhang，两侧都要留出来，首末张才不会被屏幕边缘切掉
+  const overhang = Math.ceil((cw / 2) * cosA + (ch / 2) * sinA - cw / 2);
+  // 21 个牌位整排铺满且不越界；窄屏按可容纳宽度收缩步进
+  const step = Math.max(8, Math.min(DV_PEEK, Math.floor((w - cw - overhang * 2) / (DV_SLOTS - 1))));
+  const fanW = (DV_SLOTS - 1) * step + cw;
+  const base = Math.round((w - fanW) / 2);
+  // 整张牌都显示：扇区高度 = 弧线落差 + 牌高 + 旋转后上下外扩，底边正好是扇区下沿
+  const fanH = Math.ceil((DV_ARC_H + (ch / 2) * (1 + cosA) + (cw / 2) * sinA) * 100) / 100;
   stage.style.setProperty('--dv-cw', `${cw}px`);
   wrap.style.height = `${fanH}px`;
   track.style.width = `${fanW + step}px`;
   for (let k = 0; k < track.children.length; k++) {
     const el = track.children[k];
-    el.style.clipPath = `inset(0 0 calc(100% - ${head}px) 0)`;
+    el.style.clipPath = '';
     el.style.zIndex = String(DV_SLOTS - Math.abs(k - (DV_SLOTS - 1) / 2));
   }
-  d._fan = { n: d.pool.length, cw, ch, step, base, head, fanH, w };
+  d._fan = { n: d.pool.length, cw, ch, step, base, fanH, w };
   if (typeof d.fanX !== 'number') d.fanX = Math.floor((d.pool.length - DV_SLOTS) / 2);  // 默认窗口居中
   d.fanX = dvFanMod(d.fanX || 0, d.pool.length);
   dvFanPlace();
@@ -604,6 +611,7 @@ export async function startDivineDraw() {
   const back = $('divine-back-3'); if (back) back.classList.add('hide');
   const stage = $('divine-draw-stage');
   if (stage) { stage.classList.remove('hide'); stage.innerHTML = shuffleMarkup(); bindDrawStage(); }
+  applyDivineStep();   // 抽牌态：收起底部留白，让牌扇整张牌贴到页面底部
   dvLater(finishDivineShuffle, 1200);
 }
 // 重新抽牌：清空问题并回到第一步

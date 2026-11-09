@@ -708,9 +708,12 @@ a { text-decoration:none; color:inherit; }
 /* 抽牌舞台：占满第三步剩余高度；中间牌阵区弹性伸缩，底部牌扇贴底 */
 .dv-draw-stage { flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; }
 .dv-target { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-/* 抽牌阶段：牌阵贴住牌扇上沿，扇区高度由 JS 按弧线实际落差给定，不留底部空白 */
-.dv-draw-stage .dv-target { align-items:flex-end; }
-.dv-draw-stage .dv-board { margin-bottom:0; }
+/* 抽牌阶段：牌阵在剩余区域居中，牌扇整张牌铺在底部，两者保留正常间距 */
+.dv-draw-stage .dv-target { align-items:center; }
+/* 抽牌进行中：收起页面级留白，让牌的底边距视口底部约 10px（含安全区） */
+#page-divine .page-scroll.dv-drawing { padding-bottom:0; }
+.divine-body.dv-drawing { padding-bottom:0; }
+.divine-step.dv-drawing { padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
 .dv-draw-head { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:10px; }
 .dv-draw-status { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
 .dv-draw-count { flex-shrink:0; font-size:13px; font-weight:600; color:var(--theme-color); }
@@ -727,7 +730,7 @@ a { text-decoration:none; color:inherit; }
 .dv-board.dv-drawing .dv-card { opacity:0; transform:scale(.72); transition:transform .3s ease, opacity .3s ease; }
 .dv-board.dv-drawing .dv-card.is-placed { opacity:1; transform:scale(1); }
 .dv-board.dv-drawing .dv-slot-label { opacity:0; }
-/* 底部牌扇：21 个牌位沿弧排开，左右两侧出血到屏幕边（扇内裁切，整页不横向溢出） */
+/* 底部牌扇：21 个牌位完整（不裁切）沿上凸弧排开，两侧留出旋转外溢，整页不横向溢出 */
 .dv-fan-wrap { position:relative; flex-shrink:0; width:100%; margin:0; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; height:64px; }
 /* 牌扇满宽出血：抵消 .divine-step 的左右 16px 内边距，让扇面铺到屏幕两侧 */
 .dv-draw-stage .dv-fan-wrap { width:calc(100% + 32px); margin-left:-16px; margin-right:-16px; }
