@@ -297,18 +297,16 @@ a { text-decoration:none; color:inherit; }
   .love-contacts-body .empty { padding: 40px 0; text-align:center; color:var(--text-secondary); font-size:13px; }
 }
 
-/* ========== 联系人页 · 本月心情日历（复用心情数据，只渲染当月） ==========
-   页内布局：顶栏固定 → 日历固定高度 → 联系人列表自身滚动（页面不整体滚动） */
-#page-love .page-scroll { overflow:hidden; padding-bottom:0; }
-#page-love .love-contacts-body {
-  flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
-  padding-bottom:calc(var(--nav-height) + 26px + env(safe-area-inset-bottom, 0px));
-}
+/* ========== 手机桌面第二页 · 本月心情日历小组件（复用心情数据，只渲染当月） ==========
+   壁纸红线：组件只用半透明主题色叠加，绝不覆盖 #page-home 的 --home-bg 壁纸 */
 .love-mood-cal {
   flex:0 0 auto; min-height:0; display:flex; flex-direction:column; gap:4px;
-  height:clamp(232px, 40vh, 316px);
-  margin:6px clamp(12px, 4vw, 20px) 8px; padding:8px 10px;
-  background:var(--card-bg); border-radius:16px; box-shadow:var(--shadow);
+  height:clamp(240px, 42vh, 340px);
+  margin:0 2px; padding:8px 10px;
+  background:color-mix(in srgb, var(--theme-color) 14%, rgba(255,255,255,0.46));
+  border:1px solid rgba(255,255,255,0.4); border-radius:18px;
+  box-shadow:0 6px 20px rgba(60,90,140,0.16);
+  -webkit-backdrop-filter:blur(14px) saturate(1.15); backdrop-filter:blur(14px) saturate(1.15);
   box-sizing:border-box; overflow:hidden; cursor:pointer;
 }
 .love-mood-cal-head { flex-shrink:0; height:18px; display:flex; align-items:center; gap:4px; }
@@ -327,9 +325,9 @@ a { text-decoration:none; color:inherit; }
   display:flex; align-items:center; justify-content:center;
 }
 .love-mood-day.blank { pointer-events:none; }
-.love-mood-day.has-mood { background:color-mix(in srgb, var(--theme-color) 26%, var(--card-bg)); }
-.love-mood-day.has-mood.lv2 { background:color-mix(in srgb, var(--theme-color) 16%, var(--card-bg)); }
-.love-mood-day.has-mood.lv3 { background:color-mix(in srgb, var(--theme-color) 9%, var(--card-bg)); }
+.love-mood-day.has-mood { background:color-mix(in srgb, var(--theme-color) 34%, transparent); }
+.love-mood-day.has-mood.lv2 { background:color-mix(in srgb, var(--theme-color) 21%, transparent); }
+.love-mood-day.has-mood.lv3 { background:color-mix(in srgb, var(--theme-color) 11%, transparent); }
 .love-mood-day .mood-dot { position:absolute; top:3px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--theme-color); }
 .love-mood-day.lv2 .mood-dot { opacity:.72; }
 .love-mood-day.lv3 .mood-dot { opacity:.5; }
@@ -362,7 +360,7 @@ a { text-decoration:none; color:inherit; }
   padding: 12px 16px calc(var(--nav-height) + 38px);
   display: flex; flex-direction: column; gap: 14px;
 }
-/* 第一页应用格：4 个图标一行并排，居中略放大；紧跟待办条下方 */
+/* 第一页应用格：4 列网格（「心情日历」入口已移除，第 4 格留空，其余图标位置不变） */
 .home-swiper-page.page-1 .home-apps-grid {
   grid-template-columns: repeat(4, 1fr);
   margin-top: 20px;
@@ -372,7 +370,6 @@ a { text-decoration:none; color:inherit; }
 /* 第二页占位图标（淡灰底，无交互） */
 .app-cell.placeholder { cursor: default; opacity: .55; }
 .app-cell.placeholder .app-tile { background: var(--theme-light); box-shadow: none; }
-.page-2-top-area { flex-shrink: 0; }
 
 /* 底部分页小圆点 */
 .home-dots {
@@ -1940,10 +1937,6 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
                   <span class="app-tile"><svg class="i"><use href="#icon-sparkles"/></svg></span>
                   <span class="app-name">占卜</span>
                 </button>
-                <button class="app-cell" onclick="openMoodPage()" title="心情日历">
-                  <span class="app-tile"><svg class="i"><use href="#icon-calendar"/></svg></span>
-                  <span class="app-name">心情日历</span>
-                </button>
                 <button class="app-cell" onclick="openInspirationPage()" title="灵感随记">
                   <span class="app-tile"><svg class="i"><use href="#icon-bulb"/></svg></span>
                   <span class="app-name">灵感随记</span>
@@ -1955,10 +1948,18 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               </div>
             </div>
 
-            <!-- ========== 第二页：扩展入口预留 ========== -->
+            <!-- ========== 第二页：桌面小组件 + 扩展入口 ========== -->
             <div class="home-swiper-page page-2">
-              <!-- 上方留白区（预留做展示卡牌/大装饰） -->
-              <div class="page-2-top-area" style="height: 26vh;"></div>
+              <!-- 本月心情日历小组件：点任意处进入心情日历页；有记录的日子直接打开当天 -->
+              <div class="love-mood-cal" onclick="openLoveMoodPage()" title="打开心情日历">
+                <div class="love-mood-cal-head">
+                  <span class="love-mood-title"></span>
+                  <span class="love-mood-empty hide">本月暂无记录</span>
+                  <svg class="i i-sm love-mood-arrow"><use href="#icon-chevron-right"/></svg>
+                </div>
+                <div class="love-mood-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+                <div class="love-mood-grid"></div>
+              </div>
 
               <!-- 中下方应用网格（扩展入口：阅读 + 音乐） -->
               <div class="home-apps-grid">
@@ -2222,16 +2223,6 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <button class="top-bar-btn" onclick="createNewContact()" title="新建联系人">
             <svg class="i"><use href="#icon-plus"/></svg>
           </button>
-        </div>
-        <!-- 本月心情日历：点任意处进入心情日历页；有记录的日子直接打开当天 -->
-        <div class="love-mood-cal" onclick="openLoveMoodPage()" title="打开心情日历">
-          <div class="love-mood-cal-head">
-            <span class="love-mood-title"></span>
-            <span class="love-mood-empty hide">本月暂无记录</span>
-            <svg class="i i-sm love-mood-arrow"><use href="#icon-chevron-right"/></svg>
-          </div>
-          <div class="love-mood-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
-          <div class="love-mood-grid"></div>
         </div>
         <div class="love-contacts-body" id="mobile-contacts"></div>
       </div>
