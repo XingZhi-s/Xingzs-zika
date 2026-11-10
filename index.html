@@ -296,6 +296,44 @@ a { text-decoration:none; color:inherit; }
   .love-contacts-body .contact-card { background:var(--card-bg); border-radius:18px; box-shadow:var(--shadow); }
   .love-contacts-body .empty { padding: 40px 0; text-align:center; color:var(--text-secondary); font-size:13px; }
 }
+
+/* ========== 联系人页 · 本月心情日历（复用心情数据，只渲染当月） ==========
+   页内布局：顶栏固定 → 日历固定高度 → 联系人列表自身滚动（页面不整体滚动） */
+#page-love .page-scroll { overflow:hidden; padding-bottom:0; }
+#page-love .love-contacts-body {
+  flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  padding-bottom:calc(var(--nav-height) + 26px + env(safe-area-inset-bottom, 0px));
+}
+.love-mood-cal {
+  flex:0 0 auto; min-height:0; display:flex; flex-direction:column; gap:4px;
+  height:clamp(232px, 40vh, 316px);
+  margin:6px clamp(12px, 4vw, 20px) 8px; padding:8px 10px;
+  background:var(--card-bg); border-radius:16px; box-shadow:var(--shadow);
+  box-sizing:border-box; overflow:hidden; cursor:pointer;
+}
+.love-mood-cal-head { flex-shrink:0; height:18px; display:flex; align-items:center; gap:4px; }
+.love-mood-title { font-size:13px; font-weight:600; color:var(--text-primary); line-height:18px; }
+.love-mood-empty { margin-left:auto; font-size:10px; color:var(--text-secondary); white-space:nowrap; }
+.love-mood-cal .love-mood-arrow { margin-left:auto; width:14px; height:14px; color:var(--text-secondary); }
+.love-mood-empty:not(.hide) + .love-mood-arrow { margin-left:0; }
+.love-mood-week, .love-mood-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:3px; }
+.love-mood-week { flex-shrink:0; }
+.love-mood-week span { text-align:center; font-size:10px; line-height:14px; color:var(--text-secondary); }
+.love-mood-grid { flex:1 1 auto; min-height:0; }
+.love-mood-day {
+  position:relative; min-width:0; min-height:0; padding:0; border:none; border-radius:7px;
+  background:transparent; color:var(--text-primary); font-weight:500; line-height:1;
+  font-size:clamp(10px, 2.9vw, 12px);
+  display:flex; align-items:center; justify-content:center;
+}
+.love-mood-day.blank { pointer-events:none; }
+.love-mood-day.has-mood { background:color-mix(in srgb, var(--theme-color) 26%, var(--card-bg)); }
+.love-mood-day.has-mood.lv2 { background:color-mix(in srgb, var(--theme-color) 16%, var(--card-bg)); }
+.love-mood-day.has-mood.lv3 { background:color-mix(in srgb, var(--theme-color) 9%, var(--card-bg)); }
+.love-mood-day .mood-dot { position:absolute; top:3px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--theme-color); }
+.love-mood-day.lv2 .mood-dot { opacity:.72; }
+.love-mood-day.lv3 .mood-dot { opacity:.5; }
+.love-mood-day.today { box-shadow:inset 0 0 0 1.5px var(--theme-color); color:var(--theme-color); font-weight:700; }
 .home-deco-layer { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index: 5; }
 .home-deco-layer .deco-sticker { position:absolute; user-select:none; touch-action:none; pointer-events:auto; }
 .home-deco-layer .deco-sticker img { display:block; width:100%; height:100%; object-fit:contain; }
@@ -710,10 +748,10 @@ a { text-decoration:none; color:inherit; }
 .dv-target { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 /* 抽牌阶段：牌阵在剩余区域居中，牌扇整张牌铺在底部，两者保留正常间距 */
 .dv-draw-stage .dv-target { align-items:center; }
-/* 抽牌进行中：收起页面级留白，让牌的底边距视口底部约 10px（含安全区） */
+/* 抽牌进行中：收起页面级留白，让牌的底边压到页面底部（约 2px，含安全区） */
 #page-divine .page-scroll.dv-drawing { padding-bottom:0; }
 .divine-body.dv-drawing { padding-bottom:0; }
-.divine-step.dv-drawing { padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+.divine-step.dv-drawing { padding-bottom:calc(2px + env(safe-area-inset-bottom)); }
 .dv-draw-head { display:flex; align-items:center; gap:10px; width:100%; margin-bottom:10px; }
 .dv-draw-status { flex:1; min-width:0; font-size:13px; color:var(--text-secondary); }
 .dv-draw-count { flex-shrink:0; font-size:13px; font-weight:600; color:var(--theme-color); }
@@ -2184,6 +2222,16 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <button class="top-bar-btn" onclick="createNewContact()" title="新建联系人">
             <svg class="i"><use href="#icon-plus"/></svg>
           </button>
+        </div>
+        <!-- 本月心情日历：点任意处进入心情日历页；有记录的日子直接打开当天 -->
+        <div class="love-mood-cal" onclick="openLoveMoodPage()" title="打开心情日历">
+          <div class="love-mood-cal-head">
+            <span class="love-mood-title"></span>
+            <span class="love-mood-empty hide">本月暂无记录</span>
+            <svg class="i i-sm love-mood-arrow"><use href="#icon-chevron-right"/></svg>
+          </div>
+          <div class="love-mood-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+          <div class="love-mood-grid"></div>
         </div>
         <div class="love-contacts-body" id="mobile-contacts"></div>
       </div>

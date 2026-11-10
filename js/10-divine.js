@@ -321,8 +321,8 @@ function shuffleMarkup() {
 // 牌沿弧滚动、越靠两侧越斜，像拨动转盘；因为队列循环取模，任意牌都能转到任意位上。
 const DV_SLOTS = 21;                          // 屏幕上保留的牌位数
 const DV_PEEK = 17;                           // 相邻牌位的横向步进目标（露出的可点宽度），窄屏按可容纳宽度收缩
-const DV_FAN_MAXA = 24;                       // 最外侧牌位的倾角（度）
-const DV_ARC_H = 116;                         // 弧线落差：中间那张最高（y=0），向两侧逐渐降低到 116
+const DV_FAN_MAXA = 10;                       // 最外侧牌位的倾角（度）：牌基本竖直，只轻微朝外倾斜
+const DV_ARC_H = 12;                          // 弧线落差：中间那张最高（y=0），向两侧缓慢降低到 12（浅弧）
 let dvFanDrag = null;       // { pointerId, wrap, startX, startY, startFanX, moved, card, lastX, lastT, vx }
 let dvFanRAF = 0;           // 位置刷新 rAF
 let dvFanGlideRAF = 0;      // 松手惯性 rAF
@@ -344,10 +344,10 @@ function dvFanPlace() {
   for (let k = 0; k < cards.length; k++) {
     const el = cards[k];
     const qi = (q0 + k) % n;
-    // 槽距（含小数部分）→ 归一化到 [-1,1]：中间竖直、两侧 ±24°，纵向按落差抛物线抬起
+    // 槽距（含小数部分）→ 归一化到 [-1,1]：中间竖直、两侧 ±10°，纵向按浅弧缓慢下沉
     const t = Math.max(-1, Math.min(1, (k - (DV_SLOTS - 1) / 2 - frac) / ((DV_SLOTS - 1) / 2)));
     const x = m.base + (k - frac) * m.step;
-    const y = DV_ARC_H * t * t;
+    const y = m.topPad + m.arcH * t * t;
     el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${(t * DV_FAN_MAXA).toFixed(2)}deg)`;
     if (el._qi !== qi) {
       el._qi = qi;
@@ -401,8 +401,17 @@ function dvFanLayout(stage) {
   const step = Math.max(8, Math.min(DV_PEEK, Math.floor((w - cw - overhang * 2) / (DV_SLOTS - 1))));
   const fanW = (DV_SLOTS - 1) * step + cw;
   const base = Math.round((w - fanW) / 2);
-  // 整张牌都显示：扇区高度 = 弧线落差 + 牌高 + 旋转后上下外扩，底边正好是扇区下沿
-  const fanH = Math.ceil((DV_ARC_H + (ch / 2) * (1 + cosA) + (cw / 2) * sinA) * 100) / 100;
+  // 整张牌可见且底边压到扇区下沿：按倾角反算旋转后的底部外扩，取最大值；
+  // 再校核浅弧下沉与旋转顶部外扩，避免最外侧牌的上圆角被扇区裁掉
+  let minTop = 0;
+  for (let i = -24; i <= 24; i++) {
+    const tt = i / 24, aa = Math.abs(tt) * rad;
+    const top = DV_ARC_H * tt * tt + (ch / 2) * (1 - Math.cos(aa)) - (cw / 2) * Math.sin(aa);
+    if (top < minTop) minTop = top;
+  }
+  const topPad = Math.max(0, Math.ceil(-minTop));
+  const dipMax = (ch / 2) * (cosA - 1) + (cw / 2) * sinA;
+  const fanH = Math.ceil((topPad + DV_ARC_H + ch + dipMax) * 100) / 100;
   stage.style.setProperty('--dv-cw', `${cw}px`);
   wrap.style.height = `${fanH}px`;
   track.style.width = `${fanW + step}px`;
@@ -411,7 +420,7 @@ function dvFanLayout(stage) {
     el.style.clipPath = '';
     el.style.zIndex = String(DV_SLOTS - Math.abs(k - (DV_SLOTS - 1) / 2));
   }
-  d._fan = { n: d.pool.length, cw, ch, step, base, fanH, w };
+  d._fan = { n: d.pool.length, cw, ch, step, base, fanH, w, arcH: DV_ARC_H, topPad };
   if (typeof d.fanX !== 'number') d.fanX = Math.floor((d.pool.length - DV_SLOTS) / 2);  // 默认窗口居中
   d.fanX = dvFanMod(d.fanX || 0, d.pool.length);
   dvFanPlace();

@@ -331,11 +331,21 @@ export function openPage(id, pushPrev=false) {
   if (id === 'page-my-stickers') renderMyStickersGrid();
   if (id === 'page-contact-settings-list') renderContactSettingsList();
   if (id === 'page-love' || id === 'page-chat') renderContacts();
+  // 联系人页本月心情日历（只渲染当月，数据复用 09-mood.js）
+  if (id === 'page-love' && window.renderLoveMoodCalendar) window.renderLoveMoodCalendar();
   if (id === 'page-home') { renderHomeAvatar(); renderTodos(); }
   state.lastPage = id;
   // A26：切页触发一次补算（聊天页由 openChat 在进入前 await，避免二次插入）
   if (id !== 'page-chat' && typeof window.__runCatchUp === 'function') {
-    try { window.__runCatchUp().catch(() => {}); } catch (e) { /* 静默 */ }
+    try {
+      const p = window.__runCatchUp();
+      // 补算可能补出今天的心情记录，完成后刷新一次小日历
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          if (state.lastPage === 'page-love' && window.renderLoveMoodCalendar) window.renderLoveMoodCalendar();
+        }).catch(() => {});
+      }
+    } catch (e) { /* 静默 */ }
   }
   // 页面切换后刷新迷你播放条（由 12-music.js 挂载）
   if (window.updateMusicMiniBar) window.updateMusicMiniBar();

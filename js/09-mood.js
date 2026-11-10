@@ -57,15 +57,73 @@ async function getMonthMoods(role, y, m) {
   return map;
 }
 
+// ---- 联系人页「本月心情」小日历：只渲染当月，数据仍走 getMonthMoods ----
+function moodLevel(emoji) {
+  const i = MOOD_GROUPS.findIndex(g => g.emojis.includes(emoji));
+  return i === 0 ? 1 : i === 1 ? 3 : 2; // 1 开心（最深）/ 2 日常 / 3 负面（最浅）
+}
+export async function renderLoveMoodCalendar() {
+  const cards = document.querySelectorAll('.love-mood-cal');
+  if (!cards.length) return;
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth();
+  const records = await getMonthMoods(state.moodRole || 'me', y, m);
+  const days = new Date(y, m + 1, 0).getDate();
+  const offset = new Date(y, m, 1).getDay(); // 周日起始，与心情页一致
+  const rows = Math.ceil((offset + days) / 7); // 当月固定 5–6 行
+  const todayDs = dateStr(today);
+  const cells = [];
+  for (let i = 0; i < offset; i++) cells.push('<span class="love-mood-day blank"></span>');
+  for (let d = 1; d <= days; d++) {
+    const ds = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const rec = records[String(d).padStart(2, '0')];
+    const last = lastRecord(rec);
+    const cls = 'love-mood-day' + (ds === todayDs ? ' today' : '') +
+      (rec ? ` has-mood lv${moodLevel(last ? last.emoji : '')}` : '');
+    cells.push(`<button class="${cls}" onclick="event.stopPropagation();openLoveMoodDay('${ds}')">` +
+      `<span class="lm-num">${d}</span>${rec ? '<span class="mood-dot"></span>' : ''}</button>`);
+  }
+  for (let i = offset + days; i < rows * 7; i++) cells.push('<span class="love-mood-day blank"></span>');
+  const html = cells.join('');
+  const title = `${y}年${m + 1}月`;
+  const isEmpty = !Object.keys(records).length;
+  cards.forEach(card => {
+    const t = card.querySelector('.love-mood-title');
+    if (t) t.textContent = title;
+    const g = card.querySelector('.love-mood-grid');
+    if (g) {
+      g.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+      g.innerHTML = html;
+    }
+    const e = card.querySelector('.love-mood-empty');
+    if (e) e.classList.toggle('hide', !isEmpty);
+  });
+}
+// 点日历任意处：进心情页（当月）
+export function openLoveMoodPage() {
+  const n = new Date();
+  state.moodCursor = { y: n.getFullYear(), m: n.getMonth() };
+  return openMoodPage();
+}
+// 点某一天：先切到该月进心情页；该天有记录再直接打开当天
+export async function openLoveMoodDay(ds) {
+  state.moodCursor = { y: Number(ds.slice(0, 4)), m: Number(ds.slice(5, 7)) - 1 };
+  await openMoodPage();
+  const mood = await getMood(state.moodRole || 'me', ds);
+  if (mood) await openMoodDay(ds);
+}
+
 // ---- 页面入口与角色切换（抽屉式联系人菜单） ----
 export async function openMoodPage() {
   openPage('page-mood');
   // 当前选中的联系人可能已被删除，回退到“我的心情”
+  const roleBefore = state.moodRole;
   if (state.moodRole !== 'me') {
     const contacts = await getAllContacts();
     if (!contacts.some(c => c.id === state.moodRole)) state.moodRole = 'me';
   }
   renderMoodCalendar();
+  if (state.moodRole !== roleBefore) renderLoveMoodCalendar();
 }
 // 抽屉：渲染“我的心情” + 全部联系人（头像 + 名字）
 export async function renderMoodDrawer() {
@@ -96,11 +154,13 @@ export function pickMoodRole(role) {
   state.moodRole = role;
   toggleMoodDrawer(false);
   renderMoodCalendar();
+  renderLoveMoodCalendar();
 }
 export function switchMoodRole(role) {
   state.moodRole = role;
   renderMoodDrawer();
   renderMoodCalendar();
+  renderLoveMoodCalendar();
 }
 
 // ---- 日历渲染 ----
@@ -198,6 +258,7 @@ export async function saveMyMood() {
   await dbPut('meta', { k: key, records: recs });
   state._moodEdit = null;
   renderMoodCalendar();
+  renderLoveMoodCalendar();
   toast('心情已记录');
   // 重新打开弹窗，让新记录出现在时间线里
   await openMoodDay(ed.date);
@@ -335,6 +396,7 @@ export function initMoodModule() {
   const n = new Date();
   state.moodRole = 'me';
   state.moodCursor = { y: n.getFullYear(), m: n.getMonth() };
+  renderLoveMoodCalendar();
 }
 export function initInspirationModule() {
   renderInspirations();
