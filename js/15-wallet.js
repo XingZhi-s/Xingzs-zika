@@ -275,8 +275,22 @@ async function tickInner(cid) {
 }
 
 // ============ 钱包页 ============
+let _sharedOpen = false; // 共用卡区块默认收起
+
 export function openWallet() {
+  _sharedOpen = false;
   openPage('page-wallet');
+}
+
+function ledgerRowsHtml(list) {
+  return list.map(x => `
+    <div class="wallet-ledger-row">
+      <div class="wl-main">
+        <span class="wl-peer">${escapeHtml(x.peer || '—')}</span>
+        <span class="wl-time">${formatTime(x.time)}</span>
+      </div>
+      <div class="wl-amt ${x.dir === 'in' ? 'in' : 'out'}">${x.dir === 'in' ? '+' : '-'}¥${fmtMoney(x.amount)}</div>
+    </div>`).join('');
 }
 
 export async function renderWalletPage() {
@@ -300,15 +314,6 @@ export async function renderWalletPage() {
       <div class="ws-bal">¥${fmtMoney(cw.shared)}</div>
       <svg class="i i-sm ws-arrow"><use href="#icon-chevron-right"/></svg>
     </div>`).join('') : `<div class="wallet-empty">还没有联系人</div>`;
-  const ledger = (await getLedger()).slice().sort((a, b) => b.time - a.time).slice(0, 30);
-  const ledgerHtml = ledger.length ? ledger.map(x => `
-    <div class="wallet-ledger-row">
-      <div class="wl-main">
-        <span class="wl-peer">${escapeHtml(x.peer || '—')}</span>
-        <span class="wl-time">${formatTime(x.time)}</span>
-      </div>
-      <div class="wl-amt ${x.dir === 'in' ? 'in' : 'out'}">${x.dir === 'in' ? '+' : '-'}¥${fmtMoney(x.amount)}</div>
-    </div>`).join('') : `<div class="wallet-empty">还没有流水</div>`;
 
   box.innerHTML = `
     <div class="wallet-hero">
@@ -323,16 +328,6 @@ export async function renderWalletPage() {
       <div class="wallet-hero-label">我的卡 · 余额</div>
       <div class="wallet-hero-bal">¥${fmtMoney(w.balance)}</div>
       <div class="wallet-hero-sub">${w.mode === 'accumulate' ? '每月累计' : '每月清零'} · 每月 ¥${fmtMoney(w.monthly)}</div>
-    </div>
-
-    <div class="wallet-section">
-      <div class="wallet-section-title">共用卡</div>
-      <div class="wallet-card-list">${sharedHtml}</div>
-    </div>
-
-    <div class="wallet-section">
-      <div class="wallet-section-title">流水</div>
-      <div class="wallet-ledger">${ledgerHtml}</div>
     </div>
 
     <div class="wallet-section">
@@ -361,7 +356,35 @@ export async function renderWalletPage() {
         <div class="cs-hint">清零：每月把余额重置为每月金额；累计：每月在余额上累加。修改起点余额会把我的卡余额重置为该值。</div>
       </div>
     </div>
+
+    <div class="wallet-section">
+      <div class="wallet-card-list">
+        <button type="button" class="wallet-shared-head${_sharedOpen ? ' open' : ''}" onclick="walletToggleShared()">
+          <span class="wallet-shared-title">共用卡</span>
+          <span class="ws-count">${rows.length} 张</span>
+          <svg class="i i-sm ws-arrow"><use href="#icon-chevron-right"/></svg>
+        </button>
+        <div class="wallet-shared-list${_sharedOpen ? '' : ' hide'}">${sharedHtml}</div>
+      </div>
+    </div>
   `;
+}
+
+export function walletToggleShared() {
+  _sharedOpen = !_sharedOpen;
+  renderWalletPage();
+}
+
+// ============ 流水（二级页） ============
+export function openWalletLedger() {
+  openPage('page-wallet-ledger');
+}
+
+export async function renderWalletLedger() {
+  const box = $('wallet-ledger-body');
+  if (!box) return;
+  const ledger = (await getLedger()).slice().sort((a, b) => b.time - a.time).slice(0, 30);
+  box.innerHTML = `<div class="wallet-ledger">${ledger.length ? ledgerRowsHtml(ledger) : '<div class="wallet-empty">还没有流水</div>'}</div>`;
 }
 
 export async function walletSaveSettings() {
@@ -383,17 +406,20 @@ export async function walletSaveSettings() {
 
 // ============ 联系人设置页：共用卡 + 红包参数 ============
 export async function walletSettingsHtml(cid) {
-  const cw = await getContactWallet(cid);
+  const [cw, c] = await Promise.all([getContactWallet(cid), getContact(cid)]);
   return `
     <div class="cs-section">
-      <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-wallet"/></svg> 钱包与红包</div>
-      <div class="cs-card">
-        <div class="cs-row">
-          <span class="cs-label">共用卡余额</span>
-          <span class="cs-value">
-            <div class="range-row" style="justify-content:flex-end;"><span class="cs-unit">¥</span><input type="number" min="0" step="0.01" value="${fmtMoney(cw.shared)}" id="wc-shared"></div>
-          </span>
+      <div class="wallet-card-list" style="margin-bottom:12px;">
+        <div class="wallet-shared-row" style="cursor:default;">
+          <img class="avatar" src="${escapeHtml((c && c.avatar) || DEFAULT_AVATAR)}" alt="">
+          <div class="ws-info">
+            <div class="ws-name">${escapeHtml((c && c.name) || '联系人')}</div>
+            <div class="ws-sub">共用卡</div>
+          </div>
+          <div class="ws-bal">¥<input class="wc-bal-input" type="number" min="0" step="0.01" value="${fmtMoney(cw.shared)}" style="width:${Math.max(2, String(fmtMoney(cw.shared)).length)}ch" oninput="this.style.width=Math.max(2,this.value.length)+'ch'" id="wc-shared"></div>
         </div>
+      </div>
+      <div class="cs-card">
         <div class="cs-row cs-row-switch">
           <span class="cs-label">Ta 会发红包</span>
           <span class="cs-value"><div class="switch ${cw.rpEnabled ? 'on' : ''}" id="wc-rp-switch" onclick="walletToggleRp()"></div></span>
@@ -479,6 +505,27 @@ export function walletToggleRp() {
     const sw = $('wc-rp-switch');
     if (sw) sw.classList.toggle('on', cw.rpEnabled);
   });
+}
+
+// ============ 联系人「钱包与红包」二级页 ============
+export function openContactWalletSettings() {
+  if (!state.currentContactSettingId) return toast('请先选择联系人');
+  openPage('page-contact-wallet');
+}
+
+export async function renderContactWalletSettings() {
+  const box = $('cwallet-body');
+  if (!box) return;
+  const cid = state.currentContactSettingId;
+  if (!cid) { box.innerHTML = '<div class="empty">未选择联系人</div>'; return; }
+  box.innerHTML = await walletSettingsHtml(cid);
+}
+
+export function backFromWalletSettings() {
+  const cid = state.currentContactSettingId;
+  if (!cid) return openPage('page-me');
+  if (window.openContactSetting) return window.openContactSetting(cid, state.csFromPage);
+  return openPage('page-contact-setting');
 }
 
 // ============ 发红包 ============
@@ -626,6 +673,12 @@ export function walletResume() {
 export function initWalletModule() {
   window.openWallet = openWallet;
   window.renderWalletPage = renderWalletPage;
+  window.walletToggleShared = walletToggleShared;
+  window.openWalletLedger = openWalletLedger;
+  window.renderWalletLedger = renderWalletLedger;
+  window.openContactWalletSettings = openContactWalletSettings;
+  window.renderContactWalletSettings = renderContactWalletSettings;
+  window.backFromWalletSettings = backFromWalletSettings;
   window.walletSaveSettings = walletSaveSettings;
   window.walletSaveContactSettings = walletSaveContactSettings;
   window.walletToggleRp = walletToggleRp;

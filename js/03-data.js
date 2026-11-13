@@ -331,6 +331,8 @@ export function openPage(id, pushPrev=false) {
   if (id === 'page-my-stickers') renderMyStickersGrid();
   if (id === 'page-contact-settings-list') renderContactSettingsList();
   if (id === 'page-wallet' && window.renderWalletPage) window.renderWalletPage();
+  if (id === 'page-wallet-ledger' && window.renderWalletLedger) window.renderWalletLedger();
+  if (id === 'page-contact-wallet' && window.renderContactWalletSettings) window.renderContactWalletSettings();
   if (id === 'page-love' || id === 'page-chat') renderContacts();
   // 手机桌面第二页的心情日历小组件（只渲染当月，数据复用 09-mood.js）
   if (id === 'page-home' && window.renderLoveMoodCalendar) window.renderLoveMoodCalendar();

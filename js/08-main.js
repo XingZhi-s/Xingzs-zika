@@ -424,7 +424,7 @@ async function periodicCheck() {
   const changed = await runCatchUp();
   if (changed) {
     renderContacts();
-    if (state.currentContactId) renderChatIncremental(state.currentContactId);
+    if (state.currentContactId) renderChatIncremental(state.currentContactId, { animate: false });
   }
   // 联系人提醒到点触发（串行执行，避免和 runCatchUp 同时写联系人）
   try { await enqueueTask(() => checkReminders(false)); } catch (e) { console.warn('提醒检查失败：', e); }
@@ -495,7 +495,7 @@ async function initApp() {
       try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
       try { await walletResume(); } catch (e) { console.warn('红包补算失败：', e); }
       renderContacts();
-      if (state.currentContactId) renderChatIncremental(state.currentContactId);
+      if (state.currentContactId) renderChatIncremental(state.currentContactId, { animate: false });
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
       try { await restoreCallState(); } catch (e) { console.warn('恢复通话状态失败：', e); }
     }
@@ -514,7 +514,7 @@ async function initApp() {
     try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
     try { await walletResume(); } catch (e) { console.warn('红包补算失败：', e); }
     renderContacts();
-    if (state.currentContactId) renderChatIncremental(state.currentContactId);
+    if (state.currentContactId) renderChatIncremental(state.currentContactId, { animate: false });
   };
   document.addEventListener('resume', () => { resumeSync('resume'); });
   window.addEventListener('pageshow', (e) => { if (e.persisted) resumeSync('pageshow'); });
@@ -711,6 +711,7 @@ window.openAnniversary = openAnniversary;
 window.openBatchImport = openBatchImport;
 window.openCardLib = openCardLib;
 window.openChat = openChat;
+window.renderChatIncremental = renderChatIncremental;
 window.openChoice = openChoice;
 window.openContactSetting = openContactSetting;
 window.openContactSettingsFromChatDirect = openContactSettingsFromChatDirect;

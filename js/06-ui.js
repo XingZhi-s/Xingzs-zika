@@ -181,7 +181,17 @@ export async function renderContactSetting(id) {
       </div>`;
   }).join('');
   const autoMode = c.statusAuto !== false;
-  const walletHtml = window.__walletSettingsHtml ? await window.__walletSettingsHtml(id) : '';
+  // 钱包与红包：只保留一行入口，具体参数在独立二级页（15-wallet.js）
+  const walletEntryHtml = `
+    <div class="cs-section">
+      <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-wallet"/></svg> 钱包与红包</div>
+      <div class="cs-card">
+        <div class="cs-row cs-row-link" onclick="openContactWalletSettings()">
+          <span class="cs-label">共用卡与红包参数</span>
+          <span class="cs-value">进入设置<svg class="i i-sm"><use href="#icon-chevron-right"/></svg></span>
+        </div>
+      </div>
+    </div>`;
   box.innerHTML = `
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-user"/></svg> 资料</div>
@@ -335,7 +345,7 @@ export async function renderContactSetting(id) {
       </div>
     </div>
 
-    ${walletHtml}
+    ${walletEntryHtml}
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-palette"/></svg> 聊天背景（仅本联系人）</div>

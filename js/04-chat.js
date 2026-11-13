@@ -74,7 +74,8 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   bindLongpress(box);
 }
 // A26：增量渲染（补出消息时只插入新增节点，避免整列表重建导致画面跳动）
-export async function renderChatIncremental(contactId) {
+export async function renderChatIncremental(contactId, opts = {}) {
+  const allowSeq = opts.animate !== false;
   const box = $('chat-messages');
   if (!box) return;
   const [c, me] = await Promise.all([getContact(contactId), getMe()]);
@@ -98,12 +99,14 @@ export async function renderChatIncremental(contactId) {
 
   const map = new Map();
   for (const el of Array.from(box.querySelectorAll('.msg-row[data-msgid]'))) map.set(el.dataset.msgid, el);
+  const hadNodes = map.size > 0;
   const keep = new Set(slice.map(m => m.id));
   // 删除已不存在的消息节点
   for (const [id, el] of map) if (!keep.has(id)) { el.remove(); map.delete(id); }
   // 更新已读文案 + 缺失节点按真实时间位置插入
   const typingRow = box.querySelector('[data-type="_typing"]');
   let inserted = 0;
+  const newNodes = [];
   for (let i = 0; i < slice.length; i++) {
     const m = slice[i];
     const old = map.get(m.id);
@@ -122,6 +125,7 @@ export async function renderChatIncremental(contactId) {
     else if (typingRow) box.insertBefore(node, typingRow);
     else box.appendChild(node);
     map.set(m.id, node);
+    newNodes.push({ node, m });
     inserted++;
   }
   // 输入中提示同步
@@ -132,6 +136,26 @@ export async function renderChatIncremental(contactId) {
       box.appendChild(tpl.firstElementChild);
     }
   } else if (typingRow) typingRow.remove();
+
+  // 多条回复逐条呈现：仅本次新增的对方消息，按 400–700ms 依次淡入上移
+  if (allowSeq && hadNodes && inserted) {
+    const seq = newNodes.filter(x => x.m.from === 'other' && x.m.type !== 'redpacket');
+    if (seq.length > 1) {
+      for (const x of seq) x.node.classList.add('msg-seq-wait');
+      let delay = 0;
+      for (const x of seq) {
+        setTimeout(() => {
+          if (!x.node.isConnected) return;
+          x.node.classList.remove('msg-seq-wait');
+          x.node.classList.add('msg-seq-in');
+          setTimeout(() => { if (x.node.isConnected) x.node.classList.remove('msg-seq-in'); }, 380);
+          const b = $('chat-messages');
+          if (b && b.scrollHeight - b.scrollTop - b.clientHeight < 80) b.scrollTop = b.scrollHeight;
+        }, delay);
+        delay += randInt(400, 700);
+      }
+    }
+  }
 
   if (atBottom) box.scrollTop = box.scrollHeight;
   else if (anchor && inserted) {
