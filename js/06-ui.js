@@ -181,6 +181,7 @@ export async function renderContactSetting(id) {
       </div>`;
   }).join('');
   const autoMode = c.statusAuto !== false;
+  const walletHtml = window.__walletSettingsHtml ? await window.__walletSettingsHtml(id) : '';
   box.innerHTML = `
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-user"/></svg> 资料</div>
@@ -333,6 +334,8 @@ export async function renderContactSetting(id) {
         <div class="cs-hint">每个联系人每天按此概率来电一次，睡觉类状态会顺延</div>
       </div>
     </div>
+
+    ${walletHtml}
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-palette"/></svg> 聊天背景（仅本联系人）</div>

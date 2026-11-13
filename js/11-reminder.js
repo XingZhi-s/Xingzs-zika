@@ -8,6 +8,7 @@ import { composeLetterToCurrent, makeCall } from './05-call-letter.js';
 /* ============ 聊天工具抽屉（数组驱动，第一项固定为「提醒」） ============ */
 const CHAT_TOOLS = [
   { id: 'reminder', name: '提醒', icon: 'icon-bell' },
+  { id: 'redpacket', name: '红包', icon: 'icon-gift' },
   { id: 'choice',   name: '选择', icon: 'icon-target' },
   { id: 'anni',     name: '纪念日', icon: 'icon-calendar' },
   { id: 'letter',   name: '写信', icon: 'icon-mail' },
@@ -47,6 +48,7 @@ export function runChatTool(id) {
   closeChatToolDrawer();
   switch (id) {
     case 'reminder': return openReminderPanel();
+    case 'redpacket': return window.openRedPacketPanel && window.openRedPacketPanel();
     case 'choice': return openChoice();
     case 'anni': return openAnniversary();
     case 'letter': return composeLetterToCurrent();

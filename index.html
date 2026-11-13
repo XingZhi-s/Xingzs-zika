@@ -864,7 +864,7 @@ a { text-decoration:none; color:inherit; }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不写死浅蓝渐变，改为半透明主题色叠加层：
      既继承全局背景（聊天背景由 applyChatBg 行内 !important 独占），又让换主题色时这些页面可见跟随 */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet {
     background: var(--theme-bg-light);
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -1764,6 +1764,71 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .insp-search-clear svg { stroke:var(--text-secondary); }
 .insp-hit { background:color-mix(in srgb, var(--theme-color) 20%, transparent); color:var(--theme-color); border-radius:3px; padding:0 2px; }
 
+/* ========== 钱包 ========== */
+.wallet-hero { position:relative; margin:0 16px 18px; padding:20px; border-radius:18px; color:#fff; overflow:hidden;
+  background:linear-gradient(135deg, var(--theme-color) 0%, color-mix(in srgb, var(--theme-color) 62%, #1f2937) 100%);
+  box-shadow:0 10px 24px color-mix(in srgb, var(--theme-color) 28%, transparent); }
+.wallet-hero-svg { position:absolute; right:-24px; top:-10px; width:220px; height:120px; pointer-events:none; }
+.wallet-hero-label { font-size:12px; opacity:.85; letter-spacing:.5px; }
+.wallet-hero-bal { font-size:34px; font-weight:700; margin-top:6px; letter-spacing:.5px; }
+.wallet-hero-sub { font-size:12px; opacity:.8; margin-top:8px; }
+.wallet-section { padding:0 16px 18px; }
+.wallet-section-title { font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:8px; }
+.wallet-card-list, .wallet-ledger, .wallet-settings { background:var(--card-bg); border-radius:14px; box-shadow:var(--shadow); padding:4px 14px; }
+.wallet-shared-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border-color); cursor:pointer; }
+.wallet-shared-row:last-child { border-bottom:none; }
+.wallet-shared-row .avatar { width:36px; height:36px; }
+.ws-info { flex:1; min-width:0; }
+.ws-name { font-size:14px; color:var(--text-primary); }
+.ws-sub { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+.ws-bal { font-size:14px; font-weight:600; color:var(--theme-color); }
+.ws-arrow { stroke:var(--text-secondary); }
+.wallet-ledger-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--border-color); }
+.wallet-ledger-row:last-child { border-bottom:none; }
+.wl-main { display:flex; flex-direction:column; min-width:0; }
+.wl-peer { font-size:13px; color:var(--text-primary); }
+.wl-time { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+.wl-amt { font-size:14px; font-weight:600; flex-shrink:0; }
+.wl-amt.in { color:var(--success); }
+.wl-amt.out { color:var(--text-primary); }
+.wallet-empty { padding:18px 0; text-align:center; font-size:13px; color:var(--text-secondary); }
+.wallet-settings { padding:6px 14px 14px; }
+.wallet-settings .cs-row { padding:10px 0; border-bottom:1px solid var(--border-color); }
+.wallet-settings .cs-row:last-of-type { border-bottom:none; }
+.wallet-settings .cs-label { font-size:13px; }
+.wallet-settings .cs-hint { margin-top:10px; }
+.wallet-settings select.input { flex:0 1 auto; max-width:100%; }
+
+/* 发红包面板 */
+.rp-panel-label { font-size:12px; color:var(--text-secondary); margin-bottom:8px; }
+.rp-card-opts { display:flex; flex-direction:column; gap:8px; }
+.rp-card-opt { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px; border-radius:12px;
+  border:1px solid var(--border-color); background:var(--card-bg); color:var(--text-primary); min-height:48px; text-align:left; }
+.rp-card-opt.sel { border-color:var(--theme-color); box-shadow:0 0 0 1px var(--theme-color) inset; background:var(--theme-light); }
+.rp-card-opt.disabled { opacity:.45; }
+.rp-opt-name { font-size:13px; }
+.rp-opt-bal { font-size:13px; font-weight:600; color:var(--theme-color); }
+.rp-amount-row { display:flex; align-items:center; gap:6px; padding:10px 14px; border-radius:12px; background:var(--theme-light); color:var(--theme-color); font-size:20px; font-weight:600; }
+.rp-amount-row input { flex:1; min-width:0; border:none; background:transparent; font-size:24px; font-weight:600; color:var(--theme-color); }
+.rp-quick-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.rp-quick { padding:6px 12px; min-height:34px; min-width:0; border-radius:20px; background:var(--theme-light); color:var(--theme-color); font-size:12px; }
+.rp-hint { font-size:11px; color:var(--text-secondary); line-height:1.6; margin-top:12px; }
+
+/* 红包消息卡片 */
+.msg-rp-bubble { padding:0; background:transparent; box-shadow:none; }
+.msg-rp-card { display:flex; align-items:center; gap:10px; width:210px; max-width:100%; padding:10px 12px; border-radius:12px;
+  border:1px solid color-mix(in srgb, var(--theme-color) 30%, var(--border-color));
+  background:color-mix(in srgb, var(--theme-color) 8%, var(--card-bg)); cursor:pointer; }
+.msg-rp-card:active { transform:scale(0.98); }
+.msg-rp-ic { width:38px; height:38px; min-width:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  background:color-mix(in srgb, var(--theme-color) 18%, var(--card-bg)); color:var(--theme-color); }
+.msg-rp-ic svg { width:22px; height:22px; stroke:var(--theme-color); }
+.msg-rp-body { flex:1; min-width:0; }
+.msg-rp-title { font-size:13px; color:var(--text-primary); }
+.msg-rp-amount { font-size:15px; font-weight:700; color:var(--theme-color); margin-top:2px; letter-spacing:.5px; }
+.msg-rp-status { font-size:11px; color:var(--text-secondary); margin-top:2px; }
+.msg-rp-card.done { opacity:.72; }
+
 </style>
 </head>
 <body>
@@ -1812,6 +1877,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
     <symbol id="icon-crystal" viewBox="0 0 24 24"><circle cx="12" cy="10" r="7"/><path d="M9 7.5a4.5 4.5 0 0 1 4-2.5"/><path d="M8.5 21l1-3h5l1 3"/><path d="M6 21h12"/></symbol>
     <symbol id="icon-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="16" rx="2"/><path d="M8 2h11a2 2 0 0 1 2 2v12"/></symbol>
+    <symbol id="icon-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 9h18"/><circle cx="17" cy="15" r="1.3"/><path d="M6 6V5a2 2 0 0 1 2-2h9"/></symbol>
+    <symbol id="icon-gift" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="12" rx="2"/><path d="M12 9v12"/><path d="M3 9h18"/><path d="M12 9c0-3-1.5-6-3.5-6S5 4.5 5 6s1.5 3 3.5 3H12z"/><path d="M12 9c0-3 1.5-6 3.5-6S19 4.5 19 6s-1.5 3-3.5 3H12z"/></symbol>
     <symbol id="dv-card-back-tarot" viewBox="0 0 64 100"><rect x="3" y="3" width="58" height="94" rx="9" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.6"/><rect x="7" y="7" width="50" height="86" rx="6" fill="none" stroke="#fff" stroke-opacity=".22" stroke-width="1"/><circle cx="32" cy="44" r="18" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1"/><path d="M32 26l4.3 13.7L50 44l-13.7 4.3L32 62l-4.3-13.7L14 44l13.7-4.3z" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.3"/><circle cx="32" cy="44" r="4" fill="#fff" fill-opacity=".55"/><path d="M14 84h36M14 16h36" stroke="#fff" stroke-opacity=".28" stroke-width="1"/><path d="M21 90h22" stroke="#fff" stroke-opacity=".18" stroke-width="1"/></symbol>
     <symbol id="icon-warning" viewBox="0 0 24 24"><path d="M12 3L2 21h20L12 3z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/></symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="4"/></symbol>
@@ -2403,6 +2470,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-image"/></svg></span><span>我的头像</span></div>
             <img id="me-avatar" src="" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#e5e7eb;border:1px solid #e3e8f0;">
           </div>
+          <div class="setting-item" onclick="openWallet()">
+            <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-wallet"/></svg></span><span>我的卡</span></div>
+            <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
+          </div>
         </div>
 
         <div class="list-section-title">我的内容</div>
@@ -2416,6 +2487,15 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
           </div>
         </div>
+      </div>
+
+      <!-- ========== 钱包（我的卡） ========== -->
+      <div class="page" id="page-wallet">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="openPage('page-me')"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow">我的卡</div>
+        </div>
+        <div style="padding:16px 0;" id="wallet-body"></div>
       </div>
 
       <!-- ========== 我的表情包管理页 ========== -->

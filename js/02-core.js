@@ -12,6 +12,7 @@ export function openDB() {
       if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'k' });
       if (!d.objectStoreNames.contains('me')) d.createObjectStore('me', { keyPath: 'k' });
       if (!d.objectStoreNames.contains('contacts')) d.createObjectStore('contacts', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('wallet')) d.createObjectStore('wallet', { keyPath: 'k' });
     };
     req.onsuccess = (e) => { state.db = e.target.result; resolve(state.db); };
     req.onerror = (e) => reject(e.target.error);

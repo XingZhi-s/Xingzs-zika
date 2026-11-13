@@ -295,6 +295,25 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
       </div>
     </div></div>`;
   }
+  else if (m.type === 'redpacket') {
+    // 红包卡片：金额未点开前遮盖，点开后显示
+    const rp = m.redPacket || {};
+    const isOut = m.from === 'me';
+    const done = rp.status === 'opened' || rp.status === 'expired' || rp.status === 'returned';
+    const fmt = n => { const s = (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); return s.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1'); };
+    const statusText = rp.status === 'opened' ? '已领取'
+      : rp.status === 'expired' ? '已过期'
+      : rp.status === 'returned' ? '已退回'
+      : (isOut ? '等待对方领取' : '点开领取');
+    contentHtml = `<div class="msg-bubble msg-rp-bubble"><div class="msg-rp-card${done ? ' done' : ''}" data-rpid="${escapeHtml(m.id)}" onclick="openRedPacket('${contactId}','${m.id}')">
+      <div class="msg-rp-ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 8.5l9 6 9-6"/><circle cx="12" cy="12.5" r="1.6"/></svg></div>
+      <div class="msg-rp-body">
+        <div class="msg-rp-title">红包</div>
+        <div class="msg-rp-amount">${done ? '¥' + fmt(rp.amount) : '¥ ••.••'}</div>
+        <div class="msg-rp-status">${statusText}</div>
+      </div>
+    </div></div>`;
+  }
   const typingHtml = (m.type === '_typing') ? `<div class="msg-bubble msg-typing"><span class="msg-typing-text">${escapeHtml(contactName)}正在输入</span><span class="typing-dots"><span></span><span></span><span></span></span></div>` : '';
   if (typingHtml) return `<div class="msg-row other" data-type="_typing"><img class="msg-avatar" src="${escapeHtml(otherAvatar||DEFAULT_AVATAR)}" alt=""><div class="msg-wrap">${typingHtml}</div></div>`;
   // 时间戳和已读

@@ -330,6 +330,7 @@ export function openPage(id, pushPrev=false) {
   }
   if (id === 'page-my-stickers') renderMyStickersGrid();
   if (id === 'page-contact-settings-list') renderContactSettingsList();
+  if (id === 'page-wallet' && window.renderWalletPage) window.renderWalletPage();
   if (id === 'page-love' || id === 'page-chat') renderContacts();
   // 手机桌面第二页的心情日历小组件（只渲染当月，数据复用 09-mood.js）
   if (id === 'page-home' && window.renderLoveMoodCalendar) window.renderLoveMoodCalendar();
@@ -475,6 +476,10 @@ export async function openChat(contactId) {
   // A26：进入聊天页之前一次性完成补算并落库，进入后不再二次插入
   if (typeof window.__runCatchUp === 'function') {
     try { await window.__runCatchUp(contactId); } catch (e) { console.warn('进入聊天前补算失败：', e); }
+  }
+  // 钱包红包：只补算当前这一位联系人，不参与全局 60 秒补算
+  if (typeof window.__walletOnChatOpen === 'function') {
+    try { await window.__walletOnChatOpen(contactId); } catch (e) { console.warn('进入聊天前红包补算失败：', e); }
   }
   state.currentContactId = contactId;
   const c = await getContact(contactId);

@@ -9,7 +9,7 @@
 // ============ 全局状态 ============
 
 export const DB_NAME = 'ZiKaDB';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const CALL_PERSIST_KEY = 'zika_call_v1';
 export const state = {
   db: null,

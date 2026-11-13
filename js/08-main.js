@@ -12,6 +12,7 @@ import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, init
 import { checkTogetherInvites, initMusicModule, musicAcceptInvite, musicBack, musicDelete, musicExitTogether, musicNext, musicOpenTogetherPicker, musicPickFiles, musicPlayId, musicPrev, musicRejectInvite, musicSeek, musicSetVolume, musicStartTogether, musicToggleLoop, musicTogglePlay, openMusicPage, renderGlobalStorage, requestPersistStorage, updateMusicMiniBar } from './12-music.js';
 import { checkPeriodReminders, openPeriodPage, periodAddPast, periodSaveSettings, periodToday, renderPeriodPage } from './13-period.js';
 import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
+import { initWalletModule, walletResume } from './15-wallet.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -492,6 +493,7 @@ async function initApp() {
       try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
       try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
       try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
+      try { await walletResume(); } catch (e) { console.warn('红包补算失败：', e); }
       renderContacts();
       if (state.currentContactId) renderChatIncremental(state.currentContactId);
       // 切回前台时恢复未结束的通话（兜底，防止内存状态丢失）
@@ -510,6 +512,7 @@ async function initApp() {
     try { await enqueueTask(() => checkReminders(true)); } catch (e) { console.warn('提醒补发失败：', e); }
     try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
     try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
+    try { await walletResume(); } catch (e) { console.warn('红包补算失败：', e); }
     renderContacts();
     if (state.currentContactId) renderChatIncremental(state.currentContactId);
   };
@@ -539,6 +542,8 @@ async function initApp() {
   initDivineModule();
   // 聊天「＋」工具抽屉 & 联系人提醒模块
   initReminderModule();
+  // 钱包 + 红包（纯本地记账）
+  initWalletModule();
   // 本地音乐模块（空盒子，等待用户导入）
   initMusicModule();
   // 每 30 秒检查待办提醒
