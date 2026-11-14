@@ -100,8 +100,25 @@ export async function renderPeriodPage() {
     $('period-left').textContent = pr.left > 0 ? `还有 ${pr.left} 天` : (pr.left === 0 ? '预计今天' : `预计已过 ${-pr.left} 天`);
   }
   const hist = (p.history || []).slice().sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+  // 结束日 = 开始日 + 经期天数 - 1（跨月/跨年用 Date 推算）
+  const endMd = (startStr) => {
+    const ts = parseYmd(startStr);
+    if (!Number.isFinite(ts)) return '';
+    const e = new Date(ts + (p.periodDays - 1) * DAY);
+    return `${pad(e.getMonth() + 1)}/${pad(e.getDate())}`;
+  };
   $('period-history').innerHTML = hist.length
-    ? hist.map(h => `<div class="period-hist-row"><span>${escapeHtml(fmt(h.start))}</span><span class="period-hist-tag">${h.start === p.start ? '本次' : '历史'}</span></div>`).join('')
+    ? hist.map((h, i) => {
+        const startTs = parseYmd(h.start);
+        const next = hist[i - 1]; // 降序：上一条是时间上更晚的下一次记录
+        let cycle = '';
+        if (next && Number.isFinite(startTs)) {
+          const nextTs = parseYmd(next.start);
+          if (Number.isFinite(nextTs)) cycle = `· ${Math.round((nextTs - startTs) / DAY)}天`;
+        }
+        const tag = h.start === p.start ? '<span class="period-hist-tag">本次</span>' : '';
+        return `<div class="period-hist-row"><span class="period-hist-range">${escapeHtml(fmt(h.start))}-${escapeHtml(endMd(h.start))}${tag}</span><span class="period-hist-cycle">${cycle}</span></div>`;
+      }).join('')
     : '<div class="period-empty">还没有记录</div>';
 }
 

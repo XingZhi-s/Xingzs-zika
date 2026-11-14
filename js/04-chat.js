@@ -139,7 +139,7 @@ export async function renderChatIncremental(contactId, opts = {}) {
 
   // 多条回复逐条呈现：仅本次新增的对方消息，按 400–700ms 依次淡入上移
   if (allowSeq && hadNodes && inserted) {
-    const seq = newNodes.filter(x => x.m.from === 'other' && x.m.type !== 'redpacket');
+    const seq = newNodes.filter(x => x.m.from === 'other' && x.m.type !== 'redpacket' && x.m.type !== 'transfer');
     if (seq.length > 1) {
       for (const x of seq) x.node.classList.add('msg-seq-wait');
       let delay = 0;
@@ -335,6 +335,20 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
         <div class="msg-rp-title">红包</div>
         <div class="msg-rp-amount">${done ? '¥' + fmt(rp.amount) : '¥ ••.••'}</div>
         <div class="msg-rp-status">${statusText}</div>
+      </div>
+    </div></div>`;
+  }
+  else if (m.type === 'transfer') {
+    // 联系人往共用卡转账：沿用红包卡片的视觉语言，不点击、不显示操作
+    const tr = m.transfer || {};
+    const isMe = m.from === 'me';
+    const fmt = n => { const s = (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); return s.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1'); };
+    contentHtml = `<div class="msg-bubble msg-rp-bubble"><div class="msg-rp-card msg-trans-card">
+      <div class="msg-rp-ic"><svg class="i"><use href="#icon-wallet"/></svg></div>
+      <div class="msg-rp-body">
+        <div class="msg-rp-title">${isMe ? '你' : escapeHtml(contactName)} 往共用卡转了</div>
+        <div class="msg-rp-amount">¥${fmt(tr.amount)}</div>
+        <div class="msg-rp-status">已存入共用卡</div>
       </div>
     </div></div>`;
   }

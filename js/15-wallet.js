@@ -31,6 +31,13 @@ function fmtMoney(n) {
 }
 function clamp(n, a, b) { n = Number(n); if (!Number.isFinite(n)) n = a; return Math.max(a, Math.min(b, n)); }
 function monthKey(t) { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}`; }
+function dayKey(t) { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function parseDayKey(s) {
+  if (!s || typeof s !== 'string') return NaN;
+  const a = s.split('-').map(Number);
+  if (a.length !== 3 || !a[0] || !a[1] || !a[2]) return NaN;
+  return new Date(a[0], a[1] - 1, a[2]).getTime();
+}
 function monthsPassed(fromKey, toKey) {
   const [fy, fm] = String(fromKey || '').split('-').map(Number);
   const [ty, tm] = String(toKey || '').split('-').map(Number);
@@ -73,20 +80,32 @@ function normalizeCW(rec, cid) {
     prob: 60,
     gapMin: 1,
     gapMax: 4,
-    inMin: 1,
-    inMax: 50,
-    outMin: 1,
-    outMax: 20,
+    inMin: 50,
+    inMax: 500,
+    outMin: 50,
+    outMax: 500,
+    transferInMin: 20,
+    transferInMax: 200,
+    transferDay: '',
     nextAt: 0,
   }, rec || {});
   w.shared = round2(clamp(w.shared, 0, 99999999));
   w.prob = Math.round(clamp(w.prob, 0, 100));
   w.gapMin = Math.max(1, Math.round(clamp(w.gapMin, 1, 720)));
   w.gapMax = Math.max(w.gapMin, Math.round(clamp(w.gapMax, 1, 720)));
-  w.inMin = round2(Math.max(0.01, clamp(w.inMin, 0.01, 999999)));
-  w.inMax = round2(Math.max(w.inMin, clamp(w.inMax, 0.01, 999999)));
-  w.outMin = round2(Math.max(0.01, clamp(w.outMin, 0.01, 999999)));
-  w.outMax = round2(Math.max(w.outMin, clamp(w.outMax, 0.01, 999999)));
+  // 旧默认区间（1–50 / 1–20）只在首次升级时迁移到 50–500，之后尊重用户自定义
+  if (rec && !rec.defaultsV2) {
+    if (w.inMin === 1 && w.inMax === 50) { w.inMin = 50; w.inMax = 500; }
+    if (w.outMin === 1 && w.outMax === 20) { w.outMin = 50; w.outMax = 500; }
+  }
+  w.defaultsV2 = true;
+  w.inMin = round2(Math.max(0.01, Number(w.inMin) || 0.01));
+  w.inMax = round2(Math.max(w.inMin, Number(w.inMax) || w.inMin));
+  w.outMin = round2(Math.max(0.01, Number(w.outMin) || 0.01));
+  w.outMax = round2(Math.max(w.outMin, Number(w.outMax) || w.outMin));
+  w.transferInMin = round2(Math.max(0.01, Number(w.transferInMin) || 20));
+  w.transferInMax = round2(Math.max(w.transferInMin, Number(w.transferInMax) || w.transferInMin));
+  w.transferDay = typeof w.transferDay === 'string' ? w.transferDay : '';
   w.rpEnabled = w.rpEnabled !== false;
   if (!w.nextAt) w.nextAt = now() + randInt(2, 10) * MIN;
   return w;
@@ -259,7 +278,45 @@ async function tickInner(cid) {
     cwChanged = true;
   }
 
-  if (generated) {
+  // 4) 联系人往共用卡转钱：每天 50% 概率，金额走单独的「转入金额区间」，命中时刻落库
+  let transferred = 0;
+  if (!cw.transferDay) {
+    const base = Math.max(Number(c.createdAt) || 0, t - DAY);
+    cw.transferDay = dayKey(base);
+    cwChanged = true;
+  }
+  let dayTs = parseDayKey(cw.transferDay);
+  if (Number.isFinite(dayTs)) {
+    dayTs += DAY;
+    let guard = 0;
+    while (dayTs <= t && guard < 90 && transferred < 20) {
+      const winStart = dayTs + 8 * 3600000;          // 08:00 起才可能转入
+      const winEnd = Math.min(dayTs + DAY - 1, t);
+      if (winStart > winEnd) break;                   // 今天还没到 8 点，等下一轮再判定
+      if (Math.random() < 0.5) {
+        const hitAt = winStart + randInt(0, Math.max(0, Math.floor((winEnd - winStart) / 1000))) * 1000;
+        const amount = randAmount(cw.transferInMin, cw.transferInMax);
+        msgs.push({
+          id: uid(), from: 'other', type: 'transfer', content: '',
+          time: hitAt, replyTo: null, snapshot: null,
+          read: true, readAt: hitAt, replyAt: 0, replied: true,
+          transfer: { amount, createdAt: hitAt }
+        });
+        cw.shared = round2(cw.shared + amount);
+        await addLedger({ time: hitAt, peer: c.name, amount, dir: 'in' });
+        if (state.currentContactId !== cid) c.unread = (c.unread || 0) + 1;
+        cwChanged = true;
+        contactChanged = true;
+        transferred++;
+      }
+      cw.transferDay = dayKey(dayTs);
+      cwChanged = true;
+      dayTs += DAY;
+      guard++;
+    }
+  }
+
+  if (generated || transferred) {
     msgs.sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
   }
   if (contactChanged) await saveContact(c);
@@ -405,6 +462,8 @@ export async function walletSaveSettings() {
 }
 
 // ============ 联系人设置页：共用卡 + 红包参数 ============
+// 金额输入框宽度随位数增长（上限 90px），大额也能尽量完整看到
+function rangeInputW(v) { return Math.min(90, Math.max(66, (String(v).length + 1) * 8)); }
 export async function walletSettingsHtml(cid) {
   const [cw, c] = await Promise.all([getContactWallet(cid), getContact(cid)]);
   return `
@@ -441,8 +500,8 @@ export async function walletSettingsHtml(cid) {
           <span class="cs-label">Ta 发我的金额</span>
           <span class="cs-value">
             <div class="range-row" style="justify-content:flex-end;">
-              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.inMin)}" id="wc-in-min"><span class="cs-unit">~</span>
-              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.inMax)}" id="wc-in-max">
+              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.inMin)}" id="wc-in-min" style="width:${rangeInputW(fmtMoney(cw.inMin))}px" oninput="walletRangeResize(this)"><span class="cs-unit">~</span>
+              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.inMax)}" id="wc-in-max" style="width:${rangeInputW(fmtMoney(cw.inMax))}px" oninput="walletRangeResize(this)">
             </div>
           </span>
         </div>
@@ -450,15 +509,24 @@ export async function walletSettingsHtml(cid) {
           <span class="cs-label">我发红包默认金额</span>
           <span class="cs-value">
             <div class="range-row" style="justify-content:flex-end;">
-              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMin)}" id="wc-out-min"><span class="cs-unit">~</span>
-              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMax)}" id="wc-out-max">
+              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMin)}" id="wc-out-min" style="width:${rangeInputW(fmtMoney(cw.outMin))}px" oninput="walletRangeResize(this)"><span class="cs-unit">~</span>
+              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMax)}" id="wc-out-max" style="width:${rangeInputW(fmtMoney(cw.outMax))}px" oninput="walletRangeResize(this)">
+            </div>
+          </span>
+        </div>
+        <div class="cs-row">
+          <span class="cs-label">转入金额区间</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;">
+              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.transferInMin)}" id="wc-tr-min" style="width:${rangeInputW(fmtMoney(cw.transferInMin))}px" oninput="walletRangeResize(this)"><span class="cs-unit">~</span>
+              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.transferInMax)}" id="wc-tr-max" style="width:${rangeInputW(fmtMoney(cw.transferInMax))}px" oninput="walletRangeResize(this)">
             </div>
           </span>
         </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="walletSaveContactSettings()">
           <svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存钱包设置
         </button>
-        <div class="cs-hint">每段间隔到点按概率决定是否发红包；对方按当前状态决定领取时间，睡觉不领、醒来再领；24 小时未领取作废。</div>
+        <div class="cs-hint">每段间隔到点按概率决定是否发红包；对方按当前状态决定领取时间，睡觉不领、醒来再领；24 小时未领取作废。联系人每天 50% 概率按「转入金额区间」往共用卡转一笔，会生成聊天卡片并记入流水。</div>
       </div>
     </div>`;
 }
@@ -487,6 +555,10 @@ export async function walletSaveContactSettings() {
     let outMax = round2(Math.max(0.01, num('wc-out-max', cw.outMax)));
     if (outMin > outMax) { const tmp = outMin; outMin = outMax; outMax = tmp; }
     cw.outMin = outMin; cw.outMax = outMax;
+    let trMin = round2(Math.max(0.01, num('wc-tr-min', cw.transferInMin)));
+    let trMax = round2(Math.max(0.01, num('wc-tr-max', cw.transferInMax)));
+    if (trMin > trMax) { const tmp = trMin; trMin = trMax; trMax = tmp; }
+    cw.transferInMin = trMin; cw.transferInMax = trMax;
     await dbPut('wallet', cw);
     toast('钱包设置已保存');
   });
@@ -690,6 +762,7 @@ export function initWalletModule() {
   window.__walletOnChatOpen = (cid) => walletTick(cid);
   window.__walletResume = walletResume;
   window.__walletSettingsHtml = (cid) => walletSettingsHtml(cid);
+  window.walletRangeResize = (el) => { if (el) el.style.width = rangeInputW(el.value) + 'px'; };
 
   // 聊天页打开时低频检查当前联系人（只读这一位，不进 60 秒全量补算）
   setInterval(() => {

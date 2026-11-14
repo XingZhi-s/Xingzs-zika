@@ -58,10 +58,6 @@ async function getMonthMoods(role, y, m) {
 }
 
 // ---- 联系人页「本月心情」小日历：只渲染当月，数据仍走 getMonthMoods ----
-function moodLevel(emoji) {
-  const i = MOOD_GROUPS.findIndex(g => g.emojis.includes(emoji));
-  return i === 0 ? 1 : i === 1 ? 3 : 2; // 1 开心（最深）/ 2 日常 / 3 负面（最浅）
-}
 export async function renderLoveMoodCalendar() {
   const cards = document.querySelectorAll('.love-mood-cal');
   if (!cards.length) return;
@@ -78,10 +74,9 @@ export async function renderLoveMoodCalendar() {
     const ds = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const rec = records[String(d).padStart(2, '0')];
     const last = lastRecord(rec);
-    const cls = 'love-mood-day' + (ds === todayDs ? ' today' : '') +
-      (rec ? ` has-mood lv${moodLevel(last ? last.emoji : '')}` : '');
+    const cls = 'love-mood-day' + (ds === todayDs ? ' today' : '');
     cells.push(`<button class="${cls}" onclick="event.stopPropagation();openLoveMoodDay('${ds}')">` +
-      `<span class="lm-num">${d}</span>${rec ? '<span class="mood-dot"></span>' : ''}</button>`);
+      `<span class="lm-num">${d}</span>${last ? `<span class="lm-emoji">${last.emoji}</span>` : ''}</button>`);
   }
   for (let i = offset + days; i < rows * 7; i++) cells.push('<span class="love-mood-day blank"></span>');
   const html = cells.join('');

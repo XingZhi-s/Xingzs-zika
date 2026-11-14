@@ -224,8 +224,10 @@ a { text-decoration:none; color:inherit; }
 .period-add-row .input { flex:1; min-height:40px; padding:8px 10px; }
 .period-add-row .btn { min-height:40px; white-space:nowrap; }
 .period-hint { font-size:11px; color:var(--text-secondary); margin-top:8px; }
-.period-hist-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:13px; }
+.period-hist-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid var(--border-color); font-size:13px; }
 .period-hist-row:last-child { border-bottom:none; }
+.period-hist-range { display:flex; align-items:center; gap:6px; min-width:0; }
+.period-hist-cycle { flex-shrink:0; font-size:12px; color:var(--text-secondary); }
 .period-hist-tag { font-size:11px; color:var(--theme-color); background:var(--theme-bg-light); border-radius:8px; padding:1px 7px; }
 .period-empty { font-size:13px; color:var(--text-secondary); padding:6px 0; }
 
@@ -321,16 +323,12 @@ a { text-decoration:none; color:inherit; }
 .love-mood-day {
   position:relative; min-width:0; min-height:0; padding:0; border:none; border-radius:7px;
   background:transparent; color:var(--text-primary); font-weight:500; line-height:1;
-  font-size:clamp(10px, 2.9vw, 12px);
-  display:flex; align-items:center; justify-content:center;
+  font-size:clamp(9px, 2.5vw, 11px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
 }
 .love-mood-day.blank { pointer-events:none; }
-.love-mood-day.has-mood { background:color-mix(in srgb, var(--theme-color) 34%, transparent); }
-.love-mood-day.has-mood.lv2 { background:color-mix(in srgb, var(--theme-color) 21%, transparent); }
-.love-mood-day.has-mood.lv3 { background:color-mix(in srgb, var(--theme-color) 11%, transparent); }
-.love-mood-day .mood-dot { position:absolute; top:3px; right:3px; width:4px; height:4px; border-radius:50%; background:var(--theme-color); }
-.love-mood-day.lv2 .mood-dot { opacity:.72; }
-.love-mood-day.lv3 .mood-dot { opacity:.5; }
+.love-mood-day .lm-num { line-height:1; }
+.love-mood-day .lm-emoji { font-size:clamp(12px, 3.8vw, 16px); line-height:1; }
 .love-mood-day.today { box-shadow:inset 0 0 0 1.5px var(--theme-color); color:var(--theme-color); font-weight:700; }
 .home-deco-layer { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index: 5; }
 .home-deco-layer .deco-sticker { position:absolute; user-select:none; touch-action:none; pointer-events:auto; }
@@ -1516,12 +1514,16 @@ a { text-decoration:none; color:inherit; }
 .switch.on::after { transform:translateX(20px); }
 
 /* ========== 输入数字范围 ========== */
-.range-row { display:flex; align-items:center; gap:8px; }
+.range-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .range-row input {
-  width:80px; height:36px; min-height:36px; padding:0 10px; box-sizing:border-box;
+  width:80px; height:36px; min-height:36px; padding:0 6px; box-sizing:border-box;
+  font-size:12px;
   background:#f9fafb; border:1px solid var(--border-color); border-radius:10px;
   color:var(--text-primary); text-align:center; line-height:normal;
+  -moz-appearance:textfield;
 }
+.range-row input::-webkit-outer-spin-button,
+.range-row input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 
 /* ========== 分组折叠 ========== */
 .collapsed .group-content { display:none; }
@@ -1847,6 +1849,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 .msg-rp-amount { font-size:15px; font-weight:700; color:var(--theme-color); margin-top:2px; letter-spacing:.5px; }
 .msg-rp-status { font-size:11px; color:var(--text-secondary); margin-top:2px; }
 .msg-rp-card.done { opacity:.72; }
+.msg-rp-card.msg-trans-card { cursor:default; }
+.msg-rp-card.msg-trans-card:active { transform:none; }
 
 </style>
 </head>
