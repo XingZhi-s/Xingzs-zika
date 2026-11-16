@@ -320,7 +320,10 @@ export function openPage(id, pushPrev=false) {
     b.classList.toggle('active', b.dataset.page === id);
   });
   // 进入me页时刷新显示
-  if (id === 'page-me') renderMeBrief();
+  if (id === 'page-me') {
+    renderMeBrief();
+    if (window.renderNotifyState) window.renderNotifyState();
+  }
   if (id === 'page-letter') renderLetterList();
   if (id === 'page-setting') {
     renderThemeUI(getThemeSync());

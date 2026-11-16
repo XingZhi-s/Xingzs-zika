@@ -719,8 +719,10 @@ export async function sendLetter() {
   const cid = $('letter-recipient').value;
   if (!cid) return toast('请选择收件人');
   const title = $('letter-title').value.trim();
-  const content = $('letter-content').value.trim();
-  if (!content) return toast('请输入正文');
+  const raw = $('letter-content').value;
+  if (!raw.trim()) return toast('请输入正文');
+  // 正文原样保存：不 trim，保留用户输入的换行、空行、行首缩进与行尾空格
+  const content = raw;
   const c = await getContact(cid);
   if (!c) return;
   const cards = c.cardGroups.flatMap(g => g.cards);
@@ -765,16 +767,18 @@ export async function openLetterDetail(cid, lid) {
   state.currentLetterId = lid;
   state.currentLetterContactId = cid;
   $('letter-detail-title').textContent = l.title || '(无标题)';
-  // 信纸视图：亲爱的 xx：正文 —— 署名 · 日期
+  // 信纸视图：我发出的信不再自动添加称呼/落款/日期，正文严格按用户输入显示
   const me = await getMe();
   const isOut = l.direction === 'out';
   const nick = (c.settings && c.settings.myNickname) || me.name || '我';
   const greetName = isOut ? c.name : nick;
   const signName = isOut ? (me.name || '我') : c.name;
+  const bodyHtml = `<div class="lp-body">${escapeHtml(l.content)}</div>`;
   $('letter-detail-content').innerHTML = `<div class="letter-paper">` +
-    `<div class="lp-greet">亲爱的 ${escapeHtml(greetName)}：</div>` +
-    `<div class="lp-body">${escapeHtml(l.content).replace(/\n/g, '<br>')}</div>` +
-    `<div class="lp-sign">—— ${escapeHtml(signName)} · ${formatTime(l.time)}</div></div>`;
+    (isOut ? bodyHtml :
+      `<div class="lp-greet">亲爱的 ${escapeHtml(greetName)}：</div>` + bodyHtml +
+      `<div class="lp-sign">—— ${escapeHtml(signName)} · ${formatTime(l.time)}</div>`) +
+    `</div>`;
   $('letter-list-view').classList.add('hide');
   $('letter-inbox-view').classList.add('hide');
   $('letter-compose-view').classList.add('hide');

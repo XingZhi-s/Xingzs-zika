@@ -200,6 +200,7 @@ async function tickInner(cid) {
   const pool = await getStatusPool();
   const msgs = c.messages || (c.messages = []);
   let contactChanged = false, myChanged = false, cwChanged = false;
+  const notifyItems = []; // 本次新到达的红包/转入，交给通知模块合并
 
   // 1) 我发出的红包：对方按状态时刻自动领取；超过 24 小时未领取退回原卡
   for (const m of msgs) {
@@ -266,6 +267,7 @@ async function tickInner(cid) {
           });
           if (state.currentContactId !== cid) c.unread = (c.unread || 0) + 1;
           generated++;
+          notifyItems.push({ kind: 'redpacket' });
           contactChanged = true;
         }
       }
@@ -307,6 +309,7 @@ async function tickInner(cid) {
         if (state.currentContactId !== cid) c.unread = (c.unread || 0) + 1;
         cwChanged = true;
         contactChanged = true;
+        notifyItems.push({ kind: 'transfer' });
         transferred++;
       }
       cw.transferDay = dayKey(dayTs);
@@ -322,6 +325,9 @@ async function tickInner(cid) {
   if (contactChanged) await saveContact(c);
   if (myChanged) await dbPut('wallet', w);
   if (cwChanged) await dbPut('wallet', cw);
+  if (notifyItems.length && typeof window.__notifyIncoming === 'function') {
+    try { window.__notifyIncoming(c.id, c.name, notifyItems); } catch (e) {}
+  }
   if (contactChanged && state.currentContactId === cid) {
     const pg = $('page-chat');
     if (pg && pg.classList.contains('active')) {

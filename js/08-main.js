@@ -11,8 +11,9 @@ import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackSt
 import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
 import { checkTogetherInvites, initMusicModule, musicAcceptInvite, musicBack, musicDelete, musicExitTogether, musicNext, musicOpenTogetherPicker, musicPickFiles, musicPlayId, musicPrev, musicRejectInvite, musicSeek, musicSetVolume, musicStartTogether, musicToggleLoop, musicTogglePlay, openMusicPage, renderGlobalStorage, requestPersistStorage, updateMusicMiniBar } from './12-music.js';
 import { checkPeriodReminders, openPeriodPage, periodAddPast, periodSaveSettings, periodToday, renderPeriodPage } from './13-period.js';
-import { openReaderBook, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
-import { initWalletModule, walletResume } from './15-wallet.js';
+import { openReaderBook, openReaderMenu, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerExportBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
+import { initWalletModule, walletResume, walletTick } from './15-wallet.js';
+import { initBackgroundModule } from './16-background.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -192,6 +193,7 @@ export async function runCatchUp(onlyCid) {
     for (let c of contacts) {
       // 记录本轮补算开始时的消息长度：用于找出本轮新补出的回复，主动消息排在它们之后
       const preReplyLen = (c.messages || []).length;
+      const notifyItems = []; // 本轮新到达的对方消息，交给通知模块合并/限流
       // 0) 先与共享池/作息表/挂起队列对齐（状态为空或不在池内 → 池内随机并写回）
       await normalizeContactStatus(c, statusPool);
       // 1) 状态逐段回放（含离线期间错过的切换）+ 挂起消息按窗口判定
@@ -283,6 +285,7 @@ export async function runCatchUp(onlyCid) {
                 time: atT, replyTo, snapshot: null,
                 read: true, readAt: atT, replyAt: 0, replied: true
               });
+              notifyItems.push({ kind: type === 'sticker' ? 'sticker' : 'text', text: type === 'text' ? content : '' });
             }
             c.settings.nextProactiveAt = t + randInt(2, 8) * 3600 * 1000;
             if (cnt > 0) { c.unread = (c.unread||0) + cnt; changed = true; }
@@ -357,6 +360,7 @@ export async function runCatchUp(onlyCid) {
               sysKey: letterSysKey
             });
             c.unread = (c.unread || 0) + 1;
+            notifyItems.push({ kind: 'letter' });
           }
           changed = true;
         }
@@ -370,6 +374,9 @@ export async function runCatchUp(onlyCid) {
       c.messages.sort((a, b) => a.time - b.time);
 
       await saveContact(c);
+      if (notifyItems.length && typeof window.__notifyIncoming === 'function') {
+        try { window.__notifyIncoming(c.id, c.name, notifyItems); } catch (e) {}
+      }
     } // end contacts loop
     return changed;
     } finally {
@@ -432,6 +439,13 @@ async function periodicCheck() {
   try { await enqueueTask(() => checkTogetherInvites()); } catch (e) { console.warn('一起听邀请检查失败：', e); }
   // 经期提醒（每个周期 2 条；过期不补，仅在预约当天窗口内发送）
   try { await enqueueTask(() => checkPeriodReminders()); } catch (e) { console.warn('经期提醒检查失败：', e); }
+  // 页面不在前台且通知开启时，提前执行既有钱包补算，让红包/转账也能产生后台通知（不改任何金额/概率规则）
+  if (document.visibilityState !== 'visible' && typeof window.__notifyActive === 'function' && window.__notifyActive()) {
+    try {
+      const cs = await getAllContacts();
+      for (const c of cs) { try { await walletTick(c.id); } catch (e) {} }
+    } catch (e) { console.warn('后台钱包补算失败：', e); }
+  }
 }
 
 // ============ 初始化 ============
@@ -445,6 +459,8 @@ async function initApp() {
   // 应用主题
   const theme = await getTheme();
   applyTheme(theme);
+  // 后台能力：静音保活 + 消息通知（失败不阻塞启动）
+  initBackgroundModule().catch(() => {});
   // 迁移修复：旧版联系人默认头像二次编码损坏，统一替换
   const _oldContacts = await dbAll('contacts');
   for (const _c of _oldContacts) {
@@ -805,6 +821,8 @@ window.readerNextPage = readerNextPage;
 window.renderReaderPage = renderReaderPage;
 window.readerOpenNote = readerOpenNote;
 window.openReaderNoteView = openReaderNoteView;
+window.openReaderMenu = openReaderMenu;
+window.readerExportBook = readerExportBook;
 // 聊天工具抽屉 & 联系人提醒
 window.toggleChatToolDrawer = toggleChatToolDrawer;
 window.closeChatToolDrawer = closeChatToolDrawer;

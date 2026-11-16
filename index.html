@@ -73,6 +73,69 @@ a { text-decoration:none; color:inherit; }
 .tier-不理人 { background:#f3f4f6; color:#4b5563; }
 .toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; padding:10px 20px; border-radius:8px; z-index:9999; font-size:14px; }
 
+/* ========== 进站开屏：每次打开网站播放一次，纯 CSS + 内联 SVG ========== */
+#splash-screen {
+  position:fixed; inset:0; z-index:10000;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg-color); overflow:hidden;
+  animation:splashFade 2s ease forwards;
+  pointer-events:auto;
+}
+#splash-screen::before {
+  content:""; position:absolute; inset:0;
+  background:radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--theme-color) 22%, transparent) 0%, transparent 62%);
+}
+.splash-stage {
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:16px;
+  animation:splashRise .6s cubic-bezier(.2,.8,.2,1) both;
+}
+.splash-mark {
+  width:clamp(96px, 28vw, 144px); height:auto; color:var(--theme-color);
+  filter:drop-shadow(0 8px 22px color-mix(in srgb, var(--theme-color) 28%, transparent));
+  overflow:visible;
+}
+.sp-ring { fill:none; stroke:currentColor; stroke-width:1.4; stroke-opacity:.32; stroke-dasharray:377; stroke-dashoffset:377; animation:splashDraw 1.05s cubic-bezier(.4,0,.2,1) forwards; }
+.sp-ring-2 { stroke-opacity:.5; stroke-dasharray:289; stroke-dashoffset:289; animation-delay:.12s; }
+.sp-star { fill:none; stroke:currentColor; stroke-width:2.1; stroke-linejoin:round; opacity:0; transform-origin:80px 80px; animation:splashStar .8s cubic-bezier(.2,.8,.2,1) .3s forwards; }
+.sp-keyhole { fill:currentColor; opacity:0; animation:splashFadeIn .4s ease .62s forwards; }
+.sp-keyhole-slot { fill:currentColor; opacity:0; animation:splashFadeIn .4s ease .7s forwards; }
+.sp-dot { fill:currentColor; opacity:0; animation:splashDot 1.2s ease .5s infinite; }
+.sp-dot-2 { animation-delay:.72s; }
+.sp-dot-3 { animation-delay:.94s; }
+.sp-dot-4 { animation-delay:1.16s; }
+.splash-word {
+  font-size:15px; letter-spacing:.42em; text-indent:.42em; font-weight:600;
+  color:var(--text-primary); opacity:0; animation:splashFadeIn .5s ease .55s forwards;
+}
+.splash-line { width:96px; height:2px; border-radius:2px; background:color-mix(in srgb, var(--theme-color) 18%, transparent); overflow:hidden; }
+.splash-line i { display:block; width:100%; height:100%; border-radius:2px; background:var(--theme-color); transform-origin:0 50%; transform:scaleX(0); animation:splashLine 1.15s cubic-bezier(.3,0,.2,1) .45s forwards; }
+@keyframes splashFade {
+  0% { opacity:1; visibility:visible; }
+  80% { opacity:1; visibility:visible; pointer-events:auto; }
+  100% { opacity:0; visibility:hidden; pointer-events:none; }
+}
+@keyframes splashRise {
+  from { transform:translateY(10px); opacity:0; }
+  to { transform:translateY(0); opacity:1; }
+}
+@keyframes splashDraw { to { stroke-dashoffset:0; } }
+@keyframes splashStar {
+  0% { opacity:0; transform:scale(.55) rotate(-18deg); }
+  70% { opacity:1; transform:scale(1.05) rotate(3deg); }
+  100% { opacity:1; transform:scale(1) rotate(0); }
+}
+@keyframes splashFadeIn { to { opacity:1; } }
+@keyframes splashDot {
+  0%,100% { opacity:.18; }
+  45% { opacity:.85; }
+}
+@keyframes splashLine { to { transform:scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-stage, .sp-ring, .sp-star, .sp-keyhole, .sp-keyhole-slot, .sp-dot, .splash-word, .splash-line i {
+    animation-duration:.01s !important; animation-delay:0s !important; animation-iteration-count:1 !important;
+  }
+}
+
 /* DIY / Todo 浮层（从底部弹出/全屏弹窗手机） */
 .diy-panel {
   position: fixed; inset: 0; z-index: 9000;
@@ -1282,16 +1345,25 @@ a { text-decoration:none; color:inherit; }
 .letter-read { display:inline-block; margin-left:8px; font-size:11px; font-weight:500; color:var(--text-secondary); background:color-mix(in srgb, var(--text-secondary) 14%, transparent); border-radius:8px; padding:1px 7px; vertical-align:2px; }
 
 .letter-compose { padding:16px; display:flex; flex-direction:column; gap:14px; }
+/* 输入框与信纸正文使用同一套字体/字号/行高/换行规则，保证所见即所得 */
+#letter-content {
+  font-family: KaiTi, STKaiti, cursive;
+  font-size:15px;
+  line-height:2.0;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:break-word;
+}
 
 .letter-detail { padding:0; background:transparent; line-height:1.8; font-size:15px; }
 /* 精美信纸 */
 .letter-paper {
-  background:#fcfaf2; border-radius:10px; padding:26px 22px;
+  background:#fcfaf2; border-radius:10px; padding:26px 13px;
   box-shadow: inset 0 0 40px rgba(180,160,120,.18), 0 2px 8px rgba(0,0,0,.06);
   font-family: KaiTi, STKaiti, cursive; line-height: 2.0; color: #3a3226;
 }
 .letter-paper .lp-greet { margin-bottom:14px; font-size:16px; }
-.letter-paper .lp-body { white-space:pre-wrap; word-break:break-word; }
+.letter-paper .lp-body { white-space:pre-wrap; word-break:break-word; overflow-wrap:break-word; font-size:15px; line-height:2.0; }
 .letter-paper .lp-sign { margin-top:18px; text-align:right; font-size:14px; }
 
 /* ========== ME 页 ========== */
@@ -1855,6 +1927,24 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 </style>
 </head>
 <body>
+<!-- ========== 进站开屏（每次打开网站播放一次；不依赖 JS、不阻塞数据加载） ========== -->
+<div id="splash-screen" aria-hidden="true">
+  <div class="splash-stage">
+    <svg class="splash-mark" viewBox="0 0 160 160" aria-hidden="true">
+      <circle class="sp-ring" cx="80" cy="80" r="60"/>
+      <circle class="sp-ring sp-ring-2" cx="80" cy="80" r="46"/>
+      <path class="sp-star" d="M80 28 L88.5 63.5 L124 72 L88.5 80.5 L80 116 L71.5 80.5 L36 72 L71.5 63.5 Z"/>
+      <circle class="sp-keyhole" cx="80" cy="72" r="8.5"/>
+      <path class="sp-keyhole-slot" d="M76.2 77.5 h7.6 l4.2 18 h-16 z"/>
+      <circle class="sp-dot sp-dot-1" cx="80" cy="19" r="3"/>
+      <circle class="sp-dot sp-dot-2" cx="141" cy="80" r="2.4"/>
+      <circle class="sp-dot sp-dot-3" cx="80" cy="141" r="2.6"/>
+      <circle class="sp-dot sp-dot-4" cx="19" cy="80" r="2.2"/>
+    </svg>
+    <div class="splash-word">星之匙</div>
+    <div class="splash-line"><i></i></div>
+  </div>
+</div>
 <!-- ========== SVG 图标库（不显示，供引用） ========== -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -2193,6 +2283,9 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         <div class="top-bar">
           <button class="chat-header-back" onclick="readerBack()"><svg class="i"><use href="#icon-back"/></svg></button>
           <div class="top-bar-title grow" id="reader-title">阅读</div>
+          <button class="top-bar-btn hide" id="reader-menu-btn" onclick="openReaderMenu()" title="本书菜单">
+            <svg class="i"><use href="#icon-menu"/></svg>
+          </button>
           <button class="top-bar-btn" id="reader-upload-btn" onclick="document.getElementById('reader-file').click()" title="上传 TXT / DOCX">
             <svg class="i"><use href="#icon-upload"/></svg>
           </button>
@@ -2497,6 +2590,14 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div class="setting-item" onclick="openWallet()">
             <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-wallet"/></svg></span><span>我的卡</span></div>
             <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
+          </div>
+        </div>
+
+        <div class="list-section-title">通知</div>
+        <div class="setting-list">
+          <div class="setting-item" onclick="toggleNotify()">
+            <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-bell"/></svg></span><span>新消息通知</span></div>
+            <div class="switch" id="notify-switch" role="switch" aria-checked="false"></div>
           </div>
         </div>
 

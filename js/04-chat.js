@@ -599,6 +599,7 @@ export async function appendReplyMessages(c, anchor, count, atTime) {
   const total = Math.max(0, count || 0);
   const base = Math.min(Number(atTime) || now(), now());
   let sent = 0;
+  const notifyItems = [];
   for (let i = 0; i < total; i++) {
     if (!cards.length && !stickers.length) break;
     const useSticker = stickers.length > 0 && Math.random() < 0.5;
@@ -614,7 +615,11 @@ export async function appendReplyMessages(c, anchor, count, atTime) {
       time, replyTo, snapshot: null,
       read: true, readAt: time, replyAt: 0, replied: true, replyDone: true
     });
+    notifyItems.push({ kind: type === 'sticker' ? 'sticker' : 'text', text: type === 'text' ? content : '' });
     sent++;
+  }
+  if (sent && typeof window.__notifyIncoming === 'function') {
+    try { window.__notifyIncoming(c.id, c.name, notifyItems); } catch (e) {}
   }
   return sent;
 }
@@ -821,6 +826,9 @@ export function resolveChoiceQuestion(c, qMsg, atTime) {
   });
   qMsg.replied = true;
   qMsg.choiceResolved = true;
+  if (typeof window.__notifyIncoming === 'function') {
+    try { window.__notifyIncoming(c.id, c.name, [{ kind: 'choice', text: '选择了 ' + letters }]); } catch (e) {}
+  }
   return 1;
 }
 // 选择结果实时定时器（幂等挂载）：文档冻结/切后台可能丢弃定时器，

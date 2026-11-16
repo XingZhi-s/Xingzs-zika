@@ -59,6 +59,8 @@ function applyReaderView() {
   $('reader-shelf').classList.toggle('hide', !!_book);
   $('reader-reading').classList.toggle('hide', !_book);
   $('reader-upload-btn').classList.toggle('hide', !!_book);
+  const menuBtn = $('reader-menu-btn');
+  if (menuBtn) menuBtn.classList.toggle('hide', !_book);
   hideSelMenu();
 }
 
@@ -86,6 +88,78 @@ export async function renderReaderShelf() {
       `</div>`;
   }).join('');
 }
+// ---- 当前这本书的菜单：导出 TXT（书名 + 正文 + 全部笔记） ----
+let _lastExportText = '';
+function fmtExportTime(ts) {
+  const d = new Date(Number(ts) || 0);
+  if (!Number.isFinite(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function toCRLF(s) { return String(s == null ? '' : s).replace(/\r\n?/g, '\n').replace(/\n/g, '\r\n'); }
+function indentBlock(s) { return String(s == null ? '' : s).replace(/\r\n?/g, '\n').split('\n').map(l => '   ' + l).join('\r\n'); }
+function buildReaderTxt(book, notes) {
+  const lines = [];
+  lines.push(`《${book.title || '未命名'}》`);
+  lines.push('');
+  lines.push('【正文】');
+  lines.push('');
+  lines.push(toCRLF((book.pages || []).join('')));
+  lines.push('');
+  lines.push('============================================================');
+  lines.push(`【笔记】共 ${notes.length} 条`);
+  lines.push('------------------------------------------------------------');
+  if (!notes.length) {
+    lines.push('（暂无笔记）');
+  } else {
+    const sorted = notes.slice().sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0) || (a.timestamp || 0) - (b.timestamp || 0));
+    sorted.forEach((n, i) => {
+      lines.push(`${i + 1}. 位置：第 ${(n.pageIndex || 0) + 1} 页`);
+      lines.push('   原文：' + indentBlock(n.quote).trimStart());
+      lines.push('   笔记：' + indentBlock(n.note).trimStart());
+      lines.push('   时间：' + fmtExportTime(n.timestamp));
+      if (i < sorted.length - 1) lines.push('');
+    });
+  }
+  return '\ufeff' + lines.join('\r\n') + '\r\n';
+}
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 5000);
+}
+export function openReaderMenu() {
+  if (!_book) return toast('请先打开一本书');
+  showModal(`${_book.title || '未命名'} · 本书菜单`,
+    `<div style="font-size:13px;line-height:1.8;color:var(--text-secondary);">` +
+    `共 ${(_book.pages || []).length} 页<br>` +
+    `导出内容：书名、正文，以及每处笔记对应的页码、原文、笔记内容与时间。一本一个 TXT 文件。` +
+    `</div>`,
+    [
+      { label: '取消', cls: 'btn-outline', onClick: closeModal },
+      { label: '导出本书 TXT', cls: '', onClick: () => { closeModal(); readerExportBook(); } }
+    ]);
+}
+export async function readerExportBook() {
+  if (!_book) return toast('请先打开一本书');
+  const book = _book;
+  const notes = (await getNotes()).filter(n => n.bookId === book.id);
+  const text = buildReaderTxt(book, notes);
+  _lastExportText = text;
+  const filename = String(book.title || '未命名').replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 80) + '.txt';
+  downloadTextFile(filename, text);
+  toast(`已导出《${book.title || '未命名'}》TXT`);
+}
+// 仅测试/排查用：读取最近一次导出的纯文本内容
+window.__readerLastExport = () => _lastExportText;
+
 export async function readerDeleteBook(id) {
   if (!await confirmDialog('删除这本书？相关笔记与阅读进度将一并删除！')) return;
   await saveBooks((await getBooks()).filter(b => b.id !== id));
