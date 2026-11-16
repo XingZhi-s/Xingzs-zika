@@ -78,9 +78,13 @@ a { text-decoration:none; color:inherit; }
   position:fixed; inset:0; z-index:10000;
   display:flex; align-items:center; justify-content:center;
   background:var(--bg-color); overflow:hidden;
-  animation:splashFade 2s ease forwards;
+  opacity:1; visibility:visible;
+  transition:opacity .45s ease, visibility .45s ease;
+  /* 纯 CSS 最后兜底：即使 JS 未运行，9 秒后也自行隐藏，不会永远卡在开屏 */
+  animation:splashFallback .01s linear 9s forwards;
   pointer-events:auto;
 }
+#splash-screen.splash-out { opacity:0; visibility:hidden; pointer-events:none; }
 #splash-screen::before {
   content:""; position:absolute; inset:0;
   background:radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--theme-color) 22%, transparent) 0%, transparent 62%);
@@ -109,10 +113,8 @@ a { text-decoration:none; color:inherit; }
 }
 .splash-line { width:96px; height:2px; border-radius:2px; background:color-mix(in srgb, var(--theme-color) 18%, transparent); overflow:hidden; }
 .splash-line i { display:block; width:100%; height:100%; border-radius:2px; background:var(--theme-color); transform-origin:0 50%; transform:scaleX(0); animation:splashLine 1.15s cubic-bezier(.3,0,.2,1) .45s forwards; }
-@keyframes splashFade {
-  0% { opacity:1; visibility:visible; }
-  80% { opacity:1; visibility:visible; pointer-events:auto; }
-  100% { opacity:0; visibility:hidden; pointer-events:none; }
+@keyframes splashFallback {
+  to { opacity:0; visibility:hidden; pointer-events:none; }
 }
 @keyframes splashRise {
   from { transform:translateY(10px); opacity:0; }
@@ -131,6 +133,7 @@ a { text-decoration:none; color:inherit; }
 }
 @keyframes splashLine { to { transform:scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
+  #splash-screen { transition:none; }
   .splash-stage, .sp-ring, .sp-star, .sp-keyhole, .sp-keyhole-slot, .sp-dot, .splash-word, .splash-line i {
     animation-duration:.01s !important; animation-delay:0s !important; animation-iteration-count:1 !important;
   }
@@ -1997,6 +2000,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
     <symbol id="icon-warning" viewBox="0 0 24 24"><path d="M12 3L2 21h20L12 3z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/></symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><line x1="12" y1="2" x2="12" y2="4"/></symbol>
     <symbol id="icon-music" viewBox="0 0 24 24"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><line x1="9" y1="18" x2="9" y2="5"/><line x1="21" y1="16" x2="21" y2="3"/><path d="M9 5l12-2"/></symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
     <symbol id="icon-period" viewBox="0 0 24 24"><path d="M12 3.2c3.4 4.6 5.8 7.6 5.8 10.6a5.8 5.8 0 0 1-11.6 0c0-3 2.4-6 5.8-10.6z"/><path d="M9.4 14.4a2.7 2.7 0 0 0 2.5 2.7"/></symbol>
     <symbol id="icon-play" viewBox="0 0 24 24"><polygon points="7 4 19 12 7 20 7 4"/></symbol>
     <symbol id="icon-pause" viewBox="0 0 24 24"><rect x="7" y="4" width="4" height="16" rx="1"/><rect x="13" y="4" width="4" height="16" rx="1"/></symbol>
@@ -2598,6 +2602,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div class="setting-item" onclick="toggleNotify()">
             <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-bell"/></svg></span><span>新消息通知</span></div>
             <div class="switch" id="notify-switch" role="switch" aria-checked="false"></div>
+          </div>
+          <div class="setting-item" onclick="toggleKeepAlive()">
+            <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-activity"/></svg></span><span>后台保活</span></div>
+            <div class="switch" id="keepalive-switch" role="switch" aria-checked="true"></div>
           </div>
         </div>
 

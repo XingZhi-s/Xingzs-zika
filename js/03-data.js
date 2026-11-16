@@ -323,6 +323,7 @@ export function openPage(id, pushPrev=false) {
   if (id === 'page-me') {
     renderMeBrief();
     if (window.renderNotifyState) window.renderNotifyState();
+    if (window.renderKeepAliveState) window.renderKeepAliveState();
   }
   if (id === 'page-letter') renderLetterList();
   if (id === 'page-setting') {

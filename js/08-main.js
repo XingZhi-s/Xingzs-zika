@@ -448,12 +448,39 @@ async function periodicCheck() {
   }
 }
 
+// ============ 开屏控制：等应用真正就绪后再淡出 ============
+const SPLASH_MIN_MS = 1200;  // 最短展示，避免一闪而过
+const SPLASH_MAX_MS = 8000;  // 最长兜底，初始化卡死时也会退出开屏
+const _splashT0 = performance.now();
+let _splashDismissed = false;
+function dismissSplash() {
+  if (_splashDismissed) return;
+  _splashDismissed = true;
+  window.__splashDismissedAt = Math.round(performance.now() - _splashT0);
+  const sp = document.getElementById('splash-screen');
+  if (!sp) { window.__splashRemovedAt = Math.round(performance.now() - _splashT0); return; }
+  sp.classList.add('splash-out');
+  setTimeout(() => {
+    try { sp.remove(); } catch (e) {}
+    window.__splashRemovedAt = Math.round(performance.now() - _splashT0);
+    window.__splashRemovedAbs = Math.round(performance.now());
+  }, 480);
+}
+// 数据加载 + 首屏渲染完成后调用；不足最短时长则补足后再淡出
+function finishSplash() {
+  window.__appReadyAt = Math.round(performance.now() - _splashT0);
+  const wait = Math.max(0, SPLASH_MIN_MS - (performance.now() - _splashT0));
+  setTimeout(dismissSplash, wait);
+}
+setTimeout(dismissSplash, SPLASH_MAX_MS); // 兜底：任何异常都不会永远停在开屏
+
 // ============ 初始化 ============
 async function initApp() {
   try {
     await openDB();
   } catch (e) {
     showModal('初始化失败', `<div style="font-size:14px;line-height:1.7;">IndexedDB 初始化失败：${escapeHtml(e.message)}</div>`);
+    finishSplash();
     return;
   }
   // 应用主题
@@ -488,6 +515,14 @@ async function initApp() {
   try { await restoreCallState(); } catch (e) { console.warn('恢复通话状态失败：', e); }
   // 手机端默认进入手机桌面页
   if (window.matchMedia('(max-width: 899px)').matches) openPage('page-home');
+  // 通知点击在页面已关闭时打开：index.html?chat=<联系人 id>，启动后直接进入该聊天
+  try {
+    const chatCid = new URLSearchParams(location.search).get('chat');
+    if (chatCid) {
+      await openChat(chatCid);
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
+  } catch (e) { console.warn('打开通知对应聊天失败：', e); }
   // 底部导航点击（事件绑定式，兼容手机触屏；再次点击已激活的键 = 回手机桌面）
   window.__initBound = 0;
   document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => {
@@ -565,6 +600,8 @@ async function initApp() {
   // 每 30 秒检查待办提醒
   setInterval(checkTodoReminders, 30_000);
   setTimeout(checkTodoReminders, 2000);
+  // 数据加载与首屏渲染都已完成：等两帧确保已绘制，再收起开屏
+  requestAnimationFrame(() => requestAnimationFrame(finishSplash));
 }
 
 // ============ 手机桌面：左右滑动双页 ============
@@ -629,6 +666,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initApp().catch(e => {
     console.error(e);
     toast('初始化失败：' + e.message);
+    finishSplash();
   });
 });
 
