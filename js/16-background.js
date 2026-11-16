@@ -3,12 +3,17 @@ import { dbGet, dbPut, toast } from './02-core.js';
 
 /* ============ 后台能力（不改变任何聊天/钱包业务规则） ============
    1) 静音保活：用「全零采样 WAV」循环播放，尽量拖住后台页面；首次用户交互后才起播。
-   2) 消息通知：页面不在前台时，把新消息/红包/转账/来信合并成一条系统通知，带限流。 */
+   2) 消息通知：页面不在前台时把新消息发成系统通知。同一联系人的消息各自成条，
+      但按「联系人」归到同一组（tag 按联系人 + 槽位固定），另发一条组汇总承载条数；
+      跨批次仍有限流。 */
 
 const NOTIFY_KEY = 'notify_enabled_v1';
 const KEEPALIVE_KEY = 'keepalive_enabled_v1';
 const NOTIFY_MIN_GAP = 8000;   // 两次系统通知的最小间隔
 const NOTIFY_MERGE_DELAY = 1200; // 首批消息到达后的合并窗口
+const MAX_GROUP_ITEMS = 5;       // 单个联系人最多展开成条的通知数，其余由组汇总承载条数
+const MAX_FLUSH_ITEMS = 8;       // 一次刷新内所有联系人合计的成条通知上限
+const NOTIFY_ITEM_STAGGER = 160; // 组内逐条出现的间隔，避免一秒内炸出一片
 
 let _enabled = false;
 let _keepEnabled = true;   // 后台保活开关（默认开启，用户可关；关闭后释放音频资源）
@@ -16,13 +21,14 @@ let _gestureDone = false;
 let _keepAudio = null;
 let _keepUrl = null;
 let _silentBlob = null;
-let _pending = new Map(); // cid -> { name, count, kinds:Set, lastText }
+let _pending = new Map(); // cid -> { name, count, kinds:Set, lastText, items:[{kind,text}] }
 let _flushTimer = null;
 let _lastNotifyAt = 0;
 let _swReg = null;
 let _swPromise = null;
 let _lastMethod = '';
 let _lastError = '';
+let _lastBatch = [];      // 最近一批实际发出的通知（排查/测试用）
 
 /* ============ 静音保活 ============ */
 // 0.5s / 8kHz / 16bit 单声道 / 采样全 0：任何音量下都不会发出声音
@@ -187,8 +193,8 @@ async function showSystemNotification(title, options) {
       body: opt.body || '',
       tag: opt.tag || 'zika-new-msg',
       renotify: !!opt.renotify,
-      data: { cid },
-      silent: false
+      data: { cid, kind: opt.kind || 'msg' },
+      silent: !!opt.silent
     });
     return 'sw';
   }
@@ -265,60 +271,103 @@ function notifyBody(rec) {
   if (kinds.length === 1) return KIND_LABEL[kinds[0]] || '[新消息]';
   return '[新消息]';
 }
+function previewOf(it) {
+  if (!it) return '[新消息]';
+  if (it.text) return truncate(it.text, 24);
+  return KIND_LABEL[it.kind] || '[新消息]';
+}
+// 组内成条 + 一条组汇总：
+// - 每条消息一条通知，tag 固定为「联系人 + 槽位」，下一批同槽位覆盖，通知栏不会越堆越多
+// - 同一联系人的这些 tag 共用一个前缀，系统通知栏里归为该联系人的一组
+// - 条数超过展示上限（或本批多于一条）时，再补一条组汇总承载条数
+function buildNotifyBatch(entries) {
+  const batch = [];
+  let budget = MAX_FLUSH_ITEMS;
+  for (const [cid, rec] of entries) {
+    if (budget <= 0) break;
+    const total = rec.count || 0;
+    if (!cid || !total) continue;
+    const shown = rec.items.slice(0, Math.min(rec.items.length, budget));
+    budget -= shown.length;
+    shown.forEach((it, i) => {
+      batch.push({
+        title: rec.name || '新消息',
+        body: previewOf(it),
+        tag: `zika-msg-${cid}-${i}`,
+        cid,
+        kind: 'item',
+        // 组内多条时逐条静默，只在组汇总上提醒一次，避免连响
+        silent: total > 1
+      });
+    });
+    if (total > 1) {
+      batch.push({
+        title: `${rec.name || '联系人'} · ${total} 条新消息`,
+        body: notifyBody(rec),
+        tag: `zika-grp-${cid}`,
+        cid,
+        kind: 'summary',
+        silent: false
+      });
+    }
+  }
+  return batch;
+}
 function scheduleFlush(delay) {
   if (_flushTimer) clearTimeout(_flushTimer);
   const wait = Math.max(delay, _lastNotifyAt + NOTIFY_MIN_GAP - Date.now(), 0);
   _flushTimer = setTimeout(flushNotifications, wait);
 }
-function flushNotifications() {
+async function flushNotifications() {
   _flushTimer = null;
   const entries = Array.from(_pending.entries());
   _pending.clear();
   if (!entries.length) return;
   // 页面回到前台或中途关闭：积压直接丢弃，不补发
   if (!_enabled || !permissionGranted() || pageIsActive()) return;
-  const total = entries.reduce((n, [, r]) => n + r.count, 0);
-  let title, body, targetCid;
-  if (entries.length === 1) {
-    const [cid, rec] = entries[0];
-    targetCid = cid;
-    title = rec.name || '新消息';
-    const brief = notifyBody(rec);
-    body = rec.count > 1 ? `${rec.count} 条新消息 · ${brief}` : brief;
-  } else {
-    targetCid = entries[entries.length - 1][0];
-    const names = entries.map(([, r]) => r.name || '联系人');
-    title = `星之匙 · ${total} 条新消息`;
-    body = `${names.slice(0, 3).join('、')}${entries.length > 3 ? `等 ${entries.length} 人` : ''}发来消息`;
+  const batch = buildNotifyBatch(entries);
+  if (!batch.length) return;
+  // 冷却从整批开始时刻重新起算：组内可以逐条出现，但不会紧接着再炸一批
+  _lastNotifyAt = Date.now();
+  _lastBatch = [];
+  for (let i = 0; i < batch.length; i++) {
+    const item = batch[i];
+    try {
+      const method = await showSystemNotification(item.title, {
+        body: truncate(item.body, 60),
+        tag: item.tag,
+        renotify: !item.silent,
+        cid: item.cid,
+        kind: item.kind,
+        silent: item.silent
+      });
+      _lastMethod = method;
+      _lastError = '';
+      _lastBatch.push({ title: item.title, body: truncate(item.body, 60), tag: item.tag, cid: item.cid, kind: item.kind, silent: item.silent });
+    } catch (e) {
+      _lastError = '通知发送失败：' + (e && e.message ? e.message : e);
+      console.warn(_lastError, e);
+      break;
+    }
+    if (i < batch.length - 1) await new Promise(r => setTimeout(r, NOTIFY_ITEM_STAGGER));
   }
-  showSystemNotification(title, {
-    body: truncate(body, 60),
-    tag: 'zika-new-msg',
-    renotify: true,
-    cid: targetCid
-  }).then(method => {
-    _lastNotifyAt = Date.now();
-    _lastMethod = method;
-    _lastError = '';
-  }).catch(e => {
-    _lastError = '通知发送失败：' + (e && e.message ? e.message : e);
-    console.warn(_lastError, e);
-  });
 }
 // 各消息生成点调用：只上报「到达了什么」，是否真正发通知由本模块统一判定
 function pushIncoming(cid, name, items) {
   if (!_enabled || !permissionGranted()) return;
   if (pageIsActive()) return;
   if (!cid || !Array.isArray(items) || !items.length) return;
-  const rec = _pending.get(cid) || { name: name || '联系人', count: 0, kinds: new Set(), lastText: '' };
+  const rec = _pending.get(cid) || { name: name || '联系人', count: 0, kinds: new Set(), lastText: '', items: [] };
   if (name) rec.name = name;
   for (const it of items) {
     if (!it) continue;
     rec.count++;
     const kind = it.kind || 'text';
     rec.kinds.add(kind);
-    if (kind === 'text' && it.text) rec.lastText = it.text;
-    if (kind === 'choice' && it.text) rec.lastText = it.text;
+    const text = it.text || '';
+    if (kind === 'text' && text) rec.lastText = text;
+    if (kind === 'choice' && text) rec.lastText = text;
+    if (rec.items.length < MAX_GROUP_ITEMS) rec.items.push({ kind, text });
   }
   _pending.set(cid, rec);
   scheduleFlush(NOTIFY_MERGE_DELAY);
@@ -391,6 +440,8 @@ export async function initBackgroundModule() {
     swScope: _swReg ? _swReg.scope : '',
     method: _lastMethod,
     lastError: _lastError,
-    pageActive: pageIsActive()
+    pageActive: pageIsActive(),
+    groupMax: MAX_GROUP_ITEMS,
+    lastBatch: _lastBatch
   });
 }
