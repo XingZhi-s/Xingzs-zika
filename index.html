@@ -73,10 +73,11 @@ a { text-decoration:none; color:inherit; }
 .tier-不理人 { background:#f3f4f6; color:#4b5563; }
 .toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; padding:10px 20px; border-radius:8px; z-index:9999; font-size:14px; }
 
-/* ========== 进站开屏：夜色 → 日出，纯 CSS 渐变 + 手写 SVG（无图片/emoji/第三方库） ========== */
+/* ========== 进站开屏：每次打开网站播放一次，纯 CSS + 内联 SVG ========== */
 #splash-screen {
   position:fixed; inset:0; z-index:10000;
-  background:#050b18; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg-color); overflow:hidden;
   opacity:1; visibility:visible;
   transition:opacity .45s ease, visibility .45s ease;
   /* 纯 CSS 最后兜底：即使 JS 未运行，9 秒后也自行隐藏，不会永远卡在开屏 */
@@ -84,77 +85,51 @@ a { text-decoration:none; color:inherit; }
   pointer-events:auto;
 }
 #splash-screen.splash-out { opacity:0; visibility:hidden; pointer-events:none; }
-.splash-scene { position:absolute; inset:0; overflow:hidden; }
-.splash-sky { position:absolute; inset:0; }
-/* 底层始终是浅色日景，夜色层逐渐淡出即完成「深蓝 → 浅色」过渡 */
-.splash-sky-day { background:linear-gradient(180deg, #8fb4ec 0%, #c4dafb 46%, #fff0d8 100%); }
-.splash-sky-dawn {
-  background:linear-gradient(180deg, #2c3f74 0%, #8b6798 42%, #f0a06a 76%, #ffd9a3 100%);
-  opacity:0; animation:splashDawn 2.6s ease-in-out forwards;
+#splash-screen::before {
+  content:""; position:absolute; inset:0;
+  background:radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--theme-color) 22%, transparent) 0%, transparent 62%);
 }
-.splash-sky-night {
-  background:linear-gradient(180deg, #030712 0%, #061024 38%, #0b1c3d 70%, #15315c 100%);
-  animation:splashNight 2.6s ease-in-out forwards;
+.splash-stage {
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:16px;
+  animation:splashRise .6s cubic-bezier(.2,.8,.2,1) both;
 }
-@keyframes splashNight {
-  0%, 18% { opacity:1; }
-  55% { opacity:.92; }
-  100% { opacity:0; }
+.splash-mark {
+  width:clamp(96px, 28vw, 144px); height:auto; color:var(--theme-color);
+  filter:drop-shadow(0 8px 22px color-mix(in srgb, var(--theme-color) 28%, transparent));
+  overflow:visible;
 }
-@keyframes splashDawn {
-  0%, 30% { opacity:0; }
-  62% { opacity:.9; }
-  100% { opacity:0; }
+.sp-ring { fill:none; stroke:currentColor; stroke-width:1.4; stroke-opacity:.32; stroke-dasharray:377; stroke-dashoffset:377; animation:splashDraw 1.05s cubic-bezier(.4,0,.2,1) forwards; }
+.sp-ring-2 { stroke-opacity:.5; stroke-dasharray:289; stroke-dashoffset:289; animation-delay:.12s; }
+/* 日月在同一位置交替：月亮先淡出，太阳随后淡入，不做位移与旋转 */
+.sp-moon { animation:splashMoonFade 1.8s ease-in-out both; }
+.sp-sun { animation:splashSunFade 1.8s ease-in-out both; }
+.splash-word {
+  font-size:15px; letter-spacing:.42em; text-indent:.42em; font-weight:600;
+  color:var(--text-primary); opacity:0; animation:splashFadeIn .5s ease .55s forwards;
 }
-.splash-stars { position:absolute; inset:0; width:100%; height:100%; animation:splashStars 2.6s ease-in-out forwards; }
-@keyframes splashStars {
-  0%, 42% { opacity:1; }
-  100% { opacity:0; }
-}
-.splash-moon {
-  position:absolute; left:26%; top:0; width:clamp(64px, 18vw, 92px); height:auto;
-  transform:translate(-50%, 4vh);
-  animation:splashMoonSet 2.6s cubic-bezier(.4,.05,.6,.95) forwards;
-  filter:drop-shadow(0 0 22px rgba(190,215,255,.45));
-}
-@keyframes splashMoonSet {
-  0% { transform:translate(-50%, 4vh); opacity:1; }
-  72% { transform:translate(-50%, 58vh); opacity:.95; }
-  100% { transform:translate(-50%, 74vh); opacity:0; }
-}
-.splash-sun {
-  position:absolute; left:70%; top:0; width:clamp(84px, 24vw, 124px); height:auto;
-  transform:translate(-50%, 120vh);
-  animation:splashSunRise 2.6s cubic-bezier(.4,.05,.6,.95) forwards;
-  filter:drop-shadow(0 0 28px rgba(255,190,110,.5));
-}
-@keyframes splashSunRise {
-  0% { transform:translate(-50%, 120vh); opacity:0; }
-  25% { opacity:.75; }
-  100% { transform:translate(-50%, 54vh); opacity:1; }
-}
-.splash-horizon { position:absolute; left:0; right:0; bottom:0; height:18vh; animation:splashHorizon 2.6s ease-in-out forwards; }
-.splash-horizon svg { width:100%; height:100%; display:block; }
-@keyframes splashHorizon {
-  0% { opacity:1; }
-  100% { opacity:.35; }
-}
-.splash-brand {
-  position:absolute; left:0; right:0; bottom:22vh; text-align:center;
-  font-size:15px; letter-spacing:.42em; text-indent:.42em; font-weight:600; color:#1c2b46;
-  opacity:0; animation:splashBrand 2.6s ease forwards;
-}
-@keyframes splashBrand {
-  0%, 58% { opacity:0; transform:translateY(6px); }
-  78% { opacity:1; transform:translateY(0); }
-  100% { opacity:.92; }
-}
+.splash-line { width:96px; height:2px; border-radius:2px; background:color-mix(in srgb, var(--theme-color) 18%, transparent); overflow:hidden; }
+.splash-line i { display:block; width:100%; height:100%; border-radius:2px; background:var(--theme-color); transform-origin:0 50%; transform:scaleX(0); animation:splashLine 1.15s cubic-bezier(.3,0,.2,1) .45s forwards; }
 @keyframes splashFallback {
   to { opacity:0; visibility:hidden; pointer-events:none; }
 }
+@keyframes splashRise {
+  from { transform:translateY(10px); opacity:0; }
+  to { transform:translateY(0); opacity:1; }
+}
+@keyframes splashDraw { to { stroke-dashoffset:0; } }
+@keyframes splashMoonFade {
+  0%, 35% { opacity:1; }
+  55%, 100% { opacity:0; }
+}
+@keyframes splashSunFade {
+  0%, 35% { opacity:0; }
+  55%, 100% { opacity:1; }
+}
+@keyframes splashFadeIn { to { opacity:1; } }
+@keyframes splashLine { to { transform:scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
   #splash-screen { transition:none; }
-  .splash-sky-dawn, .splash-sky-night, .splash-stars, .splash-moon, .splash-sun, .splash-horizon, .splash-brand {
+  .splash-stage, .sp-ring, .sp-moon, .sp-sun, .splash-word, .splash-line i {
     animation-duration:.01s !important; animation-delay:0s !important; animation-iteration-count:1 !important;
   }
 }
@@ -1952,79 +1927,38 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 <body>
 <!-- ========== 进站开屏（每次打开网站播放一次；不依赖 JS、不阻塞数据加载） ========== -->
 <div id="splash-screen" aria-hidden="true">
-  <div class="splash-scene">
-    <div class="splash-sky splash-sky-day"></div>
-    <div class="splash-sky splash-sky-night"></div>
-    <div class="splash-sky splash-sky-dawn"></div>
-    <svg class="splash-stars" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <g fill="#dfe9ff">
-        <circle cx="42" cy="72" r="1.8" opacity=".85"/>
-        <circle cx="96" cy="136" r="1.2" opacity=".55"/>
-        <circle cx="152" cy="58" r="1.5" opacity=".7"/>
-        <circle cx="212" cy="118" r="1.1" opacity=".45"/>
-        <circle cx="268" cy="64" r="1.7" opacity=".8"/>
-        <circle cx="330" cy="142" r="1.3" opacity=".55"/>
-        <circle cx="374" cy="86" r="1.6" opacity=".7"/>
-        <circle cx="64" cy="214" r="1.1" opacity=".4"/>
-        <circle cx="128" cy="248" r="1.6" opacity=".65"/>
-        <circle cx="196" cy="202" r="1.2" opacity=".5"/>
-        <circle cx="252" cy="268" r="1.8" opacity=".75"/>
-        <circle cx="316" cy="224" r="1.1" opacity=".4"/>
-        <circle cx="366" cy="292" r="1.4" opacity=".55"/>
-        <circle cx="86" cy="344" r="1.7" opacity=".6"/>
-        <circle cx="168" cy="318" r="1.1" opacity=".4"/>
-        <circle cx="238" cy="368" r="1.3" opacity=".5"/>
-        <circle cx="306" cy="336" r="1.5" opacity=".6"/>
-        <circle cx="52" cy="458" r="1.2" opacity=".4"/>
-        <circle cx="144" cy="432" r="1.5" opacity=".5"/>
-        <circle cx="282" cy="446" r="1.1" opacity=".35"/>
+  <div class="splash-stage">
+    <svg class="splash-mark" viewBox="0 0 160 160" aria-hidden="true">
+      <circle class="sp-ring" cx="80" cy="80" r="60"/>
+      <circle class="sp-ring sp-ring-2" cx="80" cy="80" r="46"/>
+      <!-- 月亮：线条弯月 + 星点，先淡出 -->
+      <g class="sp-moon" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(80 80) scale(1.55) translate(-12 -12)">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-width="1.2"/>
+        </g>
+        <g stroke-width="1.3">
+          <path d="M101 61 v6 M98 64 h6"/>
+          <path d="M58 98 v5 M55.5 100.5 h5"/>
+          <circle cx="103" cy="88" r="1"/>
+        </g>
+      </g>
+      <!-- 太阳：线条圆盘 + 放射光线，随后淡入并保持 -->
+      <g class="sp-sun" stroke="currentColor" fill="none" stroke-linecap="round">
+        <circle cx="80" cy="80" r="17" stroke-width="1.8"/>
+        <g stroke-width="1.6">
+          <line x1="80" y1="57" x2="80" y2="49"/>
+          <line x1="80" y1="103" x2="80" y2="111"/>
+          <line x1="57" y1="80" x2="49" y2="80"/>
+          <line x1="103" y1="80" x2="111" y2="80"/>
+          <line x1="63.7" y1="63.7" x2="58.1" y2="58.1"/>
+          <line x1="96.3" y1="63.7" x2="101.9" y2="58.1"/>
+          <line x1="63.7" y1="96.3" x2="58.1" y2="101.9"/>
+          <line x1="96.3" y1="96.3" x2="101.9" y2="101.9"/>
+        </g>
       </g>
     </svg>
-    <svg class="splash-moon" viewBox="0 0 120 120" aria-hidden="true">
-      <defs>
-        <radialGradient id="splashMoonFill" cx="36%" cy="30%" r="78%">
-          <stop offset="0%" stop-color="#ffffff"/>
-          <stop offset="58%" stop-color="#e8eefb"/>
-          <stop offset="100%" stop-color="#c3cfe6"/>
-        </radialGradient>
-      </defs>
-      <circle cx="60" cy="60" r="44" fill="url(#splashMoonFill)"/>
-      <circle cx="44" cy="43" r="10" fill="#c6d2e6" opacity=".32"/>
-      <circle cx="73" cy="52" r="6" fill="#c6d2e6" opacity=".26"/>
-      <circle cx="57" cy="80" r="13" fill="#c6d2e6" opacity=".2"/>
-      <circle cx="84" cy="81" r="4" fill="#c6d2e6" opacity=".3"/>
-    </svg>
-    <svg class="splash-sun" viewBox="0 0 160 160" aria-hidden="true">
-      <defs>
-        <radialGradient id="splashSunHalo" cx="50%" cy="50%" r="50%">
-          <stop offset="55%" stop-color="#ffca7a" stop-opacity=".55"/>
-          <stop offset="100%" stop-color="#ffca7a" stop-opacity="0"/>
-        </radialGradient>
-        <radialGradient id="splashSunCore" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#fffdf2"/>
-          <stop offset="55%" stop-color="#ffe08a"/>
-          <stop offset="100%" stop-color="#ffab4a"/>
-        </radialGradient>
-      </defs>
-      <circle cx="80" cy="80" r="76" fill="url(#splashSunHalo)"/>
-      <g stroke="#ffc46b" stroke-width="3" stroke-linecap="round" opacity=".8">
-        <line x1="80" y1="12" x2="80" y2="26"/>
-        <line x1="80" y1="134" x2="80" y2="148"/>
-        <line x1="12" y1="80" x2="26" y2="80"/>
-        <line x1="134" y1="80" x2="148" y2="80"/>
-        <line x1="34" y1="34" x2="44" y2="44"/>
-        <line x1="116" y1="34" x2="126" y2="44"/>
-        <line x1="34" y1="126" x2="44" y2="116"/>
-        <line x1="116" y1="126" x2="126" y2="116"/>
-      </g>
-      <circle cx="80" cy="80" r="42" fill="url(#splashSunCore)"/>
-    </svg>
-    <div class="splash-horizon" aria-hidden="true">
-      <svg viewBox="0 0 400 120" preserveAspectRatio="none">
-        <path d="M0,78 C60,58 110,86 170,70 C230,54 290,84 350,66 C375,58 390,62 400,58 L400,120 L0,120 Z" fill="#08152b"/>
-      </svg>
-    </div>
-    <div class="splash-brand">星之匙</div>
+    <div class="splash-word">星之匙</div>
+    <div class="splash-line"><i></i></div>
   </div>
 </div>
 <!-- ========== SVG 图标库（不显示，供引用） ========== -->

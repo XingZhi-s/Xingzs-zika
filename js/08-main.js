@@ -450,7 +450,7 @@ async function periodicCheck() {
 }
 
 // ============ 开屏控制：等应用真正就绪后再淡出 ============
-const SPLASH_MIN_MS = 2600;  // 最短展示：与日月交替动画时长一致，避免动画没播完就淡出
+const SPLASH_MIN_MS = 2000;  // 最短展示：日月交替 1.8s 放完后再留一拍
 const SPLASH_MAX_MS = 8000;  // 最长兜底，初始化卡死时也会退出开屏
 const _splashT0 = performance.now();
 let _splashDismissed = false;
