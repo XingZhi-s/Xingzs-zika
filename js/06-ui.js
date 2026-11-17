@@ -1,7 +1,7 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
-import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme } from './03-data.js';
+import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
 
@@ -161,6 +161,7 @@ export async function renderContactSetting(id) {
   await normalizeContactStatus(c, pool);
   const box = $('cs-content'); if (!box) return;
   const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
+  const pg = proactiveGapRange(c);
   const cats = await getStatusCategories();
   // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
   const currentSid = (c.statusId && pool.some(s => s.id === c.statusId))
@@ -304,8 +305,19 @@ export async function renderContactSetting(id) {
             </div>
           </span>
         </div>
+        <div class="cs-row">
+          <span class="cs-label">间隔</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;gap:6px;">
+              <input type="number" min="1" max="168" step="1" value="${pg.min}" id="cs-pgap-min">
+              <span class="cs-unit">~</span>
+              <input type="number" min="1" max="168" step="1" value="${pg.max}" id="cs-pgap-max">
+              <span class="cs-unit">小时</span>
+            </div>
+          </span>
+        </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveProactive()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存主动消息设置</button>
-        <div class="cs-hint">开启后每 2~8 小时随机主动发一批；条数 0 表示该批次不发送</div>
+        <div class="cs-hint">开启后按设置的间隔（小时，最少 1 小时）随机主动发一批；条数 0 表示该批次不发送</div>
       </div>
     </div>
 
@@ -607,7 +619,18 @@ export async function csSaveProactive() {
   if (mx > 50) mx = 50;
   c.settings.proactiveMin = mn;
   c.settings.proactiveMax = mx;
-  if (c.settings.proactiveMsg) c.settings.nextProactiveAt = now() + randInt(2, 8) * 3600 * 1000;
+  // 间隔（小时）：最少 1 小时，上限 168 小时（一周），空值回落默认 2~8
+  let gMin = parseInt($('cs-pgap-min') ? $('cs-pgap-min').value : '');
+  let gMax = parseInt($('cs-pgap-max') ? $('cs-pgap-max').value : '');
+  if (isNaN(gMin) || gMin < 1) gMin = 2;
+  if (isNaN(gMax) || gMax < 1) gMax = 8;
+  if (gMin > gMax) { const t = gMin; gMin = gMax; gMax = t; }
+  gMin = Math.min(168, gMin);
+  gMax = Math.min(168, Math.max(gMin, gMax));
+  c.settings.proactiveGapMin = gMin;
+  c.settings.proactiveGapMax = gMax;
+  const gap = proactiveGapRange(c);
+  if (c.settings.proactiveMsg) c.settings.nextProactiveAt = now() + randInt(gap.min, gap.max) * 3600 * 1000;
   await saveContact(c);
   toast('主动消息设置已保存');
 }
@@ -615,7 +638,8 @@ export async function csToggleProactive() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
   c.settings.proactiveMsg = !c.settings.proactiveMsg;
   if (c.settings.proactiveMsg) {
-    c.settings.nextProactiveAt = now() + randInt(2, 8) * 3600 * 1000;
+    const gap = proactiveGapRange(c);
+    c.settings.nextProactiveAt = now() + randInt(gap.min, gap.max) * 3600 * 1000;
   }
   await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
@@ -755,6 +779,24 @@ export async function csSearchChatRender(kw) {
 
 // ============ 字卡库 ============
 
+// 记住哪些分组处于展开状态：保存/重渲染后保持展开，不回到默认收起
+const _openCardGroups = new Set();
+function cardLibScroller() {
+  let el = $('card-groups');
+  while (el && el !== document.body && el !== document.documentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if (oy === 'auto' || oy === 'scroll') return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+export function toggleCardGroup(gid) {
+  const block = document.getElementById('grp-' + gid);
+  if (!block) return;
+  if (_openCardGroups.has(gid)) _openCardGroups.delete(gid);
+  else _openCardGroups.add(gid);
+  block.classList.toggle('collapsed', !_openCardGroups.has(gid));
+}
 export function openCardLib() {
   if (!state.currentContactSettingId) return;
   state.cardLibFrom = 'page-contact-setting';
@@ -768,15 +810,19 @@ export async function renderCardLib() {
   const box = $('card-groups');
   const groups = c.cardGroups || [];
   if (!groups.length) { box.innerHTML = `<div class="empty">还没有分组，点击上方按钮新建</div>`; return; }
+  // 重渲染前记住滚动位置，渲染后恢复，避免保存后跳回顶部
+  const scroller = cardLibScroller();
+  const keepTop = scroller ? scroller.scrollTop : 0;
   box.innerHTML = groups.map(g => {
     const count = (g.cards||[]).length;
     const cardsHtml = (g.cards||[]).map(card => `<div class="card-item" onclick="editCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')">
       <button class="del" onclick="event.stopPropagation();deleteCard('${escapeHtml(g.id)}','${escapeHtml(card.id)}')"><svg class="i i-sm"><use href="#icon-close"/></svg></button>
       <div class="multi-ellipsis">${escapeHtml(card.content)}</div>
     </div>`).join('');
-    // 默认折叠：所有分组初始都收起，点标题再展开
-    return `<div class="group-block collapsed" id="grp-${escapeHtml(g.id)}">
-      <div class="group-header" onclick="document.getElementById('grp-${escapeHtml(g.id)}').classList.toggle('collapsed')">
+    // 首次进入默认收起；展开过的分组在保存/重渲染后保持展开
+    const collapsed = !_openCardGroups.has(g.id);
+    return `<div class="group-block${collapsed ? ' collapsed' : ''}" id="grp-${escapeHtml(g.id)}">
+      <div class="group-header" onclick="toggleCardGroup('${escapeHtml(g.id)}')">
         <span><svg class="i i-sm collapse-arrow" style="width:14px;height:14px;transition:transform .2s;"><use href="#icon-chevron-down"/></svg> ${escapeHtml(g.name)}（${count}张）</span>
         <span class="group-actions">
           <button onclick="event.stopPropagation();addCard('${escapeHtml(g.id)}')" title="加字卡" style="display:flex;align-items:center;justify-content:center;"><svg class="i i-sm"><use href="#icon-plus"/></svg></button>
@@ -789,6 +835,7 @@ export async function renderCardLib() {
       </div>
     </div>`;
   }).join('');
+  if (scroller) scroller.scrollTop = keepTop;
 }
 // 联系人设置项搜索：不隐藏任何模块，命中后平滑滚动到该模块并短暂高亮
 export function csSearchJump(kw) {
@@ -817,7 +864,10 @@ export function filterCardLib(keyword) {
       if (hit) hasVisible = true;
     });
     group.style.display = hasVisible ? 'block' : 'none';
-    if (hasVisible) group.classList.remove('collapsed');
+    if (hasVisible) {
+      _openCardGroups.add(group.id.replace(/^grp-/, ''));
+      group.classList.remove('collapsed');
+    }
   });
 }
 export async function createCardGroup() {
@@ -826,8 +876,10 @@ export async function createCardGroup() {
   if (!r) return;
   const nm = (r.name || '').trim(); if (!nm) return toast('请输入分组名');
   c.cardGroups = c.cardGroups || [];
-  c.cardGroups.push({ id: uid(), name: nm, cards: [] });
+  const ng = { id: uid(), name: nm, cards: [] };
+  c.cardGroups.push(ng);
   await saveContact(c);
+  _openCardGroups.add(ng.id);
   renderCardLib();
 }
 export async function editCardGroup(gid) {
@@ -838,6 +890,7 @@ export async function editCardGroup(gid) {
   const nm = (r.name || '').trim(); if (!nm) return toast('请输入分组名');
   g.name = nm;
   await saveContact(c);
+  _openCardGroups.add(gid);
   renderCardLib();
 }
 export async function deleteCardGroup(gid) {
@@ -845,6 +898,7 @@ export async function deleteCardGroup(gid) {
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
   if (!await confirmDialog(`删除分组「${g.name}」？组内${(g.cards||[]).length}张字卡将一并删除！`)) return;
   c.cardGroups = (c.cardGroups||[]).filter(x => x.id !== gid);
+  _openCardGroups.delete(gid);
   await saveContact(c);
   renderCardLib();
 }
@@ -859,6 +913,7 @@ export async function addCard(gid) {
   if (g.cards.some(x => x.content === s)) return toast('该分组已有相同内容的字卡');
   g.cards.push({ id: uid(), content: s });
   await saveContact(c);
+  _openCardGroups.add(gid);
   renderCardLib();
 }
 export async function editCard(gid, cid) {
@@ -872,6 +927,7 @@ export async function editCard(gid, cid) {
   if (g.cards.some(x => x.id !== cid && x.content === s)) return toast('该分组已有相同内容的字卡');
   card.content = s;
   await saveContact(c);
+  _openCardGroups.add(gid);
   renderCardLib();
 }
 export async function deleteCard(gid, cid) {
@@ -880,6 +936,7 @@ export async function deleteCard(gid, cid) {
   const g = (c.cardGroups||[]).find(x => x.id === gid); if (!g) return;
   g.cards = (g.cards||[]).filter(x => x.id !== cid);
   await saveContact(c);
+  _openCardGroups.add(gid);
   renderCardLib();
 }
 export function openBatchImport() {
@@ -914,6 +971,7 @@ export function openBatchImport() {
       await saveContact(c);
       closeModal();
       toast(`导入${add}张${dupList.length?`，跳过重复${dupList.length}张：${dupList.slice(0,3).join(' / ')}${dupList.length>3?'…':''}`:''}`);
+      _openCardGroups.add(gid);
       renderCardLib();
     }}
   ]);

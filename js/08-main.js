@@ -1,7 +1,7 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
+import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
@@ -247,6 +247,7 @@ export async function runCatchUp(onlyCid) {
 
       // 3) 主动消息（proactiveMsg）：条数用 proactiveMin ~ proactiveMax 之间随机
       if (c.settings.proactiveMsg) {
+        const pgap = proactiveGapRange(c);
         if (!c.settings.nextProactiveAt || t >= c.settings.nextProactiveAt) {
           // 还有未到点的回复排队：先等回复发出，避免主动消息抢在回复前面
           const pendingReplyAt = myMsgs.reduce((mx, m) => {
@@ -257,7 +258,7 @@ export async function runCatchUp(onlyCid) {
             // 本轮不排，保持 nextProactiveAt 原值，等回复到点后的下一次检查再发
           } else if (curRate <= 20) {
             // 低概率状态（睡觉 / 不理人等极不活跃）：跳过本次主动消息，仍推进下次时间防止死循环
-            c.settings.nextProactiveAt = t + randInt(2, 8) * 3600 * 1000;
+            c.settings.nextProactiveAt = t + randInt(pgap.min, pgap.max) * 3600 * 1000;
             changed = true;
           } else {
             const cards = c.cardGroups.flatMap(g => g.cards || []);
@@ -287,7 +288,7 @@ export async function runCatchUp(onlyCid) {
               });
               notifyItems.push({ kind: type === 'sticker' ? 'sticker' : 'text', text: type === 'text' ? content : '' });
             }
-            c.settings.nextProactiveAt = t + randInt(2, 8) * 3600 * 1000;
+            c.settings.nextProactiveAt = t + randInt(pgap.min, pgap.max) * 3600 * 1000;
             if (cnt > 0) { c.unread = (c.unread||0) + cnt; changed = true; }
           }
         }
@@ -449,7 +450,7 @@ async function periodicCheck() {
 }
 
 // ============ 开屏控制：等应用真正就绪后再淡出 ============
-const SPLASH_MIN_MS = 1200;  // 最短展示，避免一闪而过
+const SPLASH_MIN_MS = 2600;  // 最短展示：与日月交替动画时长一致，避免动画没播完就淡出
 const SPLASH_MAX_MS = 8000;  // 最长兜底，初始化卡死时也会退出开屏
 const _splashT0 = performance.now();
 let _splashDismissed = false;

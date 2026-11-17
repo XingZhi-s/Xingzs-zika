@@ -13,6 +13,8 @@ export function makeCall(type) {
 }
 export async function startOutgoingCall(cid, type) {
   const c = await getContact(cid);
+  // 每通电话一个稳定的标识：结束提示的 sysKey 用它，重复挂断/恢复补算都不会重复插入
+  const callKey = 'call:' + uid();
   showCallScreen({
     name: c.name, avatar: c.avatar || DEFAULT_AVATAR,
     status: `正在${type==='video'?'视频':'电话'}呼叫…`,
@@ -33,40 +35,35 @@ export async function startOutgoingCall(cid, type) {
     } else {
       // 未接
       updateCallStatus(`${c.name}未接听`, false);
-      // 记录一条消息 + 1.5秒后自动关闭
+      // 记录一条系统提示 + 1.5秒后自动关闭
       setTimeout(async () => {
         closeCallScreen();
         const cc = await getContact(cid);
-        cc.messages.push({
-          id: uid(), from:'other', type:'text', content: `（${type==='video'?'视频':'电话'}未接听）`,
-          time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-        });
-        await saveContact(cc);
-        if (state.currentContactId === cid) renderChatMessages(cid, true);
+        if (cc) {
+          pushCallEndSys(cc, callKey + ':noanswer', `（${type==='video'?'视频':''}未接听）`, 'out');
+          await saveContact(cc);
+          if (state.currentContactId === cid) renderChatMessages(cid, true);
+        }
       }, 1500);
     }
   }, d * 1000);
-  state.callState = { type, contactId: cid, incoming: false, startTime: 0, pickUpTimer, intervalId: null, connected:false, micOn:true, _name:c.name, _avatar:c.avatar||DEFAULT_AVATAR, hang:() => {
+  state.callState = { type, contactId: cid, callKey, incoming: false, startTime: 0, pickUpTimer, intervalId: null, connected:false, micOn:true, _name:c.name, _avatar:c.avatar||DEFAULT_AVATAR, hang:() => {
     clearTimeout(pickUpTimer);
     if (state.callState.intervalId) clearInterval(state.callState.intervalId);
-    // 如果接通了：挂断，记一条消息 + 时长
+    // 如果接通了：挂断，记一条系统提示 + 时长；没接通：记已取消
     setTimeout(async () => {
       const wasConnected = state.callState ? state.callState.connected : false;
       const startTime0 = state.callState ? state.callState.startTime : 0;
       closeCallScreen();
       const cc = await getContact(cid);
-      let txt = '';
+      if (!cc) return;
       if (wasConnected) {
         const s = Math.floor((now() - startTime0)/1000);
         const mm = String(Math.floor(s/60)).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
-        txt = `（已通话 ${mm}:${ss}）`;
+        pushCallEndSys(cc, callKey + ':ended', `${type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, 'out');
       } else {
-        txt = '（已取消呼叫）';
+        pushCallEndSys(cc, callKey + ':canceled', '（已取消呼叫）', 'out');
       }
-      cc.messages.push({
-        id: uid(), from:'me', type:'text', content: txt,
-        time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-      });
       await saveContact(cc);
       if (state.currentContactId === cid) renderChatMessages(cid, true);
     }, 0);
@@ -169,7 +166,7 @@ export function toggleCallMinimize() {
 
 // ============ 通话状态持久化（刷新恢复机制） ============
 export function persistCallState() {
-  try { if (!state.callState) { localStorage.removeItem(CALL_PERSIST_KEY); return; } localStorage.setItem(CALL_PERSIST_KEY, JSON.stringify({ contactId: state.callState.contactId, type: state.callState.type || 'voice', incoming: !!state.callState.incoming, connected: !!state.callState.connected, startTime: state.callState.startTime || 0, duration: state.callState.duration || 0, micOn: state.callState.micOn !== false, minimized: !!state.callState.minimized, pos: state.callState._pos || null, savedAt: now() })); } catch (e) {}
+  try { if (!state.callState) { localStorage.removeItem(CALL_PERSIST_KEY); return; } localStorage.setItem(CALL_PERSIST_KEY, JSON.stringify({ contactId: state.callState.contactId, callKey: state.callState.callKey || '', type: state.callState.type || 'voice', incoming: !!state.callState.incoming, connected: !!state.callState.connected, startTime: state.callState.startTime || 0, duration: state.callState.duration || 0, micOn: state.callState.micOn !== false, minimized: !!state.callState.minimized, pos: state.callState._pos || null, savedAt: now() })); } catch (e) {}
 }
 export function clearPersistedCall() { try { localStorage.removeItem(CALL_PERSIST_KEY); } catch (e) {} }
 export function bindMiniClickToRestore(el) {
@@ -206,7 +203,7 @@ function randomCallDuration() {
   return randInt(300, 1800);
 }
 
-// 对方主动挂断（通话时长到期自动触发），生成 from:'other' 的系统通话消息
+// 对方主动挂断（通话时长到期自动触发），生成系统通话提示
 function remoteHangUp() {
   const cs = state.callState;
   if (!cs) return;
@@ -216,16 +213,15 @@ function remoteHangUp() {
   const cid = cs.contactId;
   const isVideo = cs.type === 'video';
   const startTime = cs.startTime || now();
+  const callKey = cs.callKey || ('call:' + cid + ':' + startTime);
+  const dir = cs.incoming ? 'in' : 'out';
   setTimeout(async () => {
     closeCallScreen();
     const cc = await getContact(cid);
     if (!cc) return;
     const s = Math.max(0, Math.floor((now() - startTime)/1000));
     const mm = String(Math.floor(s/60)).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
-    cc.messages.push({
-      id: uid(), from:'other', type:'text', content: `${isVideo ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`,
-      time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-    });
+    pushCallEndSys(cc, callKey + ':remote', `${isVideo ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, dir);
     await saveContact(cc);
     if (state.currentContactId === cid) renderChatMessages(cid, true);
   }, 0);
@@ -243,27 +239,20 @@ function buildRestoredHang(cid) {
     const wasIncoming = !!cs.incoming;
     const startTime = cs.startTime || 0;
     const name = cs._name || '对方';
+    const callKey = cs.callKey || ('call:' + cid + ':' + startTime);
     setTimeout(async () => {
       closeCallScreen();
       const cc = await getContact(cid);
       if (!cc) return;
-      let txt, from;
       if (wasConnected) {
         const s = Math.floor((now() - startTime)/1000);
         const mm = String(Math.floor(s/60)).padStart(2,'0'), ss = String(s%60).padStart(2,'0');
-        txt = `（已通话 ${mm}:${ss}）`;
-        from = wasIncoming ? 'other' : 'me';
+        pushCallEndSys(cc, callKey + ':ended', `${cs.type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, wasIncoming ? 'in' : 'out');
       } else if (wasIncoming) {
-        txt = `（我拒接了${name}的来电）`;
-        from = 'me';
+        pushCallEndSys(cc, callKey + ':rejected', `（我拒接了${name}的来电）`, 'in');
       } else {
-        txt = '（已取消呼叫）';
-        from = 'me';
+        pushCallEndSys(cc, callKey + ':canceled', '（已取消呼叫）', 'out');
       }
-      cc.messages.push({
-        id: uid(), from, type:'text', content: txt,
-        time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-      });
       await saveContact(cc);
       if (state.currentContactId === cid) renderChatMessages(cid, true);
     }, 0);
@@ -293,6 +282,7 @@ export async function restoreCallState() {
   if (!saved.connected && now() - (saved.savedAt || 0) > 60 * 1000) { clearPersistedCall(); return; }
   state.callState = {
     type, contactId: cid,
+    callKey: saved.callKey || '',
     incoming: !!saved.incoming,
     connected: !!saved.connected,
     startTime: saved.startTime || 0,
@@ -312,10 +302,8 @@ export async function restoreCallState() {
     const elapsed = Math.floor((now() - state.callState.startTime) / 1000);
     if (elapsed >= dur) {
       const mm = String(Math.floor(dur/60)).padStart(2,'0'), ss = String(dur%60).padStart(2,'0');
-      c.messages.push({
-        id: uid(), from: 'other', type:'text', content: `${type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`,
-        time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-      });
+      const callKey = state.callState.callKey || ('call:' + cid + ':' + state.callState.startTime);
+      pushCallEndSys(c, callKey + ':remote', `${type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, saved.incoming ? 'in' : 'out');
       await saveContact(c);
       state.callState = null;
       clearPersistedCall();
@@ -359,13 +347,11 @@ export async function restoreCallState() {
       } else {
         updateCallStatus(`${name}未接听`, false);
         setTimeout(async () => {
+          const callKey = (state.callState && state.callState.callKey) || ('call:' + cid + ':' + (saved.startTime || now()));
           closeCallScreen();
           const cc = await getContact(cid);
           if (cc) {
-            cc.messages.push({
-              id: uid(), from:'other', type:'text', content: `（${type==='video'?'视频':'电话'}未接听）`,
-              time: now(), replyTo: null, snapshot: null, read: true, readAt: now(), replyAt: 0, replied: true
-            });
+            pushCallEndSys(cc, callKey + ':noanswer', `（${type==='video'?'视频':''}未接听）`, 'out');
             await saveContact(cc);
             if (state.currentContactId === cid) renderChatMessages(cid, true);
           }
@@ -452,6 +438,20 @@ export function rejectIncoming() {
   }, 0);
 }
 export function hangUpCall() { if (state.callState && state.callState.hang) state.callState.hang(); }
+
+// 通话结束的系统提示：与「未接来电」同一套写法（sysKey 幂等），dir 区分呼出/呼入
+function pushCallEndSys(c, key, content, dir) {
+  if (!c) return false;
+  const msgs = c.messages || (c.messages = []);
+  if (msgs.some(m => m.sysKey === key)) return false;
+  const mt = now();
+  msgs.push({
+    id: uid(), from: dir === 'out' ? 'me' : 'other', type:'text', content,
+    time: mt, replyTo: null, snapshot: null, read: true, readAt: mt, replyAt: 0, replied: true,
+    sysKey: key, sysAck: false, callDir: dir
+  });
+  return true;
+}
 
 // 记录一条未接来电（纯函数，不落库，调用方统一 saveContact）
 // 防雪崩：最近 50 条内未接提示最多 3 条；用户尚未查看时多次来电合并为一条

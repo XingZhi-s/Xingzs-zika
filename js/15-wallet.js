@@ -248,31 +248,49 @@ async function tickInner(cid) {
     }
   }
 
-  // 3) 按概率 + 间隔生成联系人发来的红包（一次补算最多 3 条，时间戳用真正命中时刻）
+  // 3) 按间隔生成联系人发来的红包：每个间隔到点只掷一次、只写一个红包（一次触发一个）。
+  //    补算跨过多个间隔时，按各自命中时刻分别补，相邻至少隔一个间隔；同一分钟已有卡片则顺延，
+  //    时间戳绝不撞在一起。通知与未读在一次补算里只算一次，避免一连弹出好几条。
   let generated = 0;
   if (cw.rpEnabled && cw.nextAt && t >= cw.nextAt) {
     let at = cw.nextAt;
     let guard = 0;
-    while (at <= t && guard < 8 && generated < 3) {
-      // 超过 24 小时的旧红包直接作废，不再补出卡片
+    // 已占用的分钟（红包/转账），补算时用来避免时间戳挤在同一分钟
+    const usedMinutes = new Set();
+    for (const m of msgs) {
+      if (m.type === 'redpacket' || m.type === 'transfer') {
+        usedMinutes.add(Math.floor((Number(m.time) || 0) / MIN));
+      }
+    }
+    while (at <= t && guard < 48) {
+      // 超过 24 小时的旧间隔不补卡片，只推进游标
       if (at > t - DAY) {
+        // 一个间隔只掷一次；命中后只写一个红包
         if (Math.random() * 100 < cw.prob) {
-          const amount = randAmount(cw.inMin, cw.inMax);
-          const hitAt = Math.min(at, t);
-          msgs.push({
-            id: uid(), from: 'other', type: 'redpacket', content: '',
-            time: hitAt, replyTo: null, snapshot: null,
-            read: true, readAt: hitAt, replyAt: 0, replied: true,
-            redPacket: { amount, status: 'unopened', direction: 'in', createdAt: hitAt, expiresAt: hitAt + DAY }
-          });
-          if (state.currentContactId !== cid) c.unread = (c.unread || 0) + 1;
-          generated++;
-          notifyItems.push({ kind: 'redpacket' });
-          contactChanged = true;
+          let hitAt = Math.min(at, t);
+          // 同一分钟已经有红包/转账：本次触发顺延到下一个空分钟，不与已有时间戳相撞
+          for (let k = 0; k < 5 && hitAt <= t && usedMinutes.has(Math.floor(hitAt / MIN)); k++) hitAt += MIN;
+          if (hitAt <= t && !usedMinutes.has(Math.floor(hitAt / MIN))) {
+            const amount = randAmount(cw.inMin, cw.inMax);
+            msgs.push({
+              id: uid(), from: 'other', type: 'redpacket', content: '',
+              time: hitAt, replyTo: null, snapshot: null,
+              read: true, readAt: hitAt, replyAt: 0, replied: true,
+              redPacket: { amount, status: 'unopened', direction: 'in', createdAt: hitAt, expiresAt: hitAt + DAY }
+            });
+            usedMinutes.add(Math.floor(hitAt / MIN));
+            generated++;
+            contactChanged = true;
+          }
         }
       }
       at += randInt(cw.gapMin, cw.gapMax) * 3600000;
       guard++;
+    }
+    // 命中过：通知与未读在一次补算里只记一次（不随补出条数叠加）
+    if (generated) {
+      if (state.currentContactId !== cid) c.unread = (c.unread || 0) + 1;
+      notifyItems.push({ kind: 'redpacket' });
     }
     // 长离线补完之后不继续堆在过期区间：直接从现在重新排期
     if (at <= t) at = t + randInt(cw.gapMin, cw.gapMax) * 3600000;
@@ -607,7 +625,7 @@ export function backFromWalletSettings() {
 }
 
 // ============ 发红包 ============
-let _rpDraft = { cid: null, card: 'mine', amount: 0 };
+let _rpDraft = { cid: null, card: 'mine' };
 
 export async function openRedPacketPanel() {
   const cid = state.currentContactId;
@@ -617,7 +635,7 @@ export async function openRedPacketPanel() {
   const w = await getWallet();
   const cw = await getContactWallet(cid);
   const card = w.balance > 0 ? 'mine' : (cw.shared > 0 ? 'shared' : '');
-  _rpDraft = { cid, card, amount: randAmount(cw.outMin, cw.outMax) };
+  _rpDraft = { cid, card };
   const opt = (key, name, bal) => `
     <button type="button" class="rp-card-opt${card === key ? ' sel' : ''}${bal <= 0 ? ' disabled' : ''}"
       data-card="${key}" onclick="rpSelectCard('${key}')">
@@ -634,12 +652,12 @@ export async function openRedPacketPanel() {
       <div class="rp-panel-label" style="margin-top:14px;">金额</div>
       <div class="rp-amount-row">
         <span>¥</span>
-        <input id="rp-amount" type="number" min="0.01" step="0.01" value="${fmtMoney(_rpDraft.amount)}">
+        <input id="rp-amount" type="number" min="${fmtMoney(cw.outMin)}" max="${fmtMoney(cw.outMax)}" step="0.01" value="" placeholder="${fmtMoney(cw.outMin)} ~ ${fmtMoney(cw.outMax)}">
       </div>
       <div class="rp-quick-row">
         ${QUICK_AMOUNTS.map(v => `<button type="button" class="rp-quick" onclick="rpQuick(${v})">${v}</button>`).join('')}
       </div>
-      <div class="rp-hint">默认金额来自该联系人的「我发红包默认金额」区间；发出后会从所选卡片扣除。</div>
+      <div class="rp-hint">金额由你自行填写，需在该联系人的「我发红包默认金额」区间 ¥${fmtMoney(cw.outMin)} ~ ¥${fmtMoney(cw.outMax)} 内；发出后会从所选卡片扣除。</div>
     </div>`;
   showModal('发红包', body, [
     { label: '取消', cls: 'btn-outline', onClick: closeModal },
@@ -670,6 +688,10 @@ export async function sendRedPacket() {
     if (!Number.isFinite(amount) || amount <= 0) return toast('请输入有效金额');
     const w = await getWallet();
     const cw = await getContactWallet(cid);
+    // 金额必须落在该联系人设置的区间内：越界只提示，不悄悄改成边界值
+    if (amount < cw.outMin || amount > cw.outMax) {
+      return toast(`金额需在 ¥${fmtMoney(cw.outMin)} ~ ¥${fmtMoney(cw.outMax)} 之间`);
+    }
     const card = _rpDraft.card === 'shared' ? 'shared' : 'mine';
     const bal = card === 'mine' ? w.balance : cw.shared;
     if (bal <= 0) return toast('这张卡没有余额了');

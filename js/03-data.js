@@ -38,6 +38,18 @@ export async function getContact(id) { return await dbGet('contacts', id); }
 export async function saveContact(c) { await dbPut('contacts', c); }
 export async function deleteContact(id) { await dbDel('contacts', id); }
 
+// 主动消息间隔（小时）：默认 2~8；最小 1 小时，避免填 0 后每轮补算都触发
+export function proactiveGapRange(c) {
+  const s = (c && c.settings) ? c.settings : {};
+  let min = Number(s.proactiveGapMin);
+  let max = Number(s.proactiveGapMax);
+  if (!Number.isFinite(min)) min = 2;
+  if (!Number.isFinite(max)) max = 8;
+  min = Math.max(1, Math.round(min));
+  max = Math.max(min, Math.round(max));
+  return { min, max };
+}
+
 // ============ 状态大类（固定四类；数据按配置存，便于以后扩展第五类） ============
 const STATUS_CATEGORY_KEY = 'status_categories_v1';
 export const STATUS_CATEGORY_DEFAULTS = [
@@ -202,6 +214,7 @@ export function createEmptyContact(name) {
       incomingCall: true, proactiveMsg: false,
       callRate: 50, // 每天主动来电概率（0–100 整数，默认 50；老数据缺省按 50 处理）
       proactiveMin: 1, proactiveMax: 3,
+      proactiveGapMin: 2, proactiveGapMax: 8, // 主动消息间隔（小时），用户可改
       nextProactiveAt: now() + randInt(2, 8) * 3600 * 1000,
       chatBackground: null,
       myNickname: '',

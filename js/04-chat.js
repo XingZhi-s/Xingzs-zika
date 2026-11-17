@@ -183,8 +183,21 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
   if (m.type === 'text') {
     const raw = sysText;
     const stripped = raw.replace(/^[\s\uFE0F\u260E\u{1F4DE}\u{1F3A5}\u{1F4F4}]+/gu, '').trim();
+    // 我主动呼出的通话结束提示：方向明确为「我 呼叫」，不套用「来电」
+    if (m.callDir === 'out') {
+      isSys = true; sysText = stripped;
+      sysVideo = /视频/.test(raw);
+      sysIcon = sysVideo ? 'icon-video' : 'icon-phone';
+      sysName = '我';
+      sysAction = sysVideo ? '视频呼叫' : '呼叫';
+      const mOut = stripped.match(/已通话\s*(\d{1,2}:\d{2})/);
+      if (mOut) { sysSub = sysVideo ? '视频通话·已结束' : '通话已挂断'; sysDuration = mOut[1]; }
+      else if (/未接听/.test(stripped)) { sysSub = '未接听'; sysDuration = ''; }
+      else if (/已取消/.test(stripped)) { sysSub = '已取消'; sysDuration = ''; }
+      else { sysSub = '已结束'; sysDuration = ''; }
+    }
     // 来信系统提示："✉️ Ta 寄来了一封信，快去信箱看看吧。"
-    if (/寄来了一封信/.test(stripped)) {
+    else if (/寄来了一封信/.test(stripped)) {
       isSys = true; sysText = stripped;
       sysIcon = 'icon-mail';
       sysName = contactName || '对方'; sysAction = '寄来了一封信'; sysSub = '快去信箱看看吧'; sysDuration = '';
@@ -199,7 +212,7 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
       // 2. 未接听
       let m2 = stripped.match(/^[（(]?(.+?)未接听[）)]?$/);
       if (!m2) m2 = stripped.match(/^(.+?)未接听/);
-      if (m2) { sysName = m2[1]; sysAction = sysVideo ? '视频来电' : '来电'; sysSub = '未接听'; sysDuration = ''; }
+      if (m2) { const nm = String(m2[1] || '').replace(/[（()）\s]/g, ''); sysName = nm || (contactName || '对方'); sysAction = sysVideo ? '视频来电' : '来电'; sysSub = '未接听'; sysDuration = ''; }
       // 3. 未接来电（新增补全）：与“已通话”正则互斥，故不需再判 m3
       let m5 = stripped.match(/^(.+?)[（(]未接来电[）)]$/);
       if (!m5) m5 = stripped.match(/^(.+?)未接来电/);
