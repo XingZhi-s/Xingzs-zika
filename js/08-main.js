@@ -4,7 +4,7 @@ import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pic
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openLoveMoodDay, openLoveMoodPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderLoveMoodCalendar, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
@@ -205,7 +205,6 @@ export async function runCatchUp(onlyCid) {
       const curRate = getCurrentReplyRate(c);
       let msgsChanged = false;
       const myMsgs = (c.messages || []).filter(m => m.from === 'me');
-      let anchorMsg = myMsgs.length ? myMsgs[myMsgs.length - 1] : null;
 
       // 2a) 已读处理：到达各自 readAt 即已读 + 级联（仅旧数据）
       for (const m of myMsgs) {
@@ -219,17 +218,20 @@ export async function runCatchUp(onlyCid) {
       if (await processJudgedMessages(c, t)) { msgsChanged = true; changed = true; }
 
       // 2c) 旧数据回复处理：最新一条 replyAt 到点后按快照 rate 掷骰子，命中才回
+      // 锚点只从旧数据（无 judgement）、未回复且 replyAt 有效的消息里取：
+      // 红包/转账等非文字消息 replyAt 为 0，不能顶掉待回复的旧消息
+      const replyableAnchor = myMsgs.filter(m => m.judgement == null && !m.replied && m.replyAt > 0).pop() || null;
       const anyUnhandled = myMsgs.some(m => !m.replied && m.judgement == null && !m.queued);
-      if (anyUnhandled && anchorMsg && anchorMsg.replyAt && anchorMsg.judgement == null && t >= anchorMsg.replyAt) {
-        const snap = anchorMsg.snapshot || {};
+      if (anyUnhandled && replyableAnchor && t >= replyableAnchor.replyAt) {
+        const snap = replyableAnchor.snapshot || {};
         for (const m of myMsgs) if (!m.replied && m.judgement == null) m.replied = true;
-        cascadeReadFromMe(c, anchorMsg.id);
+        cascadeReadFromMe(c, replyableAnchor.id);
         const rateForRound = snap.rate != null ? snap.rate : curRate;
         const willReply = Math.random() * 100 < rateForRound;
         if (willReply) {
           const range = replyCountRange(c);
           const repCnt = range.min === range.max ? range.min : randInt(range.min, range.max);
-          const sent = await appendReplyMessages(c, anchorMsg, repCnt, anchorMsg.replyAt);
+          const sent = await appendReplyMessages(c, replyableAnchor, repCnt, replyableAnchor.replyAt);
           c.unread = (c.unread || 0) + sent;
         }
         msgsChanged = true; changed = true;
@@ -765,6 +767,7 @@ window.onChatKeydown = onChatKeydown;
 window.openAnniversary = openAnniversary;
 window.openBatchImport = openBatchImport;
 window.openCardLib = openCardLib;
+window.toggleCardGroup = toggleCardGroup;
 window.openChat = openChat;
 window.renderChatIncremental = renderChatIncremental;
 window.openChoice = openChoice;

@@ -183,7 +183,11 @@ export async function walletTick(cid) {
   if (!cid || _running.has(cid)) return;
   _running.add(cid);
   try {
-    await serialize(() => tickInner(cid));
+    const job = () => serialize(() => tickInner(cid));
+    // 与补算/回复定时器共用同一条串行队列：两边都整对象写联系人，
+    // 不互斥会互相覆盖（红包写库顶掉刚补出的字卡回复，或反之）
+    if (typeof window.__enqueueTask === 'function') await window.__enqueueTask(job);
+    else await job();
   } catch (e) {
     console.warn('钱包补算失败：', e);
   } finally {
