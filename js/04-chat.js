@@ -2,6 +2,9 @@
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, countdownAnniversary, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
+import { recordCardUsage } from './17-card-usage.js';
+import { getMyAvatarFor } from './18-my-avatar.js';
+import { openPokePanel } from './19-poke.js';
 
 // 给联系人c的消息做级联已读：把最新一条"我发出的消息"及其之前所有我发出的都标已读
 export function cascadeReadFromMe(cc, upToMsgId) {
@@ -26,7 +29,7 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
     state._quoteRenderCid = contactId;
     clearQuoteReply();
   }
-  const [c, me] = await Promise.all([getContact(contactId), getMe()]);
+  const [c, me, myAv] = await Promise.all([getContact(contactId), getMe(), getMyAvatarFor(contactId)]);
   if (!c) return;
   const box = $('chat-messages');
   const msgs = c.messages || [];
@@ -34,7 +37,7 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   const showCount = Math.min(msgs.length, lmState.pageSize);
   const slice = msgs.slice(msgs.length - showCount);
   const contactName = c.name;
-  const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
+  const myAvatar = myAv || (me && me.avatar) || DEFAULT_AVATAR;
   const otherAvatar = c.avatar || DEFAULT_AVATAR;
   const html = slice.map(m => renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar, state._animMsgId)).join('');
   // 输入中提示（对方正在输入）：typing-dots 包裹在真实的对方气泡里
@@ -78,14 +81,14 @@ export async function renderChatIncremental(contactId, opts = {}) {
   const allowSeq = opts.animate !== false;
   const box = $('chat-messages');
   if (!box) return;
-  const [c, me] = await Promise.all([getContact(contactId), getMe()]);
+  const [c, me, myAv] = await Promise.all([getContact(contactId), getMe(), getMyAvatarFor(contactId)]);
   if (!c) return;
   const msgs = c.messages || [];
   const lmState = state.loadMoreState[contactId] || { pageSize: 50 };
   const showCount = Math.min(msgs.length, lmState.pageSize);
   const slice = msgs.slice(msgs.length - showCount);
   const contactName = c.name;
-  const myAvatar = (me && me.avatar) ? me.avatar : DEFAULT_AVATAR;
+  const myAvatar = myAv || (me && me.avatar) || DEFAULT_AVATAR;
   const otherAvatar = c.avatar || DEFAULT_AVATAR;
 
   // 记录视口锚点，插入后补偿滚动，避免内容跳动
@@ -111,6 +114,17 @@ export async function renderChatIncremental(contactId, opts = {}) {
     const m = slice[i];
     const old = map.get(m.id);
     if (old) {
+      // 撤回/问答揭晓需要更新已有节点（增量渲染默认不动已有节点）
+      const qaRevealed = m.type === 'qa' ? ((m.qa && m.qa.otherIndex != null) ? '1' : '0') : '';
+      const needReplace = (m.recalled && old.dataset.type !== 'recall')
+        || (m.type === 'qa' && (old.dataset.type !== 'qa' || old.dataset.revealed !== qaRevealed));
+      if (needReplace) {
+        const rt = document.createElement('div');
+        rt.innerHTML = renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar, null).trim();
+        const rn = rt.firstElementChild;
+        if (rn) { box.replaceChild(rn, old); map.set(m.id, rn); }
+        continue;
+      }
       const rl = old.querySelector('.msg-read');
       if (rl && m.from === 'me') { const txt = m.read ? '已读' : '未读'; if (rl.textContent !== txt) rl.textContent = txt; }
       continue;
@@ -139,7 +153,7 @@ export async function renderChatIncremental(contactId, opts = {}) {
 
   // 多条回复逐条呈现：仅本次新增的对方消息，按 400–700ms 依次淡入上移
   if (allowSeq && hadNodes && inserted) {
-    const seq = newNodes.filter(x => x.m.from === 'other' && x.m.type !== 'redpacket' && x.m.type !== 'transfer');
+    const seq = newNodes.filter(x => x.m.from === 'other' && x.m.type !== 'redpacket' && x.m.type !== 'transfer' && x.m.type !== 'poke' && !x.m.recalled);
     if (seq.length > 1) {
       for (const x of seq) x.node.classList.add('msg-seq-wait');
       let delay = 0;
@@ -171,6 +185,31 @@ export async function renderChatIncremental(contactId, opts = {}) {
 }
 export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar, animId) {
   const isMe = m.from === 'me';
+  // 拍一拍系统提示行：居中细字，不是聊天气泡
+  if (m.type === 'poke') {
+    return `<div class="msg-row msg-center" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="poke"><div class="msg-poke-line">${escapeHtml(m.content || '')}</div></div>`;
+  }
+  // 撤回提示行：居中细字，原气泡位置保留
+  if (m.recalled) {
+    const txt = m.from === 'me' ? '你撤回了一条消息' : `${contactName || '对方'} 撤回了一条消息`;
+    return `<div class="msg-row msg-center" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="recall"><div class="msg-recall-line">${escapeHtml(txt)}</div></div>`;
+  }
+  // 问答卡：我的气泡；对方选择在双方都选完后才显示
+  if (m.type === 'qa' && m.qa) {
+    const q = m.qa;
+    const revealed = q.otherIndex != null;
+    const rows = (q.options || []).map((o, i) => {
+      const isMine = i === q.mineIndex;
+      const isOther = revealed && i === q.otherIndex;
+      return `<div class="qa-opt${isMine ? ' picked mine' : ''}${isOther ? ' picked other' : ''}">
+        <span class="qa-opt-text">${escapeHtml(o)}</span>
+        ${isMine ? '<span class="qa-tag">我</span>' : ''}
+        ${isOther ? '<span class="qa-tag">对方</span>' : ''}
+      </div>`;
+    }).join('');
+    const foot = revealed ? '双方已选择' : (q.status === 'sleep' ? '对方正在睡觉，暂时不会回答' : '等待对方选择…');
+    return `<div class="msg-row me" data-msgid="${escapeHtml(m.id)}" data-from="me" data-type="qa" data-revealed="${revealed ? 1 : 0}"><img class="msg-avatar" src="${escapeHtml(myAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble qa-bubble"><div class="qa-q">${escapeHtml(q.question || '')}</div><div class="qa-opts">${rows}</div><div class="qa-foot">${foot}</div></div><div class="msg-read">${m.read ? '已读' : '未读'}</div></div></div>`;
+  }
   // 判断系统提示消息（未接来电 / 通话 / 已拒接 / 取消呼叫等）
   let isSys = false;
   let sysText = m.content || '';
@@ -473,6 +512,13 @@ export function bindLongpress(container) {
   container.addEventListener('pointercancel', end);
   container.addEventListener('mouseleave', end);
   container.addEventListener('click', swallowClick, true);
+  // 双击对方头像：打开「我拍别人」文案选择面板
+  container.addEventListener('dblclick', (e) => {
+    const av = e.target.closest ? e.target.closest('.msg-row.other .msg-avatar') : null;
+    if (!av) return;
+    e.preventDefault();
+    openPokePanel();
+  });
   container.addEventListener('contextmenu', (e) => {
     const tgt = e.target.closest ? e.target.closest('.msg-row') : null;
     if (!tgt) return;
@@ -487,17 +533,32 @@ export function bindLongpress(container) {
     if (menu && !menu.classList.contains('hide') && !menu.contains(e.target)) menu.classList.add('hide');
   }, true);
 }
+function canRecallRow(row) {
+  if (!row || row.dataset.from !== 'me') return false;
+  if (row.dataset.type === 'poke' || row.dataset.type === 'recall' || row.dataset.type === 'qa') return false;
+  const mine = Array.from(document.querySelectorAll('#chat-messages .msg-row[data-from="me"]'))
+    .filter(el => el.dataset.type !== 'poke' && el.dataset.type !== 'recall');
+  return mine.slice(-5).indexOf(row) !== -1;
+}
 export function showLongpressMenu(row, x, y) {
   if (!row) return;
   const id = row.dataset.msgid;
   const menu = $('lp-menu');
   if (!menu) return;
+  if (row.dataset.type === 'poke' || row.dataset.type === 'recall') return;
   menu.innerHTML = `<div onclick="quoteReply('${id}')" style="display:flex;align-items:center;gap:8px;"><svg class="i i-sm" style="transform:scaleX(-1);"><use href="#icon-back"/></svg> 引用回复</div><div onclick="deleteMsg('${id}')" style="color:var(--danger);display:flex;align-items:center;gap:8px;"><svg class="i i-sm"><use href="#icon-trash"/></svg> 删除</div>`;
+  if (canRecallRow(row)) {
+    const d = document.createElement('div');
+    d.setAttribute('onclick', "recallMsg('" + id + "')");
+    d.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    d.innerHTML = '<svg class="i i-sm" style="transform:scaleX(-1);"><use href="#icon-back"/></svg> 撤回';
+    menu.insertBefore(d, menu.firstChild);
+  }
   menu.classList.remove('hide');
   // 定位
   const vw = window.innerWidth, vh = window.innerHeight;
   menu.style.left = Math.min(x, vw - 150) + 'px';
-  menu.style.top = Math.min(y, vh - 120) + 'px';
+  menu.style.top = Math.min(y, vh - 170) + 'px';
 }
 export async function quoteReply(msgId) {
   const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
@@ -600,14 +661,16 @@ export function pickReplyCount(c) {
   return min === max ? min : randInt(min, max);
 }
 // 引用候选：本条会话内最近 20 条消息（双方、系统提示、邀请卡都算），不足 20 条用全部
+// 拍一拍、撤回提示这类系统行不进入引用池
 export function pickQuoteId(c) {
   const msgs = (c && c.messages) || [];
-  if (!msgs.length) return null;
-  return pick(msgs.slice(-20)).id;
+  const cand = msgs.filter(m => m.type !== 'poke' && m.type !== 'recall' && !m.recalled);
+  if (!cand.length) return null;
+  return pick(cand.slice(-20)).id;
 }
 // 生成一批回复（条数由调用方决定，不超上限；时间戳=命中时刻，按 1~3 秒递增且不晚于当前）
 export async function appendReplyMessages(c, anchor, count, atTime) {
-  const cards = (c.cardGroups || []).flatMap(g => (g.cards || []).map(x => ({ content: x.content })));
+  const cards = (c.cardGroups || []).flatMap(g => (g.cards || []).map(x => ({ id: x.id, content: x.content })));
   const stickers = c.stickers || [];
   const total = Math.max(0, count || 0);
   const base = Math.min(Number(atTime) || now(), now());
@@ -618,7 +681,13 @@ export async function appendReplyMessages(c, anchor, count, atTime) {
     const useSticker = stickers.length > 0 && Math.random() < 0.5;
     let type = 'text', content = '';
     if (useSticker) { type = 'sticker'; content = pick(stickers).data; }
-    else if (cards.length) { type = 'text'; content = await applyNickname(pick(cards).content, c); }
+    else if (cards.length) {
+      const picked = pick(cards);
+      type = 'text';
+      content = await applyNickname(picked.content, c);
+      // 只统计字卡抽出的回复；写库失败不影响消息生成
+      recordCardUsage(c.id, picked.id, picked.content).catch(() => {});
+    }
     else continue;
     let replyTo = null;
     if ((c.messages || []).length && Math.random() < 0.5) replyTo = pickQuoteId(c);

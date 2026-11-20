@@ -14,6 +14,11 @@ import { checkPeriodReminders, openPeriodPage, periodAddPast, periodSaveSettings
 import { openReaderBook, openReaderMenu, openReaderNoteView, openReaderPage, readerBack, readerDeleteBook, readerExportBook, readerNextPage, readerOpenNote, readerPickFile, readerPrevPage, renderReaderPage, renderReaderShelf } from './14-reader.js';
 import { initWalletModule, walletResume, walletTick } from './15-wallet.js';
 import { initBackgroundModule } from './16-background.js';
+import { backFromCardUsage, openCardUsage } from './17-card-usage.js';
+import { csResetMyAvatar, csUpdateMyAvatar } from './18-my-avatar.js';
+import { closePokePanel, doPokeFromPanel, initPokeModule, openPokePanel, pokeAddLine, pokeDeleteLine, pokeEditLine, pokeSaveChance } from './19-poke.js';
+import { initRecallModule, recallMine } from './20-recall.js';
+import { backFromQaDetail, backFromQaList, closeQaPanel, initQaModule, openQaDetail, openQaList, openQaPanel, qaAddOption, qaOptionInput, qaRemoveOption, qaSetMine, submitQa } from './21-qa.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -491,6 +496,12 @@ async function initApp() {
   applyTheme(theme);
   // 后台能力：静音保活 + 消息通知（失败不阻塞启动）
   initBackgroundModule().catch(() => {});
+  // 拍一拍：每小时概率判定（首次只排期，不立即判定）
+  initPokeModule();
+  // 撤回：联系人每 10 分钟一次机会，按状态决定概率与延时
+  initRecallModule();
+  // 问答：恢复未完成的延时选择
+  initQaModule().catch(() => {});
   // 迁移修复：旧版联系人默认头像二次编码损坏，统一替换
   const _oldContacts = await dbAll('contacts');
   for (const _c of _oldContacts) {
@@ -726,6 +737,27 @@ window.csToggleLetter = csToggleLetter;
 window.csToggleProactive = csToggleProactive;
 window.csToggleStatusAuto = csToggleStatusAuto;
 window.csUpdateAvatar = csUpdateAvatar;
+window.csUpdateMyAvatar = csUpdateMyAvatar;
+window.csResetMyAvatar = csResetMyAvatar;
+window.openPokePanel = openPokePanel;
+window.closePokePanel = closePokePanel;
+window.doPokeFromPanel = doPokeFromPanel;
+window.pokeAddLine = pokeAddLine;
+window.pokeEditLine = pokeEditLine;
+window.pokeDeleteLine = pokeDeleteLine;
+window.pokeSaveChance = pokeSaveChance;
+window.recallMsg = recallMine;
+window.openQaPanel = openQaPanel;
+window.closeQaPanel = closeQaPanel;
+window.qaAddOption = qaAddOption;
+window.qaRemoveOption = qaRemoveOption;
+window.qaSetMine = qaSetMine;
+window.qaOptionInput = qaOptionInput;
+window.submitQa = submitQa;
+window.openQaList = openQaList;
+window.backFromQaList = backFromQaList;
+window.openQaDetail = openQaDetail;
+window.backFromQaDetail = backFromQaDetail;
 window.csUploadBg = csUploadBg;
 window.delAnni = delAnni;
 window.deleteCard = deleteCard;
@@ -767,6 +799,8 @@ window.onChatKeydown = onChatKeydown;
 window.openAnniversary = openAnniversary;
 window.openBatchImport = openBatchImport;
 window.openCardLib = openCardLib;
+window.openCardUsage = openCardUsage;
+window.backFromCardUsage = backFromCardUsage;
 window.toggleCardGroup = toggleCardGroup;
 window.openChat = openChat;
 window.renderChatIncremental = renderChatIncremental;

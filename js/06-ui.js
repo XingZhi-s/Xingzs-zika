@@ -4,6 +4,8 @@ import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, in
 import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
+import { getMyAvatarFor } from './18-my-avatar.js';
+import { getPokeSectionHtml } from './19-poke.js';
 
 // ============ ME 页功能 ============
 export async function updateMyAvatar(input) {
@@ -161,6 +163,8 @@ export async function renderContactSetting(id) {
   await normalizeContactStatus(c, pool);
   const box = $('cs-content'); if (!box) return;
   const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
+  const myAv = await getMyAvatarFor(id);
+  const pokeHtml = await getPokeSectionHtml(id);
   const pg = proactiveGapRange(c);
   const cats = await getStatusCategories();
   // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
@@ -213,6 +217,15 @@ export async function renderContactSetting(id) {
           </span>
         </div>
         <div class="cs-row">
+          <span class="cs-label">我的头像</span>
+          <span class="cs-value" style="display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+            <img class="avatar" style="width:44px;height:44px;" src="${escapeHtml(myAv||DEFAULT_AVATAR)}" alt="">
+            <button class="btn btn-ghost" style="min-height:36px;padding:6px 12px;" onclick="document.getElementById('cs-my-avatar-file').click()">更换</button>
+            ${myAv ? `<button class="btn btn-ghost" style="min-height:36px;padding:6px 12px;" onclick="csResetMyAvatar()">恢复默认</button>` : ''}
+            <input type="file" accept="image/*" id="cs-my-avatar-file" class="hide" onchange="csUpdateMyAvatar(this)">
+          </span>
+        </div>
+        <div class="cs-row">
           <span class="cs-label">对我的专属称呼</span>
           <span class="cs-value" style="display:flex;justify-content:flex-end;gap:10px;align-items:center;">
             <span>${escapeHtml(c.settings.myNickname || '（默认：我的名字）')}</span>
@@ -232,6 +245,15 @@ export async function renderContactSetting(id) {
       <svg class="i i-sm" style="stroke:var(--text-secondary);"><use href="#icon-search"/></svg>
       <input class="cs-search-input" id="cs-search-input" placeholder="搜索设置项，如：回复、背景、字卡、来电" oninput="csSearchJump(this.value)">
     </div>
+
+    <div class="cs-card" style="margin-bottom:20px;">
+      <div class="cs-row cs-row-link" onclick="openCardUsage()">
+        <span class="cs-label">字卡使用率</span>
+        <span class="cs-value">查看统计<svg class="i i-sm"><use href="#icon-chevron-right"/></svg></span>
+      </div>
+    </div>
+
+    ${pokeHtml}
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-cog"/></svg> 生活状态</div>

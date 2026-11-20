@@ -10,6 +10,7 @@ const CHAT_TOOLS = [
   { id: 'reminder', name: '提醒', icon: 'icon-bell' },
   { id: 'redpacket', name: '红包', icon: 'icon-gift' },
   { id: 'choice',   name: '选择', icon: 'icon-target' },
+  { id: 'qa',       name: '问答', icon: 'icon-chat' },
   { id: 'anni',     name: '纪念日', icon: 'icon-calendar' },
   { id: 'letter',   name: '写信', icon: 'icon-mail' },
   { id: 'voice',    name: '电话', icon: 'icon-phone' },
@@ -50,6 +51,7 @@ export function runChatTool(id) {
     case 'reminder': return openReminderPanel();
     case 'redpacket': return window.openRedPacketPanel && window.openRedPacketPanel();
     case 'choice': return openChoice();
+    case 'qa': return window.openQaPanel && window.openQaPanel();
     case 'anni': return openAnniversary();
     case 'letter': return composeLetterToCurrent();
     case 'voice': return makeCall('voice');
