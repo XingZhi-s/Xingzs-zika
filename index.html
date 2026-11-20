@@ -923,7 +923,7 @@ a { text-decoration:none; color:inherit; }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不写死浅蓝渐变，改为半透明主题色叠加层：
      既继承全局背景（聊天背景由 applyChatBg 行内 !important 独占），又让换主题色时这些页面可见跟随 */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail, #page-my-poke, #page-poke-theirs {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail, #page-my-poke, #page-poke-theirs, #page-export {
     background: var(--theme-bg-light);
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -1330,10 +1330,10 @@ a { text-decoration:none; color:inherit; }
 .poke-group-acts { display:flex; gap:2px; flex-shrink:0; }
 .poke-group-acts button { width:30px; height:30px; min-width:30px; min-height:30px; padding:0; border-radius:8px; background:var(--bg-color); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; }
 .poke-group-body { padding:0 12px 12px; border-top:1px solid var(--border-color); }
-.msg-poke-line { max-width:90%; text-align:center; font-size:12px; line-height:1.5; color:var(--text-secondary); padding:2px 10px; overflow-wrap:anywhere; word-break:break-word; }
+.msg-poke-line { max-width:86%; text-align:center; font-size:12px; line-height:1.5; color:#fff; padding:5px 12px; border-radius:999px; background:color-mix(in srgb, color-mix(in srgb, var(--theme-color) 58%, #0b1220) 88%, transparent); border:1px solid color-mix(in srgb, #fff 28%, transparent); box-shadow:0 2px 8px rgba(0,0,0,0.18); text-shadow:0 1px 2px rgba(0,0,0,0.3); overflow-wrap:anywhere; word-break:break-word; }
 .msg-recall-line { max-width:90%; text-align:center; font-size:12px; line-height:1.5; color:var(--text-secondary); padding:2px 10px; overflow-wrap:anywhere; word-break:break-word; }
-.poke-float { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(92px + env(safe-area-inset-bottom, 0px)); z-index:650; max-width:78vw; padding:10px 16px; border-radius:20px; background:rgba(24,32,48,0.78); color:#fff; font-size:13px; line-height:1.5; text-align:center; pointer-events:none; opacity:0; transition:opacity .28s ease; overflow-wrap:anywhere; word-break:break-word; }
-.poke-float.show { opacity:1; }
+.poke-float { position:fixed; left:50%; transform:translateX(-50%) translateY(6px); bottom:calc(104px + env(safe-area-inset-bottom, 0px)); z-index:650; max-width:min(80vw, 360px); padding:12px 20px; border-radius:999px; background:color-mix(in srgb, color-mix(in srgb, var(--theme-color) 58%, #0b1220) 88%, transparent); border:1px solid color-mix(in srgb, #fff 32%, transparent); box-shadow:0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.16); color:#fff; font-size:15px; font-weight:600; line-height:1.5; text-align:center; text-shadow:0 1px 2px rgba(0,0,0,0.35); pointer-events:none; opacity:0; transition:opacity .34s ease, transform .34s ease; overflow-wrap:anywhere; word-break:break-word; }
+.poke-float.show { opacity:1; transform:translateX(-50%) translateY(0); }
 .poke-float.hide { display:none; }
 .qa-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:52vh; display:flex; flex-direction:column; }
 .qa-head-link { font-size:12px; color:var(--theme-color); background:var(--theme-light); border-radius:8px; padding:6px 10px; min-height:32px; }
@@ -1451,9 +1451,22 @@ a { text-decoration:none; color:inherit; }
 .storage-stat-label { font-size:11px; color:var(--text-secondary); }
 
 .export-options { display:flex; flex-direction:column; gap:10px; margin:14px 0; }
-.export-opt { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; cursor:pointer; }
+.export-opt { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; cursor:pointer; }
 .export-opt.checked { border-color:var(--theme-color); background:var(--theme-light); }
-.export-opt input { width:18px; height:18px; }
+.export-opt input { width:18px; height:18px; flex-shrink:0; margin-top:1px; }
+.export-opt .opt-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; line-height:1.45; }
+.export-opt .opt-sub { font-size:11.5px; color:var(--text-secondary); overflow-wrap:anywhere; }
+.btn[disabled], .btn:disabled { opacity:.45; pointer-events:none; }
+.backup-hint { font-size:12px; color:var(--text-secondary); line-height:1.6; margin:0 0 12px; }
+.backup-note { font-size:12px; color:var(--text-secondary); line-height:1.7; padding:0 2px; }
+.backup-sum-meta { font-size:12px; color:var(--text-secondary); margin-bottom:10px; }
+.backup-sum-list { border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
+.backup-sum-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:9px 12px; font-size:13px; border-bottom:1px solid var(--border-color); }
+.backup-sum-row:last-child { border-bottom:none; }
+.backup-sum-row span:first-child { flex-shrink:0; color:var(--text-secondary); }
+.backup-sum-row span:last-child { text-align:right; min-width:0; overflow-wrap:anywhere; }
+.backup-warn { background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:9px 12px; color:#92400e; font-size:12.5px; line-height:1.6; margin-bottom:10px; }
+.backup-sum-note { font-size:12px; color:var(--text-secondary); line-height:1.6; margin-top:10px; }
 
 /* ========== 联系人设置页 ========== */
 .cs-section { margin-bottom:20px; border-radius:12px; transition:box-shadow .2s; }
@@ -2960,24 +2973,22 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 
         <div class="cs-card" style="margin:0 16px 16px;">
           <div class="section-title">导出数据</div>
-          <div class="export-options" id="export-opts">
-            <label class="export-opt"><input type="checkbox" value="chat">聊天记录（不含图片base64）</label>
-            <label class="export-opt"><input type="checkbox" value="cards">字卡</label>
-            <label class="export-opt"><input type="checkbox" value="stickers">表情包</label>
-            <label class="export-opt"><input type="checkbox" value="images">图片（头像/聊天图/背景图）</label>
-            <label class="export-opt" style="font-weight:600;"><input type="checkbox" id="export-all" onchange="toggleExportAll(this)"> 全部导出（以上全选）</label>
-          </div>
-          <button class="btn" style="width:100%;" onclick="doExport()"><svg class="i i-sm" style="margin-right:6px;fill:none;stroke:#fff;"><use href="#icon-download"/></svg> 开始导出</button>
-        </div>
-
-        <div class="cs-card" style="margin:0 16px 16px;">
-          <div class="section-title">导入数据</div>
-          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">选择备份JSON文件，将按文件实际包含的范围恢复对应数据。</div>
-          <button class="btn-outline btn" style="width:100%;" onclick="document.getElementById('import-file').click()"><svg class="i i-sm" style="margin-right:6px;"><use href="#icon-upload"/></svg> 选择文件并导入</button>
-          <input type="file" accept="application/json,.json" id="import-file" class="hide" onchange="doImport(this)">
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px;">把数据按类别导出为 JSON 备份，或从备份文件恢复。导入前会先显示文件摘要。</div>
+          <button class="btn" style="width:100%;" onclick="openBackupPage()"><svg class="i i-sm" style="margin-right:6px;fill:none;stroke:#fff;"><use href="#icon-download"/></svg> 打开导出数据</button>
         </div>
 
         <div style="height:20px;"></div>
+      </div>
+
+      <!-- ========== 导出 / 导入数据页 ========== -->
+      <div class="page" id="page-export">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="backFromBackupPage()"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow">导出数据</div>
+        </div>
+        <div class="page-scroll" style="padding:16px;">
+          <div id="backup-body"></div>
+        </div>
       </div>
 
     </div>

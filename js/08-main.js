@@ -5,7 +5,7 @@ import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact,
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
-import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, doExport, doImport, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleExportAll, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
+import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openLoveMoodDay, openLoveMoodPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderLoveMoodCalendar, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
 import { checkReminders, closeChatToolDrawer, deleteReminder, editReminder, initReminderModule, openReminderPanel, runChatTool, toggleChatToolDrawer } from './11-reminder.js';
@@ -19,6 +19,7 @@ import { csResetMyAvatar, csUpdateMyAvatar } from './18-my-avatar.js';
 import { backFromMyPoke, backFromPokeTheirs, closePokePanel, doPokeFromPanel, initPokeModule, openMyPoke, openPokeImport, openPokePanel, openPokeTheirs, pokeAddGroup, pokeAddLine, pokeDeleteGroup, pokeDeleteLine, pokeEditLine, pokeRenameGroup, pokeSaveChance, pokeSaveChanceFromPage, pokeToggleGroup, renderMyPokePage, renderPokePage } from './19-poke.js';
 import { initRecallModule, recallMine, recallSaveChance, toggleRecallEnabled } from './20-recall.js';
 import { backFromQaDetail, backFromQaList, closeQaPanel, initQaModule, openQaDetail, openQaList, openQaPanel, qaAddOption, qaOptionInput, qaRemoveOption, qaSetMine, submitQa } from './21-qa.js';
+import { backFromBackupPage, backupDoExport, backupDoImport, backupToggleCat, openBackupPage } from './22-backup.js';
 
 export function enqueueTask(fn) {
   return new Promise((resolve, reject) => {
@@ -585,14 +586,6 @@ async function initApp() {
   window.addEventListener('pageshow', (e) => { if (e.persisted) resumeSync('pageshow'); });
   // 页面关闭/刷新前兜底持久化通话状态
   window.addEventListener('pagehide', () => { persistCallState(); });
-  // 绑定导出选项点击
-  document.querySelectorAll('#export-opts input[type=checkbox]:not(#export-all)').forEach(cb => {
-    cb.addEventListener('change', () => {
-      const all = document.querySelectorAll('#export-opts input[type=checkbox]:not(#export-all)');
-      const allChecked = Array.from(all).every(x => x.checked);
-      $('export-all').checked = allChecked;
-    });
-  });
   // DIY 变量应用
   applyDIYVariables(theme);
   // 首页
@@ -791,8 +784,11 @@ window.divineBackStep = divineBackStep;
 window.openDivineCardMeaning = openDivineCardMeaning;
 window.deleteDivineHistory = deleteDivineHistory;
 window.divineToInspiration = divineToInspiration;
-window.doExport = doExport;
-window.doImport = doImport;
+window.openBackupPage = openBackupPage;
+window.backFromBackupPage = backFromBackupPage;
+window.backupToggleCat = backupToggleCat;
+window.backupDoExport = backupDoExport;
+window.backupDoImport = backupDoImport;
 window.drawDivine = drawDivine;
 window.editAnni = editAnni;
 window.editInspiration = editInspiration;
@@ -884,7 +880,6 @@ window.switchDivineType = switchDivineType;
 window.toggleCallMic = toggleCallMic;
 window.toggleCallMinimize = toggleCallMinimize;
 window.toggleChatMenu = toggleChatMenu;
-window.toggleExportAll = toggleExportAll;
 window.toggleMoodDrawer = toggleMoodDrawer;
 window.toggleStickerPanel = toggleStickerPanel;
 window.closeStickerPanel = closeStickerPanel;
