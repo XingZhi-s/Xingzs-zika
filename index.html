@@ -923,7 +923,7 @@ a { text-decoration:none; color:inherit; }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不写死浅蓝渐变，改为半透明主题色叠加层：
      既继承全局背景（聊天背景由 applyChatBg 行内 !important 独占），又让换主题色时这些页面可见跟随 */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail, #page-my-poke {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail, #page-my-poke, #page-poke-theirs {
     background: var(--theme-bg-light);
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -1318,6 +1318,18 @@ a { text-decoration:none; color:inherit; }
 .poke-line-acts { display:flex; gap:4px; flex-shrink:0; }
 .poke-line-acts button { background:var(--bg-color); color:var(--text-secondary); width:30px; height:30px; min-width:30px; min-height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
 .poke-empty { font-size:12px; color:var(--text-secondary); text-align:center; padding:10px 0; }
+.poke-toolbar { display:flex; gap:8px; margin-top:10px; }
+.poke-toolbar .btn { flex:1; min-width:0; font-size:13px; padding:10px 6px; }
+.poke-group { background:var(--card-bg); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:12px; overflow:hidden; }
+.poke-group-head { display:flex; align-items:center; gap:8px; padding:10px 12px; }
+.poke-group-toggle { width:28px; height:28px; min-width:28px; min-height:28px; padding:0; background:transparent; color:var(--text-secondary); flex-shrink:0; }
+.poke-group-toggle svg { transform:rotate(-90deg); transition:transform .18s ease; }
+.poke-group.open .poke-group-toggle svg { transform:rotate(0deg); }
+.poke-group-name { flex:1; min-width:0; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.poke-group-count { font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+.poke-group-acts { display:flex; gap:2px; flex-shrink:0; }
+.poke-group-acts button { width:30px; height:30px; min-width:30px; min-height:30px; padding:0; border-radius:8px; background:var(--bg-color); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; }
+.poke-group-body { padding:0 12px 12px; border-top:1px solid var(--border-color); }
 .msg-poke-line { max-width:90%; text-align:center; font-size:12px; line-height:1.5; color:var(--text-secondary); padding:2px 10px; overflow-wrap:anywhere; word-break:break-word; }
 .msg-recall-line { max-width:90%; text-align:center; font-size:12px; line-height:1.5; color:var(--text-secondary); padding:2px 10px; overflow-wrap:anywhere; word-break:break-word; }
 .poke-float { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(92px + env(safe-area-inset-bottom, 0px)); z-index:650; max-width:78vw; padding:10px 16px; border-radius:20px; background:rgba(24,32,48,0.78); color:#fff; font-size:13px; line-height:1.5; text-align:center; pointer-events:none; opacity:0; transition:opacity .28s ease; overflow-wrap:anywhere; word-break:break-word; }
@@ -2760,6 +2772,17 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </div>
         <div class="page-scroll" style="padding:16px;">
           <div id="my-poke-body"></div>
+        </div>
+      </div>
+
+      <!-- ========== 联系人「对方拍我」设置页 ========== -->
+      <div class="page" id="page-poke-theirs">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="backFromPokeTheirs()"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow" id="poke-theirs-title">对方拍我</div>
+        </div>
+        <div class="page-scroll" style="padding:16px;">
+          <div id="theirs-poke-body"></div>
         </div>
       </div>
 
