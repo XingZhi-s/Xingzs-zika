@@ -90,18 +90,12 @@ function linesHtml(kind, list) {
 }
 
 export async function getPokeSectionHtml(cid) {
-  const [mine, theirs, chance] = await Promise.all([getPokeMineList(), getPokeTheirsList(cid), getPokeChance(cid)]);
+  const [theirs, chance] = await Promise.all([getPokeTheirsList(cid), getPokeChance(cid)]);
   return `
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-heart"/></svg> 拍一拍</div>
       <div class="cs-card">
         <div class="cs-row">
-          <span class="cs-label">我拍别人时用（全局共用）</span>
-          <span class="cs-value">${mine.length} 条</span>
-        </div>
-        ${linesHtml('mine', mine)}
-        <button class="btn btn-ghost" style="width:100%;margin:8px 0 4px;" onclick="pokeAddLine('mine')">＋ 添加文案</button>
-        <div class="cs-row" style="border-top:1px solid var(--border-color);">
           <span class="cs-label">对方拍我时用（本联系人独立）</span>
           <span class="cs-value">${theirs.length} 条</span>
         </div>
@@ -114,9 +108,32 @@ export async function getPokeSectionHtml(cid) {
             <span class="cs-unit">%</span>
           </span>
         </div>
-        <div class="cs-hint">每小时判定一次，可调 0–100；睡觉类状态不会拍。文案中的 {name} 会替换为对方名字或我的名字。</div>
+        <div class="cs-hint">每小时判定一次，可调 0–100；睡觉类状态不会拍。文案中的 {name} 会替换为我的名字。「我拍别人」的文案在「我的 → 我的拍一拍」里管理。</div>
       </div>
     </div>`;
+}
+
+/* ============ 「我的 → 我的拍一拍」管理页 ============ */
+export async function renderMyPokePage() {
+  const box = $('my-poke-body'); if (!box) return;
+  const list = await getPokeMineList();
+  box.innerHTML = `
+    <div class="cs-card">
+      <div class="cs-row">
+        <span class="cs-label">我拍别人时用</span>
+        <span class="cs-value">${list.length} 条</span>
+      </div>
+      ${linesHtml('mine', list)}
+      <button class="btn btn-ghost" style="width:100%;margin:8px 0 4px;" onclick="pokeAddLine('mine')">＋ 添加文案</button>
+      <div class="cs-hint">在聊天里双击对方头像时从这里选一条发送；文案中的 {name} 会替换成对方的名字。</div>
+    </div>`;
+}
+export async function openMyPoke() {
+  renderMyPokePage();
+  if (typeof window.openPage === 'function') window.openPage('page-my-poke');
+}
+export function backFromMyPoke() {
+  if (typeof window.openPage === 'function') window.openPage('page-me');
 }
 
 async function refreshSettings(cid) {
@@ -125,9 +142,19 @@ async function refreshSettings(cid) {
   }
 }
 
+// mine 池全局共用（不需要联系人上下文）；theirs 池按联系人独立
+function ctxCidOf(kind) {
+  if (kind === 'mine') return '';
+  return state.currentContactSettingId || '';
+}
+async function afterEdit(kind, cid) {
+  if (kind === 'mine') { await renderMyPokePage(); return; }
+  await refreshSettings(cid);
+}
+
 export async function pokeAddLine(kind) {
-  const cid = state.currentContactSettingId;
-  if (!cid) return;
+  const cid = ctxCidOf(kind);
+  if (kind !== 'mine' && !cid) return;
   const r = await inputDialog('添加拍一拍文案', [{
     key: 'text', label: '文案',
     value: kind === 'mine' ? '拍了拍{name}' : '拍了拍我的头', required: true
@@ -138,12 +165,12 @@ export async function pokeAddLine(kind) {
   const list = await getList(kind, cid);
   list.push(t);
   await putList(kind, cid, list);
-  await refreshSettings(cid);
+  await afterEdit(kind, cid);
 }
 
 export async function pokeEditLine(kind, idx) {
-  const cid = state.currentContactSettingId;
-  if (!cid) return;
+  const cid = ctxCidOf(kind);
+  if (kind !== 'mine' && !cid) return;
   const list = await getList(kind, cid);
   if (idx < 0 || idx >= list.length) return;
   const r = await inputDialog('编辑拍一拍文案', [{ key: 'text', label: '文案', value: list[idx], required: true }]);
@@ -152,18 +179,18 @@ export async function pokeEditLine(kind, idx) {
   if (!t) return toast('文案不能为空');
   list[idx] = t;
   await putList(kind, cid, list);
-  await refreshSettings(cid);
+  await afterEdit(kind, cid);
 }
 
 export async function pokeDeleteLine(kind, idx) {
-  const cid = state.currentContactSettingId;
-  if (!cid) return;
+  const cid = ctxCidOf(kind);
+  if (kind !== 'mine' && !cid) return;
   const list = await getList(kind, cid);
   if (idx < 0 || idx >= list.length) return;
   if (!await confirmDialog('删除这条拍一拍文案？')) return;
   list.splice(idx, 1);
   await putList(kind, cid, list);
-  await refreshSettings(cid);
+  await afterEdit(kind, cid);
 }
 
 export async function pokeSaveChance(value) {
@@ -189,7 +216,7 @@ export async function openPokePanel() {
   if (!panel || !body) return;
   body.innerHTML = list.length
     ? list.map((t, i) => `<button class="poke-opt" onclick="doPokeFromPanel(${i})">${escapeHtml(t.replace(/\{name\}/g, c.name))}</button>`).join('')
-    : `<div class="poke-empty" style="padding:18px 4px;">还没有文案，先去联系人设置的「拍一拍」里添加</div>`;
+    : `<div class="poke-empty" style="padding:18px 4px;">还没有文案，先去「我的 → 我的拍一拍」里添加</div>`;
   panel.classList.remove('hide');
   const box = $('chat-messages');
   if (box) box.scrollTop = box.scrollHeight;

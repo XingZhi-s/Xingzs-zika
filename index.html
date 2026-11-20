@@ -923,7 +923,7 @@ a { text-decoration:none; color:inherit; }
 @media (max-width: 899px) {
   /* 手机端聊天/写信/me/设置/美化等页面不写死浅蓝渐变，改为半透明主题色叠加层：
      既继承全局背景（聊天背景由 applyChatBg 行内 !important 独占），又让换主题色时这些页面可见跟随 */
-  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail {
+  #page-chat, #page-me, #page-letter, #page-setting, #page-contact-setting, #page-card-usage, #page-card-lib, #page-sticker-lib, #page-diy, #page-chat-search, #page-music, #page-wallet, #page-wallet-ledger, #page-contact-wallet, #page-qa-list, #page-qa-detail, #page-my-poke {
     background: var(--theme-bg-light);
   }
   /* 设置页“网站美化”区块仅电脑端显示 */
@@ -1305,10 +1305,10 @@ a { text-decoration:none; color:inherit; }
 
 /* 表情下面板 */
 .sticker-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:260px; overflow-y:auto; }
-.poke-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:42vh; display:flex; flex-direction:column; }
+.poke-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:min(42vh, 300px); max-height:min(42dvh, 300px); display:flex; flex-direction:column; }
 .poke-panel-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-shrink:0; }
 .poke-panel-head strong { flex:1; min-width:0; }
-.poke-panel-list { overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; }
+.poke-panel-list { flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; min-height:0; }
 .poke-opt { display:block; width:100%; text-align:left; padding:11px 12px; border-radius:10px; background:var(--bg-color); margin-bottom:8px; font-size:14px; color:var(--text-primary); overflow-wrap:anywhere; word-break:break-word; }
 .poke-opt:last-child { margin-bottom:0; }
 .poke-opt:active { background:var(--theme-light); }
@@ -2592,9 +2592,6 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <button class="chat-input-btn" id="chat-sticker-toggle" title="表情" onclick="toggleStickerPanel()">
                 <svg class="i"><use href="#icon-smile"/></svg>
               </button>
-              <button class="chat-input-btn" title="问答" onclick="openQaPanel()">
-                <svg class="i"><use href="#icon-target"/></svg>
-              </button>
               <input type="file" accept="image/*" id="chat-img-file" class="hide" onchange="sendImageMessage(this)">
               <textarea class="chat-input-box" id="chat-input-box" placeholder="输入消息..." rows="1" onkeydown="onChatKeydown(event)" oninput="autoResize(this)"></textarea>
               <button class="chat-send-btn" title="发送" onclick="sendTextMessage()">
@@ -2716,6 +2713,10 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
             <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-smile"/></svg></span><span>我的表情包</span></div>
             <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
           </div>
+          <div class="setting-item" onclick="openMyPoke()">
+            <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-heart"/></svg></span><span>我的拍一拍</span></div>
+            <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
+          </div>
           <div class="setting-item" onclick="openContactSettingsList()">
             <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-user"/></svg></span><span>联系人设置</span></div>
             <span class="setting-arrow"><svg class="i"><use href="#icon-chevron-right"/></svg></span>
@@ -2749,6 +2750,17 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div class="top-bar-title grow">钱包与红包</div>
         </div>
         <div style="padding:16px;" id="cwallet-body"></div>
+      </div>
+
+      <!-- ========== 我的拍一拍管理页 ========== -->
+      <div class="page" id="page-my-poke">
+        <div class="top-bar">
+          <button class="chat-header-back" onclick="backFromMyPoke()"><svg class="i"><use href="#icon-back"/></svg></button>
+          <div class="top-bar-title grow">我的拍一拍</div>
+        </div>
+        <div class="page-scroll" style="padding:16px;">
+          <div id="my-poke-body"></div>
+        </div>
       </div>
 
       <!-- ========== 我的表情包管理页 ========== -->

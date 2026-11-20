@@ -5,9 +5,8 @@ import { $, dbGet, dbPut, now, toast } from './02-core.js';
 
 const CFG_PREFIX = 'recall_cfg_';
 const TICK = 10 * 60 * 1000;          // 每 10 分钟一次机会
-const HOUR = 3600 * 1000;
-// 按状态大类的触发概率（%）
-const CHANCE = { present: 3, leisure: 2, event: 1, sleep: 0 };
+const DEFAULT_ENABLED = true;         // 默认允许对方撤回（与旧行为一致）
+const DEFAULT_CHANCE = 3;             // 默认概率 3%（旧行为工作日状态下的概率）
 // 决定撤回后到真正生效的延时（毫秒）
 const DELAY = { present: 1500, leisure: 5000, event: 12000, sleep: 0 };
 const ALLOW_TYPES = ['text', 'image', 'sticker', 'card', 'voice', 'video'];
@@ -19,6 +18,82 @@ function serialized(key, fn) {
   chains.set(key, next);
   next.catch(() => {}).then(() => { if (chains.get(key) === next) chains.delete(key); });
   return next;
+}
+async function waitChain(key) {
+  const p = chains.get(key);
+  if (p) { try { await p; } catch (e) {} }
+}
+function clampChance(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return DEFAULT_CHANCE;
+  return Math.max(0, Math.min(100, n));
+}
+
+/* ============ 撤回配置（开关 + 概率，按联系人存 meta） ============ */
+export async function getRecallConfig(cid) {
+  if (!cid) return { enabled: DEFAULT_ENABLED, chance: DEFAULT_CHANCE, nextAt: 0, lastAt: 0 };
+  const key = CFG_PREFIX + cid;
+  await waitChain(key);
+  const rec = await dbGet('meta', key);
+  return {
+    enabled: rec && typeof rec.enabled === 'boolean' ? rec.enabled : DEFAULT_ENABLED,
+    chance: rec && rec.chance != null ? clampChance(rec.chance) : DEFAULT_CHANCE,
+    nextAt: rec && rec.nextAt ? rec.nextAt : 0,
+    lastAt: rec && rec.lastAt ? rec.lastAt : 0
+  };
+}
+
+/* ============ 设置页片段（联系人设置「撤回」板块） ============ */
+export async function getRecallSectionHtml(cid) {
+  const cfg = await getRecallConfig(cid);
+  return `
+    <div class="cs-section">
+      <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-trash"/></svg> 撤回</div>
+      <div class="cs-card">
+        <div class="cs-row cs-row-switch">
+          <span class="cs-label">允许对方撤回</span>
+          <span class="cs-value">
+            <div class="switch ${cfg.enabled ? 'on' : ''}" id="recall-switch" role="switch" aria-checked="${cfg.enabled ? 'true' : 'false'}" onclick="toggleRecallEnabled()"></div>
+          </span>
+        </div>
+        <div class="cs-row">
+          <span class="cs-label">撤回概率</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;">
+              <input type="number" min="0" max="100" step="1" value="${cfg.chance}" id="recall-chance" ${cfg.enabled ? '' : 'disabled style="opacity:.45;"'} onchange="recallSaveChance(this.value)">
+              <span class="cs-unit">%</span>
+            </div>
+          </span>
+        </div>
+        <div class="cs-hint">每 10 分钟判定一次：命中后，对方会从自己最近 5 条消息里随机撤回 1~2 条。睡觉类状态不会撤回。</div>
+      </div>
+    </div>`;
+}
+
+export async function toggleRecallEnabled() {
+  const cid = state.currentContactSettingId;
+  if (!cid) return;
+  const cfg = await getRecallConfig(cid);
+  const next = !cfg.enabled;
+  await updateCfg(cid, { enabled: next });
+  const sw = $('recall-switch');
+  if (sw) { sw.classList.toggle('on', next); sw.setAttribute('aria-checked', next ? 'true' : 'false'); }
+  const inp = $('recall-chance');
+  if (inp) {
+    inp.disabled = !next;
+    inp.style.opacity = next ? '' : '.45';
+  }
+  toast(next ? '已开启对方撤回' : '已关闭对方撤回');
+}
+
+export async function recallSaveChance(value) {
+  const cid = state.currentContactSettingId;
+  if (!cid) return;
+  const n = clampChance(value);
+  await updateCfg(cid, { chance: n });
+  const el = $('recall-chance');
+  if (el) el.value = String(n);
+  toast(`对方撤回概率：${n}%`);
 }
 
 async function enqueue(fn) {
@@ -64,7 +139,9 @@ export async function recallFromContact(cid, opts) {
   const cat = st ? cats.find(x => x.id === st.category) : null;
   const catId = cat ? cat.id : 'present';
   if (catId === 'sleep') return { ok: false, reason: 'sleep' };
-  const chance = typeof CHANCE[catId] === 'number' ? CHANCE[catId] : CHANCE.present;
+  const cfg = await getRecallConfig(cid);
+  if (!cfg.enabled && !o.force) return { ok: false, reason: 'disabled' };
+  const chance = cfg.chance;
   const roll = Math.random() * 100;
   if (!o.force && roll >= chance) return { ok: false, reason: 'chance', chance, roll };
   const all = (c.messages || []).filter(m => m.from === 'other' && !m.recalled && m.type !== 'poke' && m.type !== 'recall' && ALLOW_TYPES.indexOf(m.type) !== -1);
@@ -135,6 +212,8 @@ async function runRecallChecks() {
     if (!rec || !rec.nextAt) { await updateCfg(c.id, { nextAt: t + TICK }); continue; }
     if (t < rec.nextAt) continue;
     await updateCfg(c.id, { nextAt: t + TICK, lastAt: t });
+    // 已关闭该联系人的撤回：只推进排期，不判定
+    if (rec.enabled === false) continue;
     try { await recallFromContact(c.id); } catch (e) {}
   }
 }

@@ -16,8 +16,8 @@ import { initWalletModule, walletResume, walletTick } from './15-wallet.js';
 import { initBackgroundModule } from './16-background.js';
 import { backFromCardUsage, openCardUsage } from './17-card-usage.js';
 import { csResetMyAvatar, csUpdateMyAvatar } from './18-my-avatar.js';
-import { closePokePanel, doPokeFromPanel, initPokeModule, openPokePanel, pokeAddLine, pokeDeleteLine, pokeEditLine, pokeSaveChance } from './19-poke.js';
-import { initRecallModule, recallMine } from './20-recall.js';
+import { backFromMyPoke, closePokePanel, doPokeFromPanel, initPokeModule, openMyPoke, openPokePanel, pokeAddLine, pokeDeleteLine, pokeEditLine, pokeSaveChance, renderMyPokePage } from './19-poke.js';
+import { initRecallModule, recallMine, recallSaveChance, toggleRecallEnabled } from './20-recall.js';
 import { backFromQaDetail, backFromQaList, closeQaPanel, initQaModule, openQaDetail, openQaList, openQaPanel, qaAddOption, qaOptionInput, qaRemoveOption, qaSetMine, submitQa } from './21-qa.js';
 
 export function enqueueTask(fn) {
@@ -746,7 +746,12 @@ window.pokeAddLine = pokeAddLine;
 window.pokeEditLine = pokeEditLine;
 window.pokeDeleteLine = pokeDeleteLine;
 window.pokeSaveChance = pokeSaveChance;
+window.openMyPoke = openMyPoke;
+window.backFromMyPoke = backFromMyPoke;
+window.renderMyPokePage = renderMyPokePage;
 window.recallMsg = recallMine;
+window.toggleRecallEnabled = toggleRecallEnabled;
+window.recallSaveChance = recallSaveChance;
 window.openQaPanel = openQaPanel;
 window.closeQaPanel = closeQaPanel;
 window.qaAddOption = qaAddOption;

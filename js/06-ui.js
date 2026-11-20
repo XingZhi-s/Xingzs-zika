@@ -6,6 +6,7 @@ import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
 import { getPokeSectionHtml } from './19-poke.js';
+import { getRecallSectionHtml } from './20-recall.js';
 
 // ============ ME 页功能 ============
 export async function updateMyAvatar(input) {
@@ -165,6 +166,7 @@ export async function renderContactSetting(id) {
   const bgPos = (c.settings && c.settings.chatBgPos) || 'center';
   const myAv = await getMyAvatarFor(id);
   const pokeHtml = await getPokeSectionHtml(id);
+  const recallHtml = await getRecallSectionHtml(id);
   const pg = proactiveGapRange(c);
   const cats = await getStatusCategories();
   // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
@@ -254,6 +256,8 @@ export async function renderContactSetting(id) {
     </div>
 
     ${pokeHtml}
+
+    ${recallHtml}
 
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-cog"/></svg> 生活状态</div>
