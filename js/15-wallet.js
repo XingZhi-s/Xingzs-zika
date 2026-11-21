@@ -258,6 +258,13 @@ async function tickInner(cid) {
   let generated = 0;
   if (cw.rpEnabled && cw.nextAt && t >= cw.nextAt) {
     let at = cw.nextAt;
+    // 长离线快进：早于 24 小时的旧间隔本来就不补卡片，直接按最小间隔成批跳过，
+    // 否则 guard 会在到达「最近 24 小时」之前耗尽，把这段时间的红包连同游标一起丢掉
+    if (at < t - DAY) {
+      const step = cw.gapMin * 3600000;
+      const skip = Math.floor((t - DAY - at) / step);
+      if (skip > 0) at += skip * step;
+    }
     let guard = 0;
     // 已占用的分钟（红包/转账），补算时用来避免时间戳挤在同一分钟
     const usedMinutes = new Set();
@@ -669,7 +676,7 @@ export function rpQuick(v) {
 }
 
 export async function sendRedPacket() {
-  return serialize(async () => {
+  const run = () => serialize(async () => {
     const cid = _rpDraft.cid || state.currentContactId;
     if (!cid) return toast('请先打开一位联系人');
     const c = await getContact(cid);
@@ -707,11 +714,14 @@ export async function sendRedPacket() {
     if (state.currentContactId === cid) renderChatIncremental(cid);
     toast('红包已发出');
   });
+  // 与补算共用主串行队列：整对象写联系人时不和 runCatchUp 互相覆盖
+  if (typeof window.__enqueueTask === 'function') return window.__enqueueTask(run);
+  return run();
 }
 
 // ============ 点开红包卡片 ============
 export async function openRedPacket(cid, msgId) {
-  return serialize(async () => {
+  const run = () => serialize(async () => {
     const c = await getContact(cid);
     if (!c) return;
     const m = (c.messages || []).find(x => x.id === msgId);
@@ -751,6 +761,8 @@ export async function openRedPacket(cid, msgId) {
     if (state.currentContactId === cid) { await renderChatIncremental(cid); refreshRpCard(m); }
     toast(`已领取 ¥${fmtMoney(amount)}`);
   });
+  if (typeof window.__enqueueTask === 'function') return window.__enqueueTask(run);
+  return run();
 }
 
 export function walletResume() {
