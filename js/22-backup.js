@@ -661,10 +661,10 @@ function shortError(e) {
 }
 
 export async function backupDoImport(input) {
-  if (_importing) return toast('正在导入，请稍候');
   if (!input.files || !input.files.length) return;
   const file = input.files[0];
   input.value = '';
+  if (_importing) return toast('正在导入，请稍候');
   let text;
   try {
     text = await readFileText(file);

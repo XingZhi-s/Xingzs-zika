@@ -114,10 +114,11 @@ export async function renderChatIncremental(contactId, opts = {}) {
     const m = slice[i];
     const old = map.get(m.id);
     if (old) {
-      // 撤回/问答揭晓需要更新已有节点（增量渲染默认不动已有节点）
-      const qaRevealed = m.type === 'qa' ? ((m.qa && m.qa.otherIndex != null) ? '1' : '0') : '';
+      // 撤回/问答状态变化需要更新已有节点（增量渲染默认不动已有节点）
+      const qaRevealed = m.type === 'qa' ? ((m.qa && m.qa.mineIndex != null && m.qa.otherIndex != null) ? '1' : '0') : '';
+      const qaMine = m.type === 'qa' ? String((m.qa && m.qa.mineIndex != null) ? m.qa.mineIndex : '') : '';
       const needReplace = (m.recalled && old.dataset.type !== 'recall')
-        || (m.type === 'qa' && (old.dataset.type !== 'qa' || old.dataset.revealed !== qaRevealed));
+        || (m.type === 'qa' && (old.dataset.type !== 'qa' || old.dataset.revealed !== qaRevealed || old.dataset.qaMine !== qaMine));
       if (needReplace) {
         const rt = document.createElement('div');
         rt.innerHTML = renderMsg(m, contactId, contactName, msgs, myAvatar, otherAvatar, null).trim();
@@ -194,21 +195,22 @@ export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAva
     const txt = m.from === 'me' ? '你撤回了一条消息' : `${contactName || '对方'} 撤回了一条消息`;
     return `<div class="msg-row msg-center" data-msgid="${escapeHtml(m.id)}" data-from="${m.from}" data-type="recall"><div class="msg-recall-line">${escapeHtml(txt)}</div></div>`;
   }
-  // 问答卡：我的气泡；对方选择在双方都选完后才显示
+  // 问答卡：我的气泡；双方都选完才同时揭示对方选择
   if (m.type === 'qa' && m.qa) {
     const q = m.qa;
-    const revealed = q.otherIndex != null;
+    const revealed = q.mineIndex != null && q.otherIndex != null;
+    const selectable = !revealed;
     const rows = (q.options || []).map((o, i) => {
-      const isMine = i === q.mineIndex;
+      const isMine = q.mineIndex != null && i === q.mineIndex;
       const isOther = revealed && i === q.otherIndex;
-      return `<div class="qa-opt${isMine ? ' picked mine' : ''}${isOther ? ' picked other' : ''}">
+      return `<div class="qa-opt${selectable ? ' selectable' : ''}${isMine ? ' picked mine' : ''}${isOther ? ' picked other' : ''}"${selectable ? ` onclick="qaPickMine('${contactId}','${m.qaId}',${i})"` : ''}>
         <span class="qa-opt-text">${escapeHtml(o)}</span>
         ${isMine ? '<span class="qa-tag">我</span>' : ''}
         ${isOther ? '<span class="qa-tag">对方</span>' : ''}
       </div>`;
     }).join('');
-    const foot = revealed ? '双方已选择' : (q.status === 'sleep' ? '对方正在睡觉，暂时不会回答' : '等待对方选择…');
-    return `<div class="msg-row me" data-msgid="${escapeHtml(m.id)}" data-from="me" data-type="qa" data-revealed="${revealed ? 1 : 0}"><img class="msg-avatar" src="${escapeHtml(myAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble qa-bubble"><div class="qa-q">${escapeHtml(q.question || '')}</div><div class="qa-opts">${rows}</div><div class="qa-foot">${foot}</div></div><div class="msg-read">${m.read ? '已读' : '未读'}</div></div></div>`;
+    const foot = revealed ? '双方已选择' : (q.mineIndex == null ? '点击选项选择你的答案，双方都选完后同时揭晓' : (q.status === 'sleep' ? '对方正在睡觉，暂时不会回答' : '等待对方选择…'));
+    return `<div class="msg-row me" data-msgid="${escapeHtml(m.id)}" data-from="me" data-type="qa" data-revealed="${revealed ? 1 : 0}" data-qa-mine="${q.mineIndex == null ? '' : q.mineIndex}"><img class="msg-avatar" src="${escapeHtml(myAvatar)}" alt=""><div class="msg-wrap"><div class="msg-bubble qa-bubble"><div class="qa-q">${escapeHtml(q.question || '')}</div><div class="qa-opts">${rows}</div><div class="qa-foot">${foot}</div></div><div class="msg-read">${m.read ? '已读' : '未读'}</div></div></div>`;
   }
   // 判断系统提示消息（未接来电 / 通话 / 已拒接 / 取消呼叫等）
   let isSys = false;

@@ -18,7 +18,7 @@ import { backFromCardUsage, openCardUsage } from './17-card-usage.js';
 import { csResetMyAvatar, csUpdateMyAvatar } from './18-my-avatar.js';
 import { backFromMyPoke, backFromPokeTheirs, closePokePanel, doPokeFromPanel, initPokeModule, openMyPoke, openPokeImport, openPokePanel, openPokeTheirs, pokeAddGroup, pokeAddLine, pokeDeleteGroup, pokeDeleteLine, pokeEditLine, pokeRenameGroup, pokeSaveChance, pokeSaveChanceFromPage, pokeToggleGroup, renderMyPokePage, renderPokePage } from './19-poke.js';
 import { initRecallModule, recallMine, recallSaveChance, toggleRecallEnabled } from './20-recall.js';
-import { backFromQaDetail, backFromQaList, closeQaPanel, initQaModule, openQaDetail, openQaList, openQaPanel, qaAddOption, qaOptionInput, qaRemoveOption, qaSetMine, submitQa } from './21-qa.js';
+import { backFromQaDetail, backFromQaList, closeQaPanel, initQaModule, openQaDetail, openQaList, openQaPanel, qaAddOption, qaOptionInput, qaPickMine, qaRemoveOption, submitQa } from './21-qa.js';
 import { backFromBackupPage, backupDoExport, backupDoImport, backupToggleCat, openBackupPage } from './22-backup.js';
 
 export function enqueueTask(fn) {
@@ -758,7 +758,7 @@ window.openQaPanel = openQaPanel;
 window.closeQaPanel = closeQaPanel;
 window.qaAddOption = qaAddOption;
 window.qaRemoveOption = qaRemoveOption;
-window.qaSetMine = qaSetMine;
+window.qaPickMine = qaPickMine;
 window.qaOptionInput = qaOptionInput;
 window.submitQa = submitQa;
 window.openQaList = openQaList;

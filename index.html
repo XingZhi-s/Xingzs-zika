@@ -1330,18 +1330,14 @@ a { text-decoration:none; color:inherit; }
 .poke-group-acts { display:flex; gap:2px; flex-shrink:0; }
 .poke-group-acts button { width:30px; height:30px; min-width:30px; min-height:30px; padding:0; border-radius:8px; background:var(--bg-color); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; }
 .poke-group-body { padding:0 12px 12px; border-top:1px solid var(--border-color); }
-.msg-poke-line { max-width:86%; text-align:center; font-size:12px; line-height:1.5; color:#fff; padding:5px 12px; border-radius:999px; background:color-mix(in srgb, color-mix(in srgb, var(--theme-color) 58%, #0b1220) 88%, transparent); border:1px solid color-mix(in srgb, #fff 28%, transparent); box-shadow:0 2px 8px rgba(0,0,0,0.18); text-shadow:0 1px 2px rgba(0,0,0,0.3); overflow-wrap:anywhere; word-break:break-word; }
+.msg-poke-line { max-width:86%; text-align:center; font-size:12px; line-height:1.5; color:#fff; padding:5px 12px; border-radius:999px; background:color-mix(in srgb, color-mix(in srgb, var(--theme-color) 30%, #0b1220) 68%, transparent); -webkit-backdrop-filter:blur(14px) saturate(150%); backdrop-filter:blur(14px) saturate(150%); border:1px solid color-mix(in srgb, #fff 34%, transparent); box-shadow:0 4px 14px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.18); text-shadow:0 1px 2px rgba(0,0,0,0.35); overflow-wrap:anywhere; word-break:break-word; }
 .msg-recall-line { max-width:90%; text-align:center; font-size:12px; line-height:1.5; color:var(--text-secondary); padding:2px 10px; overflow-wrap:anywhere; word-break:break-word; }
-.poke-float { position:fixed; left:50%; transform:translateX(-50%) translateY(6px); bottom:calc(104px + env(safe-area-inset-bottom, 0px)); z-index:650; max-width:min(80vw, 360px); padding:12px 20px; border-radius:999px; background:color-mix(in srgb, color-mix(in srgb, var(--theme-color) 58%, #0b1220) 88%, transparent); border:1px solid color-mix(in srgb, #fff 32%, transparent); box-shadow:0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.16); color:#fff; font-size:15px; font-weight:600; line-height:1.5; text-align:center; text-shadow:0 1px 2px rgba(0,0,0,0.35); pointer-events:none; opacity:0; transition:opacity .34s ease, transform .34s ease; overflow-wrap:anywhere; word-break:break-word; }
-.poke-float.show { opacity:1; transform:translateX(-50%) translateY(0); }
-.poke-float.hide { display:none; }
 .qa-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:52vh; display:flex; flex-direction:column; }
 .qa-head-link { font-size:12px; color:var(--theme-color); background:var(--theme-light); border-radius:8px; padding:6px 10px; min-height:32px; }
 .qa-scroll { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 .qa-label { font-size:12px; color:var(--text-secondary); margin:8px 0 6px; }
 .qa-opt-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
-.qa-pick { width:30px; height:30px; min-width:30px; min-height:30px; border-radius:50%; background:var(--bg-color); color:var(--text-secondary); font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.qa-pick.sel { background:var(--theme-color); color:var(--my-bubble-text); }
+.qa-index { width:30px; height:30px; min-width:30px; min-height:30px; border-radius:50%; background:var(--bg-color); color:var(--text-secondary); font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .qa-opt-input { flex:1; min-width:0; }
 .qa-opt-del { width:30px; height:30px; min-width:30px; min-height:30px; border-radius:8px; background:var(--bg-color); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .qa-actions { display:flex; gap:10px; margin-top:10px; flex-shrink:0; }
@@ -1350,6 +1346,8 @@ a { text-decoration:none; color:inherit; }
 .qa-q { font-size:14px; font-weight:600; line-height:1.5; margin-bottom:8px; overflow-wrap:anywhere; word-break:break-word; }
 .qa-opts { display:flex; flex-direction:column; gap:6px; }
 .qa-opt { display:flex; align-items:center; gap:6px; font-size:13px; line-height:1.45; padding:7px 9px; border-radius:9px; background:color-mix(in srgb, var(--bg-color) 72%, transparent); color:var(--text-primary); }
+.qa-opt.selectable { cursor:pointer; }
+.qa-opt.selectable:active { background:var(--theme-light); }
 .qa-opt.picked.mine { outline:1.5px solid var(--theme-color); }
 .qa-opt.picked.other { outline:1.5px dashed var(--theme-color); }
 .qa-opt-text { flex:1; min-width:0; overflow-wrap:anywhere; word-break:break-word; }
@@ -2593,7 +2591,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <div class="qa-scroll">
                 <div class="qa-label">问题</div>
                 <input class="input" id="qa-question" placeholder="想问对方什么？" maxlength="100">
-                <div class="qa-label">选项（点左侧圆点选你自己的答案，至少 2 个）</div>
+                <div class="qa-label">选项（至少 2 个；发出后在聊天卡片上选择你的答案）</div>
                 <div id="qa-options"></div>
                 <button class="btn btn-ghost" style="width:100%;" onclick="qaAddOption()"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg>添加选项</button>
               </div>
@@ -2973,8 +2971,15 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 
         <div class="cs-card" style="margin:0 16px 16px;">
           <div class="section-title">导出数据</div>
-          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px;">把数据按类别导出为 JSON 备份，或从备份文件恢复。导入前会先显示文件摘要。</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px;">把数据按类别导出为 JSON 备份。只写入勾选的类别，不包含字卡使用统计、音乐音频和图片。</div>
           <button class="btn" style="width:100%;" onclick="openBackupPage()"><svg class="i i-sm" style="margin-right:6px;fill:none;stroke:#fff;"><use href="#icon-download"/></svg> 打开导出数据</button>
+        </div>
+
+        <div class="cs-card" style="margin:0 16px 16px;">
+          <div class="section-title">导入数据</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px;">从 JSON 备份文件恢复。选择文件后会先显示导出时间、版本、所含类别与条数，确认后才写入；文件里没有的类别保持原样，失败自动回滚。</div>
+          <button class="btn btn-outline" style="width:100%;" onclick="document.getElementById('setting-import-file').click()"><svg class="i i-sm" style="margin-right:6px;"><use href="#icon-upload"/></svg> 选择备份文件导入</button>
+          <input type="file" accept="application/json,.json" id="setting-import-file" class="hide" onchange="backupDoImport(this)">
         </div>
 
         <div style="height:20px;"></div>

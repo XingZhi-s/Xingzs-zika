@@ -49,7 +49,6 @@ async function statusCat(c) {
 
 /* ============ 发起问答面板 ============ */
 let _opts = ['', ''];
-let _mine = null;
 let _submitting = false;
 
 function renderQaOptions() {
@@ -57,9 +56,7 @@ function renderQaOptions() {
   if (!box) return;
   box.innerHTML = _opts.map((v, i) => `
     <div class="qa-opt-row">
-      <button class="qa-pick${_mine === i ? ' sel' : ''}" onclick="qaSetMine(${i})" title="选择我的答案">
-        ${_mine === i ? '<svg class="i i-sm"><use href="#icon-check"/></svg>' : `<span>${i + 1}</span>`}
-      </button>
+      <span class="qa-index">${i + 1}</span>
       <input class="input qa-opt-input" value="${escapeHtml(v)}" placeholder="选项 ${i + 1}" oninput="qaOptionInput(${i},this.value)">
       ${_opts.length > 2 ? `<button class="qa-opt-del" title="删除选项" onclick="qaRemoveOption(${i})"><svg class="i i-sm"><use href="#icon-close"/></svg></button>` : ''}
     </div>`).join('');
@@ -68,7 +65,6 @@ function renderQaOptions() {
 export function openQaPanel() {
   if (!state.currentContactId) return toast('请先打开一位联系人');
   _opts = ['', ''];
-  _mine = null;
   _submitting = false;
   const q = $('qa-question'); if (q) q.value = '';
   renderQaOptions();
@@ -87,12 +83,6 @@ export function qaAddOption() {
 export function qaRemoveOption(i) {
   if (_opts.length <= 2) return;
   _opts.splice(i, 1);
-  if (_mine === i) _mine = null;
-  else if (_mine != null && _mine > i) _mine--;
-  renderQaOptions();
-}
-export function qaSetMine(i) {
-  _mine = i;
   renderQaOptions();
 }
 export function qaOptionInput(i, v) {
@@ -108,7 +98,6 @@ export async function submitQa() {
   const opts = _opts.map(s => String(s || '').trim());
   if (opts.length < 2) return toast('至少需要 2 个选项');
   if (opts.some(s => !s)) return toast('选项不能为空');
-  if (_mine == null || !opts[_mine]) return toast('请选择一个你的答案');
   const c = await getContact(cid);
   if (!c) return;
   _submitting = true;
@@ -117,7 +106,7 @@ export async function submitQa() {
     const sleeping = cat === 'sleep';
     const recId = uid();
     const rec = {
-      id: recId, cid, question, options: opts, mineIndex: _mine,
+      id: recId, cid, question, options: opts, mineIndex: null,
       otherIndex: null, status: sleeping ? 'sleep' : 'waiting',
       createdAt: now(), revealedAt: null, contactName: c.name
     };
@@ -132,7 +121,7 @@ export async function submitQa() {
       cc.messages.push({
         id: uid(), from: 'me', type: 'qa', time: t, read: true, replyTo: null, snapshot: null,
         qaId: recId,
-        qa: { question, options: opts.slice(), mineIndex: _mine, otherIndex: null, status: rec.status }
+        qa: { question, options: opts.slice(), mineIndex: null, otherIndex: null, status: rec.status }
       });
       await saveContact(cc);
       return true;
@@ -154,6 +143,50 @@ export async function submitQa() {
   }
 }
 
+/* 双方都答完才算揭晓：在此之前任何一方都看不到对方的选择 */
+function isRevealed(mineIndex, otherIndex) {
+  return mineIndex != null && otherIndex != null;
+}
+
+/* 发出后我在卡片上选自己的答案；若对方已选，选完立即同时揭示 */
+export async function qaPickMine(cid, qaId, idx) {
+  if (!cid || !qaId) return;
+  const list = await getQaRecords(cid);
+  const target = list.find(r => r.id === qaId);
+  if (!target) return;
+  if (isRevealed(target.mineIndex, target.otherIndex)) return;
+  const i = Number(idx);
+  if (!Number.isInteger(i) || i < 0 || i >= target.options.length) return;
+  target.mineIndex = i;
+  const nowReveal = isRevealed(target.mineIndex, target.otherIndex);
+  if (nowReveal) {
+    target.status = 'done';
+    target.revealedAt = now();
+  }
+  await saveRecords(cid, list);
+  await enqueue(async () => {
+    const c = await getContact(cid);
+    if (!c) return;
+    const m = (c.messages || []).find(x => x.qaId === qaId);
+    if (!m) return;
+    m.qa = m.qa || {};
+    m.qa.mineIndex = i;
+    if (nowReveal) {
+      m.qa.otherIndex = target.otherIndex;
+      m.qa.status = 'done';
+    }
+    await saveContact(c);
+  });
+  if (state.currentContactId === cid) {
+    const pc = $('page-chat');
+    if (pc && pc.classList.contains('active') && typeof window.renderChatIncremental === 'function') {
+      window.renderChatIncremental(cid, { animate: false });
+    }
+    if ($('page-qa-list') && $('page-qa-list').classList.contains('active')) renderQaList();
+    if ($('page-qa-detail') && $('page-qa-detail').classList.contains('active') && state.qaDetailId === qaId) renderQaDetail(qaId);
+  }
+}
+
 /* ============ 对方选择与揭示 ============ */
 const timers = new Map();
 function scheduleReveal(cid, recId, delay) {
@@ -172,8 +205,10 @@ async function revealQa(cid, recId) {
   if (!rec || rec.otherIndex != null) return false;
   const idx = Math.floor(Math.random() * rec.options.length);
   rec.otherIndex = idx;
-  rec.status = 'done';
-  rec.revealedAt = now();
+  // 对方已选但还没揭晓：只有我也选完，才写入揭示时间并同时展示
+  const nowReveal = isRevealed(rec.mineIndex, rec.otherIndex);
+  rec.status = nowReveal ? 'done' : 'waiting';
+  if (nowReveal) rec.revealedAt = now();
   await saveRecords(cid, list);
   await enqueue(async () => {
     const c = await getContact(cid);
@@ -182,7 +217,7 @@ async function revealQa(cid, recId) {
     if (!m) return;
     m.qa = m.qa || {};
     m.qa.otherIndex = idx;
-    m.qa.status = 'done';
+    m.qa.status = rec.status;
     await saveContact(c);
   });
   if (state.currentContactId === cid) {
@@ -216,7 +251,8 @@ export async function renderQaList() {
   const c = await getContact(cid);
   box.innerHTML = `<div class="qa-list-head">${escapeHtml((c && c.name) || '')} · 共 ${list.length} 条</div>` +
     list.map(r => {
-      const st = r.otherIndex != null ? '已揭晓' : (r.status === 'sleep' ? '对方在睡觉' : '等待选择');
+      const revealed = isRevealed(r.mineIndex, r.otherIndex);
+      const st = revealed ? '已揭晓' : (r.mineIndex == null ? '待我选择' : (r.status === 'sleep' ? '对方在睡觉' : '等待对方选择'));
       return `<div class="qa-rec-item" onclick="openQaDetail('${r.id}')">
         <div class="qa-rec-q">${escapeHtml(r.question)}</div>
         <div class="qa-rec-meta"><span>${escapeHtml(formatTime(r.createdAt))}</span><span class="qa-badge">${st}</span></div>
@@ -239,9 +275,9 @@ export async function renderQaDetail(id) {
   const list = await getQaRecords(state.currentContactId);
   const r = list.find(x => x.id === id);
   if (!r) { box.innerHTML = '<div class="empty">记录不存在</div>'; return; }
-  const revealed = r.otherIndex != null;
+  const revealed = isRevealed(r.mineIndex, r.otherIndex);
   const rows = r.options.map((o, i) => {
-    const isMine = i === r.mineIndex;
+    const isMine = r.mineIndex != null && i === r.mineIndex;
     const isOther = revealed && i === r.otherIndex;
     return `<div class="qa-opt${isMine ? ' picked mine' : ''}${isOther ? ' picked other' : ''}">
       <span class="qa-opt-text">${escapeHtml(o)}</span>
@@ -249,7 +285,7 @@ export async function renderQaDetail(id) {
       ${isOther ? '<span class="qa-tag">对方</span>' : ''}
     </div>`;
   }).join('');
-  const foot = `发起：${escapeHtml(formatTime(r.createdAt))}${revealed ? ` · 揭晓：${escapeHtml(formatTime(r.revealedAt))}` : (r.status === 'sleep' ? ' · 对方在睡觉，未回答' : ' · 等待对方选择')}`;
+  const foot = `发起：${escapeHtml(formatTime(r.createdAt))}${revealed ? ` · 揭晓：${escapeHtml(formatTime(r.revealedAt))}` : (r.mineIndex == null ? ' · 尚未选择你的答案' : (r.status === 'sleep' ? ' · 对方在睡觉，未回答' : ' · 等待对方选择'))}`;
   box.innerHTML = `<div class="qa-detail-card">
     <div class="qa-detail-q">${escapeHtml(r.question)}</div>
     <div class="qa-opts">${rows}</div>

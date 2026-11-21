@@ -403,7 +403,7 @@ export async function renderContacts(search='') {
   });
   const renderCard = (c) => {
     const last = c.messages.length ? c.messages[c.messages.length-1] : null;
-    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : last.type === 'musicInvite' ? '[一起听] ' + ((last.musicInvite && last.musicInvite.trackName) || '本地歌曲') : last.type === 'redpacket' ? '[红包]' : last.type === 'transfer' ? '[转账] 往共用卡转了' : '') : '还没有消息，点击开始聊天';
+    let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : last.type === 'musicInvite' ? '[一起听] ' + ((last.musicInvite && last.musicInvite.trackName) || '本地歌曲') : last.type === 'redpacket' ? '[红包]' : last.type === 'transfer' ? '[转账] 往共用卡转了' : last.type === 'poke' ? '[拍一拍] ' + (last.content || '') : '') : '还没有消息，点击开始聊天';
     const anni = getNearestAnniversary(c.anniversaries);
     const anniHtml = anni ? `<div class="contact-card-anni">${anni.text}</div>` : '';
     const mc = (c.missedCalls && c.missedCalls.length > 0) ? `<div class="missed-call-badge"><svg class="i i-sm" style="margin-right:2px;"><use href="#icon-phone"/></svg>${c.missedCalls.length}个未接</div>` : '';

@@ -447,60 +447,9 @@ export async function doPokeFromPanel(idx) {
     return line;
   });
   if (!text) return;
-  showPokeFloat(text);
   if (state.currentContactId === cid && typeof window.renderChatIncremental === 'function') {
     window.renderChatIncremental(cid, { animate: false });
   }
-}
-
-/* ============ 浮层提示（不是聊天气泡） ============ */
-let _floatHideTimer = null;
-let _floatClearTimer = null;
-function placePokeFloat(el) {
-  const vh = window.innerHeight;
-  const input = document.querySelector('.chat-input-wrap');
-  let bottom = 104;
-  if (input) {
-    const r = input.getBoundingClientRect();
-    if (r.height > 0 && r.top > 0) bottom = Math.max(24, vh - r.top + 12);
-  }
-  el.style.top = 'auto';
-  el.style.bottom = bottom + 'px';
-  // 极矮视口（软键盘弹起）时避免压到顶部栏
-  const page = $('page-chat');
-  const bar = page ? page.querySelector('.chat-header') : null;
-  if (bar) {
-    const br = bar.getBoundingClientRect();
-    const pr = el.getBoundingClientRect();
-    if (br.height > 0 && pr.top < br.bottom + 8) {
-      el.style.bottom = 'auto';
-      el.style.top = Math.round(br.bottom + 8) + 'px';
-    }
-  }
-}
-export function showPokeFloat(text) {
-  const page = $('page-chat');
-  if (!page || !page.classList.contains('active')) return;
-  let el = $('poke-float');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'poke-float';
-    el.className = 'poke-float hide';
-    document.body.appendChild(el);
-  }
-  if (_floatHideTimer) { clearTimeout(_floatHideTimer); _floatHideTimer = null; }
-  if (_floatClearTimer) { clearTimeout(_floatClearTimer); _floatClearTimer = null; }
-  el.textContent = text;
-  el.classList.remove('hide');
-  el.classList.remove('show');
-  placePokeFloat(el);
-  void el.offsetWidth;
-  el.classList.add('show');
-  // 停留 4.2 秒，随后淡出 0.34 秒再隐藏
-  _floatHideTimer = setTimeout(() => {
-    el.classList.remove('show');
-    _floatClearTimer = setTimeout(() => { el.classList.add('hide'); }, 380);
-  }, 4200);
 }
 
 /* ============ 对方拍我：每小时概率判定 ============ */
@@ -540,7 +489,6 @@ export async function rollPokeFor(cid) {
   });
   if (!added) return { ok: false, reason: 'save-failed' };
   if (chatOpen) {
-    showPokeFloat(line);
     if (typeof window.renderChatIncremental === 'function') window.renderChatIncremental(cid, { animate: false });
   } else {
     renderContacts();

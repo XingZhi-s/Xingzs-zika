@@ -534,15 +534,6 @@ export async function walletSettingsHtml(cid) {
           </span>
         </div>
         <div class="cs-row">
-          <span class="cs-label">我发红包默认金额</span>
-          <span class="cs-value">
-            <div class="range-row" style="justify-content:flex-end;">
-              <span class="cs-unit">¥</span><input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMin)}" id="wc-out-min" style="width:${rangeInputW(fmtMoney(cw.outMin))}px" oninput="walletRangeResize(this)"><span class="cs-unit">~</span>
-              <input type="number" min="0.01" step="0.01" value="${fmtMoney(cw.outMax)}" id="wc-out-max" style="width:${rangeInputW(fmtMoney(cw.outMax))}px" oninput="walletRangeResize(this)">
-            </div>
-          </span>
-        </div>
-        <div class="cs-row">
           <span class="cs-label">转入金额区间</span>
           <span class="cs-value">
             <div class="range-row" style="justify-content:flex-end;">
@@ -554,7 +545,7 @@ export async function walletSettingsHtml(cid) {
         <button class="btn" style="width:100%;margin-top:10px;" onclick="walletSaveContactSettings()">
           <svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存钱包设置
         </button>
-        <div class="cs-hint">每段间隔到点按概率决定是否发红包；对方按当前状态决定领取时间，睡觉不领、醒来再领；24 小时未领取作废。联系人每天 50% 概率按「转入金额区间」往共用卡转一笔，会生成聊天卡片并记入流水。</div>
+        <div class="cs-hint">每段间隔到点按概率决定是否发红包；对方按当前状态决定领取时间，睡觉不领、醒来再领；24 小时未领取作废。「Ta 发我的金额」可填任意区间，不设上限。联系人每天 50% 概率按「转入金额区间」往共用卡转一笔，会生成聊天卡片并记入流水。</div>
       </div>
     </div>`;
 }
@@ -579,10 +570,6 @@ export async function walletSaveContactSettings() {
     let inMax = round2(Math.max(0.01, num('wc-in-max', cw.inMax)));
     if (inMin > inMax) { const tmp = inMin; inMin = inMax; inMax = tmp; }
     cw.inMin = inMin; cw.inMax = inMax;
-    let outMin = round2(Math.max(0.01, num('wc-out-min', cw.outMin)));
-    let outMax = round2(Math.max(0.01, num('wc-out-max', cw.outMax)));
-    if (outMin > outMax) { const tmp = outMin; outMin = outMax; outMax = tmp; }
-    cw.outMin = outMin; cw.outMax = outMax;
     let trMin = round2(Math.max(0.01, num('wc-tr-min', cw.transferInMin)));
     let trMax = round2(Math.max(0.01, num('wc-tr-max', cw.transferInMax)));
     if (trMin > trMax) { const tmp = trMin; trMin = trMax; trMax = tmp; }
@@ -656,12 +643,12 @@ export async function openRedPacketPanel() {
       <div class="rp-panel-label" style="margin-top:14px;">金额</div>
       <div class="rp-amount-row">
         <span>¥</span>
-        <input id="rp-amount" type="number" min="${fmtMoney(cw.outMin)}" max="${fmtMoney(cw.outMax)}" step="0.01" value="" placeholder="${fmtMoney(cw.outMin)} ~ ${fmtMoney(cw.outMax)}">
+        <input id="rp-amount" type="number" min="0" step="0.01" value="" placeholder="请输入金额">
       </div>
       <div class="rp-quick-row">
         ${QUICK_AMOUNTS.map(v => `<button type="button" class="rp-quick" onclick="rpQuick(${v})">${v}</button>`).join('')}
       </div>
-      <div class="rp-hint">金额由你自行填写，需在该联系人的「我发红包默认金额」区间 ¥${fmtMoney(cw.outMin)} ~ ¥${fmtMoney(cw.outMax)} 内；发出后会从所选卡片扣除。</div>
+      <div class="rp-hint">金额由你自行填写，只需大于 0 且不超过所选卡片的可用余额；发出后会从所选卡片扣除。</div>
     </div>`;
   showModal('发红包', body, [
     { label: '取消', cls: 'btn-outline', onClick: closeModal },
@@ -692,14 +679,11 @@ export async function sendRedPacket() {
     if (!Number.isFinite(amount) || amount <= 0) return toast('请输入有效金额');
     const w = await getWallet();
     const cw = await getContactWallet(cid);
-    // 金额必须落在该联系人设置的区间内：越界只提示，不悄悄改成边界值
-    if (amount < cw.outMin || amount > cw.outMax) {
-      return toast(`金额需在 ¥${fmtMoney(cw.outMin)} ~ ¥${fmtMoney(cw.outMax)} 之间`);
-    }
+    // 金额完全由用户填写，不设区间上限；只校验卡内可用余额，超出时提示并阻止发送
     const card = _rpDraft.card === 'shared' ? 'shared' : 'mine';
     const bal = card === 'mine' ? w.balance : cw.shared;
     if (bal <= 0) return toast('这张卡没有余额了');
-    if (amount > bal) return toast('余额不足');
+    if (amount > bal) return toast(`余额不足，可用 ¥${fmtMoney(bal)}`);
     if (card === 'mine') w.balance = round2(w.balance - amount);
     else cw.shared = round2(cw.shared - amount);
     const t = now();
