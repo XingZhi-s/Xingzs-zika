@@ -50,6 +50,18 @@ export function proactiveGapRange(c) {
   return { min, max };
 }
 
+// 状态切换间隔（小时）：默认 2~8（与旧行为一致）；最小 1 小时；空值回落默认，倒序自动交换
+export function statusGapRange(c) {
+  const s = (c && c.settings) ? c.settings : {};
+  let min = Number(s.statusGapMin);
+  let max = Number(s.statusGapMax);
+  if (!Number.isFinite(min)) min = 2;
+  if (!Number.isFinite(max)) max = 8;
+  min = Math.max(1, Math.round(min));
+  max = Math.max(min, Math.round(max));
+  return { min, max };
+}
+
 // ============ 状态大类（固定四类；数据按配置存，便于以后扩展第五类） ============
 const STATUS_CATEGORY_KEY = 'status_categories_v1';
 export const STATUS_CATEGORY_DEFAULTS = [
@@ -163,7 +175,11 @@ export async function normalizeContactStatus(c, pool) {
   }
   const t = now();
   // nextStatusAt 为主，nextStatusChangeAt 保留同步（旧数据/导入数据兼容）
-  if (!c.nextStatusAt) { c.nextStatusAt = c.nextStatusChangeAt || (t + randInt(120, 480) * 60 * 1000); changed = true; }
+  if (!c.nextStatusAt) {
+    const gap = statusGapRange(c);
+    c.nextStatusAt = c.nextStatusChangeAt || (t + randInt(gap.min, gap.max) * 60 * 60 * 1000);
+    changed = true;
+  }
   if (c.nextStatusChangeAt !== c.nextStatusAt) { c.nextStatusChangeAt = c.nextStatusAt; changed = true; }
   // 负间隔保护（系统时间回拨）：状态起点不能晚于下一切换点
   if (!c.statusSince || c.statusSince > c.nextStatusAt) {
@@ -215,6 +231,7 @@ export function createEmptyContact(name) {
       callRate: 50, // 每天主动来电概率（0–100 整数，默认 50；老数据缺省按 50 处理）
       proactiveMin: 1, proactiveMax: 3,
       proactiveGapMin: 2, proactiveGapMax: 8, // 主动消息间隔（小时），用户可改
+      statusGapMin: 2, statusGapMax: 8, // 状态切换间隔（小时），用户可改
       nextProactiveAt: now() + randInt(2, 8) * 3600 * 1000,
       chatBackground: null,
       myNickname: '',

@@ -458,11 +458,18 @@ async function enqueue(fn) {
   return fn();
 }
 
+// 依附已读状态：还有「我」发出去但 Ta 未读的消息时不能主动拍我（撤回掉的不算）
+function hasMyUnread(c) {
+  return (c.messages || []).some(m => m.from === 'me' && m.type !== 'poke' && !m.recalled && m.read !== true);
+}
+
 export async function rollPokeFor(cid) {
   if (!cid) return { ok: false, reason: 'no-cid' };
   const { getContact, getStatusPool, getStatusCategories, getMe, saveContact, renderContacts } = await import('./03-data.js');
   const [c, pool, cats, me] = await Promise.all([getContact(cid), getStatusPool(), getStatusCategories(), getMe()]);
   if (!c) return { ok: false, reason: 'no-contact' };
+  // 依附已读状态：还有「我」发出去但 Ta 未读的消息时，不能主动拍我；等读完后按原概率继续判定
+  if (hasMyUnread(c)) return { ok: false, reason: 'unread' };
   const st = pool.find(s => s.id === c.statusId) || pool.find(s => s.name === c.status);
   const cat = st ? cats.find(x => x.id === st.category) : null;
   if (cat && cat.id === 'sleep') return { ok: false, reason: 'sleep' };
@@ -509,6 +516,8 @@ async function runPokeChecks() {
       continue;
     }
     if (t < rec.nextAt) continue;
+    // 还有未读的「我」的消息：本次不判定、也不消耗这次机会；等 Ta 读完后下一次巡检按原概率判定
+    if (hasMyUnread(c)) continue;
     await updateCfg(c.id, { nextAt: t + HOUR, lastAt: t });
     try { await rollPokeFor(c.id); } catch (e) {}
   }

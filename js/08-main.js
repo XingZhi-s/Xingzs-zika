@@ -1,10 +1,10 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact } from './03-data.js';
+import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, statusGapRange } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSaveStatusGap, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openLoveMoodDay, openLoveMoodPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderLoveMoodCalendar, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
@@ -58,7 +58,7 @@ async function releaseCatchUpLock() {
   const rec = await dbGet('meta', CATCHUP_LOCK_KEY);
   if (rec && rec.owner === tabId()) await dbDel('meta', CATCHUP_LOCK_KEY);
 }
-// 状态回放：按 2–8 小时逐段推进到现在，写作息表（每联系人独立）；返回切换窗口（新状态）
+// 状态回放：按该联系人的「状态切换间隔」逐段推进到现在，写作息表（每联系人独立）；返回切换窗口（新状态）
 function replayStatus(c, pool, t) {
   const windows = [];
   if (!pool.length) return windows;
@@ -69,9 +69,11 @@ function replayStatus(c, pool, t) {
     return windows;
   }
   if (c.statusAuto === false) return windows;
+  const gap = statusGapRange(c);
+  const step = () => randInt(gap.min, gap.max) * 60 * 60 * 1000;
   if (!c.statusSince) c.statusSince = Math.min(t, (c.nextStatusAt || t) - 1000);
   let next = c.nextStatusAt;
-  if (!next || next <= c.statusSince) next = c.statusSince + randInt(120, 480) * 60 * 1000;
+  if (!next || next <= c.statusSince) next = c.statusSince + step();
   let count = 0;
   while (next <= t && count < MAX_STATUS_SEGMENTS) {
     recordStatusWindow(c, c.statusId, c.statusSince, next);
@@ -81,18 +83,18 @@ function replayStatus(c, pool, t) {
     const st = pool.find(s => s.id === nextId);
     if (st) c.status = st.name;
     c.statusSince = next;
-    next = next + randInt(120, 480) * 60 * 1000;
+    next = next + step();
     count++;
   }
   if (count >= MAX_STATUS_SEGMENTS && next <= t) {
     // 离开太久：不再逐段回放，直接跳到当下（挂起消息仍用已生成的 60 个有效窗口处理）
     if (c.statusSince < t) recordStatusWindow(c, c.statusId, c.statusSince, t);
     c.statusSince = t;
-    c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+    c.nextStatusAt = t + step();
   } else {
     c.nextStatusAt = next;
   }
-  if (c.nextStatusAt < c.statusSince) c.nextStatusAt = c.statusSince + randInt(120, 480) * 60 * 1000;
+  if (c.nextStatusAt < c.statusSince) c.nextStatusAt = c.statusSince + step();
   c.nextStatusChangeAt = c.nextStatusAt;
   return windows;
 }
@@ -190,8 +192,9 @@ export async function runCatchUp(onlyCid) {
     if (!await acquireCatchUpLock()) return false;
     try {
     // B1：进入单个聊天时只补该联系人，避免每次点击都全量扫描 20 个联系人
-    let contacts = await getAllContacts();
-    if (onlyCid) contacts = contacts.filter(c => c.id === onlyCid);
+    // 全量列表保留给「下一次来电精确排期」用（只补单个联系人时也要看其他人）
+    const allContacts = await getAllContacts();
+    let contacts = onlyCid ? allContacts.filter(c => c.id === onlyCid) : allContacts;
     // A25/A26：状态共享池（内置 + 自定义，所有联系人通用）
     const statusPool = await getStatusPool();
     const cats = await getStatusCategories();
@@ -387,6 +390,10 @@ export async function runCatchUp(onlyCid) {
         try { window.__notifyIncoming(c.id, c.name, notifyItems); } catch (e) {}
       }
     } // end contacts loop
+    // 5b) 为「今天尚未触发且仍在未来」的最近来电排一个精确定时器：
+    //     前台常驻时不必等下一次 60s 轮询，触发时刻落在真实命中时刻；
+    //     是否重复由 triggered 记录保证，实际写入仍走本条串行队列，不会覆盖其他模块的整对象写。
+    scheduleNextCall(allContacts, t);
     return changed;
     } finally {
       await releaseCatchUpLock();
@@ -420,9 +427,20 @@ function ensureCallSlots(c, t) {
   const rate = contactCallRate(c);
   const slots = [];
   if (rate > 0 && Math.random() * 100 < rate) {
-    // 命中：时刻按 30 分钟槽随机（同一时段多人也各自独立抽，不会压在同一点）
-    const s = randInt(0, 47);
-    slots.push({ index: s, time: startOfDay + s * 30 * 60 * 1000 + randInt(0, 29 * 60 * 1000) });
+    // 命中：只从「现在之后」的 30 分钟槽里取，保证抽到的是未来时刻。
+    // 否则首次打开当天时可能抽到已经过去的时刻，被立刻当成未接来电吃掉，当天再也不会响铃。
+    const slotMs = 30 * 60 * 1000;
+    const dayEnd = startOfDay + 24 * 3600 * 1000;
+    const first = Math.floor((t - startOfDay) / slotMs) + 1;
+    if (first <= 47) {
+      const s = randInt(first, 47);
+      const base = startOfDay + s * slotMs;
+      slots.push({ index: s, time: base + randInt(0, 29 * 60 * 1000) });
+    } else {
+      // 23:30 之后才首次打开：从当天剩余时间里取一个未来时刻
+      const span = dayEnd - t;
+      if (span > 60000) slots.push({ index: 48, time: t + randInt(60000, span - 1000) });
+    }
   }
   c.callSlots = { date: todayStr, slots, triggered: [] };
   return c;
@@ -433,6 +451,35 @@ function isSleepingStatus(c) {
   if (!c.statusList || !c.status) return false;
   const s = c.statusList.find(x => x.name === c.status);
   return !!(s && s.category === 'sleep');
+}
+
+// 下一次来电的精确排期：所有联系人里「今天、未触发、时刻在未来」的最近一个槽
+// 到点后仍通过 runCatchUp 走串行队列判定，因此不会重复触发，也不会抢写其他模块。
+// 单次定时器上限 15 分钟：防止系统休眠/时钟跳变后长时间失准；每轮补算都会重新计算并覆盖。
+let _callTimer = null;
+function scheduleNextCall(allContacts, t) {
+  if (_callTimer) { clearTimeout(_callTimer); _callTimer = null; }
+  const d = new Date(t);
+  const todayStr = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  let nextAt = 0;
+  for (const c of (allContacts || [])) {
+    if (!c || !c.settings || !c.settings.incomingCall || !c.callSlots) continue;
+    if (c.callSlots.date !== todayStr) continue;
+    const triggered = c.callSlots.triggered || [];
+    const slots = c.callSlots.slots || [];
+    for (let i = 0; i < slots.length; i++) {
+      if (triggered.includes(i)) continue;
+      const at = slots[i] && slots[i].time;
+      if (!Number.isFinite(at) || at <= t) continue;
+      if (!nextAt || at < nextAt) nextAt = at;
+    }
+  }
+  if (!nextAt) return;
+  const delay = Math.max(150, Math.min(nextAt - now(), 15 * 60 * 1000));
+  _callTimer = setTimeout(() => {
+    _callTimer = null;
+    runCatchUp().catch(() => {});
+  }, delay);
 }
 
 // 周期性检查（保持低频 60s；更重要的是用户打开页面/切页/回到前台时补算一次）
@@ -718,6 +765,7 @@ window.csEditName = csEditName;
 window.csResetBg = csResetBg;
 window.csSaveCallRate = csSaveCallRate;
 window.csSaveProactive = csSaveProactive;
+window.csSaveStatusGap = csSaveStatusGap;
 window.csSaveReply = csSaveReply;
 window.csSetSplit = csSetSplit;
 window.toggleStatusHelp = toggleStatusHelp;

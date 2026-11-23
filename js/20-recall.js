@@ -4,12 +4,18 @@ import { state } from './01-state.js';
 import { $, dbGet, dbPut, now, toast } from './02-core.js';
 
 const CFG_PREFIX = 'recall_cfg_';
-const TICK = 10 * 60 * 1000;          // 每 10 分钟一次机会
+const BATCH = 10;                     // 每累计 10 条「联系人自己发出的消息」给一次机会
 const DEFAULT_ENABLED = true;         // 默认允许对方撤回（与旧行为一致）
 const DEFAULT_CHANCE = 3;             // 默认概率 3%（旧行为工作日状态下的概率）
 // 决定撤回后到真正生效的延时（毫秒）
 const DELAY = { present: 1500, leisure: 5000, event: 12000, sleep: 0 };
 const ALLOW_TYPES = ['text', 'image', 'sticker', 'card', 'voice', 'video'];
+// 计入「联系人自己发出的消息」的类型：系统提示（未接来电/来信提醒/提醒等，带 sysKey）不计
+const COUNT_TYPES = ['text', 'image', 'sticker', 'card', 'voice', 'video', 'redpacket', 'transfer', 'choice'];
+
+function countContactAuthored(c) {
+  return (c.messages || []).filter(m => m.from === 'other' && !m.sysKey && COUNT_TYPES.indexOf(m.type) !== -1).length;
+}
 
 const chains = new Map();
 function serialized(key, fn) {
@@ -38,6 +44,7 @@ export async function getRecallConfig(cid) {
   return {
     enabled: rec && typeof rec.enabled === 'boolean' ? rec.enabled : DEFAULT_ENABLED,
     chance: rec && rec.chance != null ? clampChance(rec.chance) : DEFAULT_CHANCE,
+    counted: rec && typeof rec.counted === 'number' ? rec.counted : null,
     nextAt: rec && rec.nextAt ? rec.nextAt : 0,
     lastAt: rec && rec.lastAt ? rec.lastAt : 0
   };
@@ -65,7 +72,7 @@ export async function getRecallSectionHtml(cid) {
             </div>
           </span>
         </div>
-        <div class="cs-hint">每 10 分钟判定一次：命中后，对方会从自己最近 5 条消息里随机撤回 1~2 条。睡觉类状态不会撤回。</div>
+        <div class="cs-hint">每累计 10 条对方发出的消息判定一次（只算 Ta 自己发的，不算我发的）：命中后，对方会从自己最近 5 条消息里随机撤回 1~2 条。睡觉类状态不会撤回。</div>
       </div>
     </div>`;
 }
@@ -188,7 +195,7 @@ export async function recallFromContact(cid, opts) {
   return { ok: true, ids, count, delay: 0, chance, roll };
 }
 
-/* ============ 定时巡检（每 10 分钟给一次机会；首次只排期） ============ */
+/* ============ 巡检：每累计 10 条联系人消息给一次机会（首次只记基线，不补判历史） ============ */
 function updateCfg(cid, patch) {
   const key = CFG_PREFIX + cid;
   return serialized(key, async () => {
@@ -200,19 +207,38 @@ function updateCfg(cid, patch) {
   });
 }
 
+let _checking = false;
 async function runRecallChecks() {
+  if (_checking) return; // 上一轮还没跑完时本轮直接跳过，避免同一批 10 条被重复消费
+  _checking = true;
+  try {
+    await runRecallChecksInner();
+  } finally {
+    _checking = false;
+  }
+}
+
+async function runRecallChecksInner() {
   const { getAllContacts } = await import('./03-data.js');
   const list = await getAllContacts();
-  const t = now();
   for (const c of list) {
     const key = CFG_PREFIX + c.id;
     const pending = chains.get(key);
     if (pending) { try { await pending; } catch (e) {} }
     const rec = await dbGet('meta', key);
-    if (!rec || !rec.nextAt) { await updateCfg(c.id, { nextAt: t + TICK }); continue; }
-    if (t < rec.nextAt) continue;
-    await updateCfg(c.id, { nextAt: t + TICK, lastAt: t });
-    // 已关闭该联系人的撤回：只推进排期，不判定
+    const total = countContactAuthored(c);
+    // 首次接入（或旧数据没有 counted）：以当前条数为基线，不对历史消息补判
+    if (!rec || typeof rec.counted !== 'number') {
+      await updateCfg(c.id, { counted: total });
+      continue;
+    }
+    // 消息被删除后条数回退：重新对齐基线，不清零到负数
+    if (total < rec.counted) { await updateCfg(c.id, { counted: total }); continue; }
+    // 未满 10 条：继续累计（余数保留，不清零）
+    if (total - rec.counted < BATCH) continue;
+    // 满 10 条：消耗这一批，掷一次骰（每批最多一次，剩余批次留给下一分钟继续递减）
+    await updateCfg(c.id, { counted: rec.counted + BATCH, lastAt: now() });
+    // 已关闭该联系人的撤回：只推进计数，不判定
     if (rec.enabled === false) continue;
     try { await recallFromContact(c.id); } catch (e) {}
   }
@@ -225,8 +251,10 @@ export function initRecallModule() {
   _timer = setInterval(() => { runRecallChecks().catch(() => {}); }, 60000);
 }
 
-// 供测试/外部使用：清除某联系人的排期（不影响消息）
+// 供测试/外部使用：把某联系人的计数基线重置为当前消息条数（不影响消息、不清概率配置）
 export async function resetRecallSchedule(cid) {
   if (!cid) return;
-  await updateCfg(cid, { nextAt: now() + TICK });
+  const { getContact } = await import('./03-data.js');
+  const c = await getContact(cid);
+  await updateCfg(cid, { counted: c ? countContactAuthored(c) : 0 });
 }

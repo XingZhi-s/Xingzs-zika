@@ -1,7 +1,7 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
-import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme } from './03-data.js';
+import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme, statusGapRange } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
@@ -168,6 +168,7 @@ export async function renderContactSetting(id) {
   const pokeHtml = await getPokeSectionHtml(id);
   const recallHtml = await getRecallSectionHtml(id);
   const pg = proactiveGapRange(c);
+  const sg = statusGapRange(c);
   const cats = await getStatusCategories();
   // A18/A26：当前生效状态以 statusId 为准（兼容旧 status 名）
   const currentSid = (c.statusId && pool.some(s => s.id === c.statusId))
@@ -268,15 +269,27 @@ export async function renderContactSetting(id) {
             <div class="switch ${autoMode?'on':''}" onclick="csToggleStatusAuto()"></div>
           </span>
         </div>
+        <div class="cs-row">
+          <span class="cs-label">状态切换间隔</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;gap:6px;">
+              <input type="number" min="1" max="168" step="1" value="${sg.min}" id="cs-sgap-min">
+              <span class="cs-unit">~</span>
+              <input type="number" min="1" max="168" step="1" value="${sg.max}" id="cs-sgap-max">
+              <span class="cs-unit">小时</span>
+            </div>
+          </span>
+        </div>
         ${statusRows || '<div style="padding:20px 0;text-align:center;color:var(--text-secondary);">还没有状态，点击下方按钮添加</div>'}
         <button class="btn btn-ghost" style="width:100%;margin-top:10px;" onclick="csAddStatus()">＋ 添加状态</button>
+        <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveStatusGap()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存状态切换间隔</button>
         <div id="cs-status-help" class="status-help hide">
           <div><b>已读并回复</b>：按该状态的「已读并回复的概率」掷骰，命中后会先已读，再发字卡回复。</div>
           <div><b>已读不回</b>：看到了消息，但这次不回复。</div>
           <div><b>未读</b>：一直没看，留到下次状态切换再判定；连续 3 个窗口未看会收尾为已读不回。睡觉类永远不会出现已读不回。</div>
         </div>
         <button class="status-help-btn status-help-corner" onclick="toggleStatusHelp()" title="状态说明">?</button>
-        <div class="cs-hint status-hint">每 2~8 小时随机切换</div>
+        <div class="cs-hint status-hint">按设置的间隔（小时，最少 1 小时）随机切换</div>
       </div>
     </div>
 
@@ -487,7 +500,8 @@ export async function setStatusCurrent(sid) {
   c.status = s.name;
   c.statusAuto = false;
   c.statusSince = t;
-  c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+  const gap = statusGapRange(c);
+  c.nextStatusAt = t + randInt(gap.min, gap.max) * 3600 * 1000;
   c.nextStatusChangeAt = c.nextStatusAt;
   c.manualSwitchAt = t;
   await saveContact(c);
@@ -611,7 +625,8 @@ export async function csToggleStatusAuto() {
   c.statusAuto = (c.statusAuto !== false) ? false : true;
   const t = now();
   c.statusSince = t;
-  c.nextStatusAt = t + randInt(120, 480) * 60 * 1000;
+  const gap = statusGapRange(c);
+  c.nextStatusAt = t + randInt(gap.min, gap.max) * 3600 * 1000;
   c.nextStatusChangeAt = c.nextStatusAt;
   await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
@@ -634,6 +649,28 @@ export async function csSaveReply() {
   c.settings.replyCount = mx; // 旧字段兼容
   await saveContact(c);
   toast('已保存');
+}
+export async function csSaveStatusGap() {
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  // 状态切换间隔（小时）：最少 1 小时，上限 168 小时，空值回落默认 2~8，倒序自动交换
+  let mn = parseInt($('cs-sgap-min') ? $('cs-sgap-min').value : '');
+  let mx = parseInt($('cs-sgap-max') ? $('cs-sgap-max').value : '');
+  if (isNaN(mn) || mn < 1) mn = 2;
+  if (isNaN(mx) || mx < 1) mx = 8;
+  if (mn > mx) { const t = mn; mn = mx; mx = t; }
+  mn = Math.min(168, mn);
+  mx = Math.min(168, Math.max(mn, mx));
+  c.settings.statusGapMin = mn;
+  c.settings.statusGapMax = mx;
+  const gap = statusGapRange(c);
+  // 立即按新区间重排下一次切换，之后补算/实时切换都用该联系人的区间
+  const t = now();
+  c.nextStatusAt = t + randInt(gap.min, gap.max) * 3600 * 1000;
+  if (c.statusSince && c.nextStatusAt <= c.statusSince) c.nextStatusAt = c.statusSince + randInt(gap.min, gap.max) * 3600 * 1000;
+  c.nextStatusChangeAt = c.nextStatusAt;
+  await saveContact(c);
+  renderContactSetting(state.currentContactSettingId);
+  toast(`状态切换间隔：${mn}~${mx} 小时`);
 }
 export async function csSaveProactive() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
