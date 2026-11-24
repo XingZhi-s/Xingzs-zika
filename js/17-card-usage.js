@@ -94,11 +94,13 @@ export async function renderCardUsage() {
     };
   }).sort((a, b) => b.count - a.count || a.text.localeCompare(b.text, 'zh'));
 
-  const counts = rows.map(r => r.count);
+  // 云图只展示使用次数最多的前 10 张（不足 10 张有多少显示多少）；清单仍列出全部
+  const cloudRows = rows.slice(0, 10);
+  const counts = cloudRows.map(r => r.count);
   const min = Math.min(...counts);
   const max = Math.max(...counts);
 
-  const cloudHtml = rows.map(r => {
+  const cloudHtml = cloudRows.map(r => {
     const fs = cloudFontSize(r.count, min, max);
     const op = 0.62 + 0.38 * ((fs - FONT_MIN) / (FONT_MAX - FONT_MIN));
     return `<span class="cu-word" style="font-size:${fs.toFixed(1)}px;opacity:${op.toFixed(2)};">${escapeHtml(r.text)}${r.deleted ? '<span class="cu-del">已删除</span>' : ''}</span>`;

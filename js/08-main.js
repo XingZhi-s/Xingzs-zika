@@ -1,7 +1,7 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, statusGapRange } from './03-data.js';
+import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveContactMerged, statusGapRange } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
 import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSaveStatusGap, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, switchStkTab, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
@@ -202,6 +202,8 @@ export async function runCatchUp(onlyCid) {
     for (let c of contacts) {
       // 记录本轮补算开始时的消息长度：用于找出本轮新补出的回复，主动消息排在它们之后
       const preReplyLen = (c.messages || []).length;
+      // 并发合并基线：本轮开始时已存在的消息 id 与未读数（落库时用，避免覆盖并发写入）
+      const saveBase = { msgIds: new Set((c.messages || []).map(m => m.id)), unread: c.unread || 0 };
       const notifyItems = []; // 本轮新到达的对方消息，交给通知模块合并/限流
       // 0) 先与共享池/作息表/挂起队列对齐（状态为空或不在池内 → 池内随机并写回）
       await normalizeContactStatus(c, statusPool);
@@ -385,7 +387,8 @@ export async function runCatchUp(onlyCid) {
       for (const m of c.messages) { if (m.time > t) m.time = t; }
       c.messages.sort((a, b) => a.time - b.time);
 
-      await saveContact(c);
+      // 落库：在单事务内与库内最新快照合并，保留补算期间并发写入的消息/回复（不覆盖、不丢失）
+      await saveContactMerged(c, saveBase);
       if (notifyItems.length && typeof window.__notifyIncoming === 'function') {
         try { window.__notifyIncoming(c.id, c.name, notifyItems); } catch (e) {}
       }

@@ -1,7 +1,7 @@
 // 依赖：04-chat.js
 import { CALL_PERSIST_KEY, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, confirmDialog, escapeHtml, formatTime, now, pick, randInt, toast } from './02-core.js';
-import { applyNickname, backFromChat, getAllContacts, getContact, getMe, openPage, renderContacts, saveContact } from './03-data.js';
+import { applyNickname, backFromChat, getAllContacts, getContact, getMe, openPage, renderContacts, saveContact, saveContactAppendOnly } from './03-data.js';
 import { renderChatMessages, toggleChatMenu } from './04-chat.js';
 
 // ============ 电话/视频 ============
@@ -485,7 +485,8 @@ export async function showIncomingCall(c, type='voice') {
   // 同时不在该联系人对话页也记未接（多个联系人的未接都要记录，不作废）
   if (state.callState || state.currentContactId !== cid) {
     pushMissedCall(c);
-    await saveContact(c);
+    // 补算中途也会走到这里（持有本轮快照）：只增不减落库，避免覆盖并发写入的聊天消息
+    await saveContactAppendOnly(c);
     renderContacts();
     if (state.currentContactId === cid) renderChatMessages(cid, true);
     return;

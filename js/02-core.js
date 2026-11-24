@@ -52,6 +52,32 @@ export function dbAll(store) {
     r.onerror = () => reject(r.error);
   });
 }
+// 单事务内「读 → 改 → 写」：同一 store 的 readwrite 事务由浏览器严格串行，
+// 因此 mutator 读到的就是提交瞬间的最新数据，可在其中把并发写入合并进来，避免整对象回写互相覆盖。
+// mutator 返回 undefined 表示「无需改动」（不写盘），返回对象则写回该对象。
+export function dbUpdate(store, key, mutator) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (e) => { if (!settled) { settled = true; reject(e); } };
+    const tx = state.db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    let out;
+    const req = os.get(key);
+    req.onsuccess = () => {
+      try {
+        out = mutator(req.result);
+        if (out !== undefined && out !== null) os.put(out);
+      } catch (e) {
+        try { tx.abort(); } catch (_) {}
+        fail(e);
+      }
+    };
+    req.onerror = () => fail(req.error);
+    tx.oncomplete = () => { if (!settled) { settled = true; resolve(out); } };
+    tx.onerror = () => fail(tx.error);
+    tx.onabort = () => fail(tx.error || new Error('transaction aborted'));
+  });
+}
 
 // ============ 工具函数 ============
 

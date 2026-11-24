@@ -1,7 +1,7 @@
 // 依赖：03-data.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, confirmDialog, countdownAnniversary, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
+import { applyNickname, clearContactUnread, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
 import { recordCardUsage } from './17-card-usage.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
 import { openPokePanel } from './19-poke.js';
@@ -63,15 +63,10 @@ export async function renderChatMessages(contactId, scrollToBottom=false) {
   if (scrollToBottom) setTimeout(() => { box.scrollTop = box.scrollHeight; }, 30);
   // A21：会话已在聊天页实际渲染即视为“看到”，清除该会话未读；
   // 仅在聊天页处于激活态且渲染的正是当前会话时执行，不影响其它联系人计未读。
-  // 用最新快照写回，避免覆盖渲染期间刚到达的新消息。
+  // 用「单事务只改 unread」的原子写，避免整对象回写覆盖渲染期间刚到达的新消息/回复。
   const pageChat = $('page-chat');
   if (contactId === state.currentContactId && pageChat && pageChat.classList.contains('active')) {
-    const fresh = await getContact(contactId);
-    if (fresh && fresh.unread) {
-      fresh.unread = 0;
-      await saveContact(fresh);
-      renderContacts();
-    }
+    if (await clearContactUnread(contactId)) renderContacts();
   }
   // 绑定长按
   bindLongpress(box);
@@ -172,16 +167,37 @@ export async function renderChatIncremental(contactId, opts = {}) {
     }
   }
 
+  // 同步「加载更早」按钮：条数变化后更新文案，缺失时补上（避免增量渲染后剩余条数不准/无法展开更早消息）
+  const moreCount = msgs.length - showCount;
+  let moreBtn = box.querySelector('.load-more');
+  if (moreCount > 0) {
+    if (!moreBtn) {
+      moreBtn = document.createElement('div');
+      moreBtn.className = 'load-more';
+      moreBtn.onclick = async () => {
+        lmState.pageSize += 50;
+        state.loadMoreState[contactId] = lmState;
+        await renderChatMessages(contactId, false);
+        const b = $('chat-messages');
+        if (b) b.scrollTop = moreBtn.offsetTop || 100;
+      };
+      box.insertBefore(moreBtn, box.firstChild);
+    }
+    const moreTxt = `↑ 加载更早消息（还有${moreCount}条）`;
+    if (moreBtn.textContent !== moreTxt) moreBtn.textContent = moreTxt;
+  } else if (moreBtn) {
+    moreBtn.remove();
+  }
+
   if (atBottom) box.scrollTop = box.scrollHeight;
   else if (anchor && inserted) {
     const el = box.querySelector(`[data-msgid="${anchor.id}"]`);
     if (el) box.scrollTop += el.getBoundingClientRect().top - anchor.top;
   }
-  // 同步未读计数（聊天页当前会话）
+  // 同步未读计数（聊天页当前会话）：同样只做原子的 unread 清零，不整对象回写
   const pageChat = $('page-chat');
   if (contactId === state.currentContactId && pageChat && pageChat.classList.contains('active')) {
-    const fresh = await getContact(contactId);
-    if (fresh && fresh.unread) { fresh.unread = 0; await saveContact(fresh); renderContacts(); }
+    if (await clearContactUnread(contactId)) renderContacts();
   }
 }
 export function renderMsg(m, contactId, contactName, allMsgs, myAvatar, otherAvatar, animId) {
@@ -587,12 +603,17 @@ export function clearQuoteReply() {
 }
 export async function deleteMsg(msgId) {
   const lp = $('lp-menu'); if (lp) lp.classList.add('hide');
+  const cid = state.currentContactId;
   if (!await confirmDialog('确定删除这条消息吗？')) return;
-  const c = await getContact(state.currentContactId);
-  if (!c) return;
-  c.messages = (c.messages || []).filter(m => m.id !== msgId);
-  await saveContact(c);
-  await renderChatMessages(state.currentContactId, true);
+  const task = async () => {
+    const c = await getContact(cid);
+    if (!c) return;
+    c.messages = (c.messages || []).filter(m => m.id !== msgId);
+    await saveContact(c);
+    await renderChatMessages(cid, true);
+  };
+  // 与补算串行：删除同样是「读-改-写」整对象，入队避免与 runCatchUp 互相覆盖
+  if (typeof window.__enqueueTask === 'function') await window.__enqueueTask(task); else await task();
 }
 
 // ============ 发送消息 ============
@@ -709,13 +730,18 @@ export async function appendReplyMessages(c, anchor, count, atTime) {
 }
 // 触发 N 条回复（兼容旧入口）
 export async function emitRoundReplies(cid, baseMsg, count) {
-  const cc = await getContact(cid); if (!cc) return;
-  const sent = await appendReplyMessages(cc, baseMsg, count, now());
-  await saveContact(cc);
-  if (state.currentContactId === cid) renderChatIncremental(cid);
-  else if (sent) { cc.unread = (cc.unread || 0) + sent; await saveContact(cc); }
-  renderContacts();
-  return sent;
+  const task = async () => {
+    const cc = await getContact(cid); if (!cc) return 0;
+    const sent = await appendReplyMessages(cc, baseMsg, count, now());
+    await saveContact(cc);
+    if (state.currentContactId === cid) renderChatIncremental(cid);
+    else if (sent) { cc.unread = (cc.unread || 0) + sent; await saveContact(cc); }
+    renderContacts();
+    return sent;
+  };
+  // 与补算串行，避免同一联系人的整对象写互相覆盖
+  if (typeof window.__enqueueTask === 'function') return window.__enqueueTask(task);
+  return task();
 }
 // 已读/回复定时排程（实时）；补算路径由 08-main 的判定组统一处理
 function scheduleJudgement(cid, key, msgIds, judgement, readAt, replyAt, replyCount) {
@@ -797,7 +823,12 @@ export function computeReadPlan(c, st, cat, baseTime, nowT) {
   return { judgement, readAt, replyAt, replyCount, readDelay, maxSec, fastSec, slowMin, rate };
 }
 // 发送消息核心：状态驱动判定链（分节 + 两个骰子 + 挂起队列）
-export async function sendMessageCore({ type, content, choice, replyTo }) {
+// 与补算串行：发送是「读-改-写」整对象，必须在同一条队列里执行，否则会被 runCatchUp 的旧快照回写覆盖
+export async function sendMessageCore(payload) {
+  if (typeof window.__enqueueTask === 'function') return window.__enqueueTask(() => sendMessageCoreInner(payload));
+  return sendMessageCoreInner(payload);
+}
+async function sendMessageCoreInner({ type, content, choice, replyTo }) {
   const cid = state.currentContactId;
   const c = await getContact(cid);
   if (!c) return;
@@ -979,16 +1010,20 @@ export async function sendChoiceResponseFlow(c, choice) {
   if (state.currentContactId === cid) renderChatMessages(cid, true);
   // 已读（实时）；定时器丢失时由补算 2a 按 readAt 兜底
   const readKey = `choiceRead_${cid}_${qMsg.id}`;
-  state.chatTimers[readKey] = setTimeout(async () => {
+  state.chatTimers[readKey] = setTimeout(() => {
     delete state.chatTimers[readKey];
-    const cc = await getContact(cid);
-    if (!cc) return;
-    const m = cc.messages.find(x => x.id === qMsg.id);
-    if (m && !m.read) {
-      m.read = true;
-      await saveContact(cc);
-      if (state.currentContactId === cid) renderChatIncremental(cid);
-    }
+    const task = async () => {
+      const cc = await getContact(cid);
+      if (!cc) return;
+      const m = cc.messages.find(x => x.id === qMsg.id);
+      if (m && !m.read) {
+        m.read = true;
+        await saveContact(cc);
+        if (state.currentContactId === cid) renderChatIncremental(cid);
+      }
+    };
+    // 与补算串行，避免整对象回写覆盖并发写入
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
   }, 2000);
   // 结果（实时）；与补算共用同一幂等结算，时间戳=choiceReplyAt
   armChoiceResultTimer(c, qMsg, replyAt);

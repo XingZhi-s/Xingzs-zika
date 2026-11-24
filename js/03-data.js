@@ -1,6 +1,6 @@
 // 依赖：01-state.js, 02-core.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
+import { $, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, dbUpdate, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
 import { autoResize, cancelRoundTimers, renderChatMessages } from './04-chat.js';
 import { renderLetterList } from './05-call-letter.js';
 import { openContactSetting, renderContactSettingsList, renderMyStickersGrid, renderStickerPanel, renderThemeUI } from './06-ui.js';
@@ -37,6 +37,73 @@ export async function getAllContacts() { return await dbAll('contacts'); }
 export async function getContact(id) { return await dbGet('contacts', id); }
 export async function saveContact(c) { await dbPut('contacts', c); }
 export async function deleteContact(id) { await dbDel('contacts', id); }
+// 补算落库（并发安全）：在单个 readwrite 事务里与库内最新快照合并后写回，避免整对象回写覆盖并发写入。
+// base.msgIds：补算开始时的消息 id 集合；base.unread：补算开始时的未读数。
+// 规则：
+//  1) 消息按 id 合并：库内并发新增（刚发出的消息 / 实时回复 / 红包等）全部保留；
+//  2) 补算期间被并发删除（库内已不存在）的旧消息不再写回，避免「删除后复活」；
+//  3) 挂起队列 / 信件按 id 合并；
+//  4) unread 只叠加本轮增量，不覆盖并发已清零的红点。
+export async function saveContactMerged(c, base = {}) {
+  if (!c || !c.id) return;
+  const baseIds = base.msgIds instanceof Set ? base.msgIds : new Set(base.msgIds || []);
+  const baseUnread = Number(base.unread) || 0;
+  await dbUpdate('contacts', c.id, (fresh) => {
+    // 联系人已被并发删除：不复活
+    if (!fresh) return undefined;
+    const out = c;
+    const freshMsgs = fresh.messages || [];
+    const freshIds = new Set(freshMsgs.map(m => m.id));
+    const knownIds = new Set((out.messages || []).map(m => m.id));
+    // 2) 丢弃库内已被删除的旧消息（基线内且补算未新增）
+    if (out.messages) out.messages = out.messages.filter(m => !baseIds.has(m.id) || freshIds.has(m.id));
+    // 1) 追加库内并发新增的消息
+    const merged = out.messages || (out.messages = []);
+    for (const m of freshMsgs) if (m && !knownIds.has(m.id)) merged.push(m);
+    merged.sort((a, b) => (a.time || 0) - (b.time || 0));
+    // 3) 挂起队列 / 信件按 id 合并
+    const prIds = new Set((out.pendingReplies || []).map(p => p.id));
+    const extraPr = (fresh.pendingReplies || []).filter(p => p && !prIds.has(p.id));
+    if (extraPr.length) {
+      out.pendingReplies = (out.pendingReplies || []).concat(extraPr).sort((a, b) => (a.sentAt || 0) - (b.sentAt || 0));
+    }
+    const letterIds = new Set((out.letters || []).map(l => l.id));
+    const extraLetters = (fresh.letters || []).filter(l => l && !letterIds.has(l.id));
+    if (extraLetters.length) out.letters = (out.letters || []).concat(extraLetters);
+    // 4) 未读：库内现值 + 本轮增量
+    out.unread = Math.max(0, (Number(fresh.unread) || 0) + ((Number(out.unread) || 0) - baseUnread));
+    return out;
+  });
+}
+// 只增不减的落库：把库内并发新增的消息/信件并入 c 后再整对象保存。
+// 用于补算中途必须立即落库、又不能丢本轮内存新消息与外部并发写入的场景（如来电提示）。
+export async function saveContactAppendOnly(c) {
+  if (!c || !c.id) return;
+  await dbUpdate('contacts', c.id, (fresh) => {
+    if (!fresh) return undefined;
+    const have = new Set((c.messages || []).map(m => m.id));
+    let added = false;
+    for (const m of (fresh.messages || [])) {
+      if (m && !have.has(m.id)) { (c.messages || (c.messages = [])).push(m); added = true; }
+    }
+    if (added) c.messages.sort((a, b) => (a.time || 0) - (b.time || 0));
+    const lid = new Set((c.letters || []).map(l => l.id));
+    for (const l of (fresh.letters || [])) if (l && !lid.has(l.id)) (c.letters || (c.letters = [])).push(l);
+    return c;
+  });
+}
+// 原子清零未读：只改 unread 字段，不整对象回写，避免覆盖渲染期间刚写入的消息/回复
+export async function clearContactUnread(cid) {
+  if (!cid) return false;
+  let cleared = false;
+  await dbUpdate('contacts', cid, (c) => {
+    if (!c || !c.unread) return undefined;
+    c.unread = 0;
+    cleared = true;
+    return c;
+  });
+  return cleared;
+}
 
 // 主动消息间隔（小时）：默认 2~8；最小 1 小时，避免填 0 后每轮补算都触发
 export function proactiveGapRange(c) {
