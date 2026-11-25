@@ -1070,17 +1070,24 @@ export function switchStkTab(tab, first=false) {
   document.querySelectorAll('.stk-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
-  renderStkLibGrid();
+  renderStkLibGrid(tab, state.currentContactSettingId);
 }
-export async function renderStkLibGrid() {
+// 渲染表情包库：来源由参数显式指定（mine=我的 / contact=当前联系人），不跨来源混用。
+// 异步返回后会校验 tab 与联系人是否仍是发起时的那一个，避免晚到的「我的」结果盖到联系人页。
+export async function renderStkLibGrid(tab, cid) {
   const grid = $('stk-lib-grid'); if (!grid) return;
+  const activeTab = tab === 'contact' ? 'contact' : 'mine';
+  const targetCid = cid !== undefined ? cid : state.currentContactSettingId;
+  grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">加载中…</div>`;
   let list = [];
-  if (state.currentStkLibTab === 'mine') {
+  if (activeTab === 'mine') {
     const m = await getMe();
+    if (state.currentStkLibTab !== activeTab) return;
     list = (m.stickers || []).map(s => ({...s, _owner:'me'}));
   } else {
-    const c = await getContact(state.currentContactSettingId);
-    if (!c) return;
+    const c = await getContact(targetCid);
+    if (state.currentStkLibTab !== activeTab || state.currentContactSettingId !== targetCid) return;
+    if (!c) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有选择联系人</div>`; return; }
     list = (c.stickers || []).map(s => ({...s, _owner:'contact'}));
   }
   if (!list.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有表情包</div>`; return; }
@@ -1097,18 +1104,22 @@ export async function deleteLibSticker(id, owner) {
     m.stickers = (m.stickers||[]).filter(x => x.id !== id);
     await saveMe(m);
   } else {
-    const c = await getContact(state.currentContactSettingId); if (!c) return;
+    const cid = state.currentContactSettingId;
+    const c = await getContact(cid); if (!c) return;
     c.stickers = (c.stickers||[]).filter(x => x.id !== id);
     await saveContact(c);
   }
-  renderStkLibGrid();
+  renderStkLibGrid(state.currentStkLibTab, state.currentContactSettingId);
 }
 export async function addLibStickers(input) {
   if (!input.files || !input.files.length) return;
   const files = Array.from(input.files);
   input.value = '';
+  // 快照当前来源：异步压缩期间即使切了 tab / 联系人，也写回发起时的归属
+  const tab = state.currentStkLibTab === 'contact' ? 'contact' : 'mine';
+  const cid = state.currentContactSettingId;
   let added = 0, dup = 0;
-  if (state.currentStkLibTab === 'mine') {
+  if (tab === 'mine') {
     const m = await getMe();
     m.stickers = m.stickers || [];
     const ex = new Set(m.stickers.map(s => s.data));
@@ -1122,7 +1133,7 @@ export async function addLibStickers(input) {
     }
     await saveMe(m);
   } else {
-    const c = await getContact(state.currentContactSettingId); if (!c) return;
+    const c = await getContact(cid); if (!c) return;
     c.stickers = c.stickers || [];
     const ex = new Set(c.stickers.map(s => s.data));
     for (const f of files) {
@@ -1135,7 +1146,7 @@ export async function addLibStickers(input) {
     }
     await saveContact(c);
   }
-  renderStkLibGrid();
+  renderStkLibGrid(state.currentStkLibTab, state.currentContactSettingId);
   toast(`添加${added}张${dup?`，跳过重复${dup}张`:''}`);
 }
 

@@ -1,6 +1,6 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, closeModal, dbAll, dbDel, dbGet, dbPut, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
+import { $, closeModal, dbAll, dbDel, dbGet, dbPut, defaultAnniMode, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveContactMerged, statusGapRange } from './03-data.js';
 import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
@@ -42,6 +42,7 @@ async function processQueue() {
 // ============ 关闭网页补算 + 周期检查 ============
 const CATCHUP_LOCK_KEY = 'catchup_lock_v1';
 const MAX_STATUS_SEGMENTS = 60; // 状态回放硬上限：超过直接跳到当下（常数级工作量）
+const FRESH_CALL_MS = 120 * 1000; // 只有「刚刚到点」的来电才弹全屏；离线期间早已过去的按未接处理
 function tabId() { if (!state._tabId) state._tabId = uid(); return state._tabId; }
 async function acquireCatchUpLock() {
   const t = now();
@@ -338,10 +339,12 @@ export async function runCatchUp(onlyCid) {
               else triggered.push(i);
               continue;
             }
-            // 触发（如果停留在该联系人对话页则弹，否则记未接）
+            // 触发：只有「现在刚到点」且网站前台可见、当前没有进行中的通话，才弹全屏（不限当前页面）
             triggered.push(i);
+            const fresh = (t - (Number(slot.time) || 0)) <= FRESH_CALL_MS;
+            const visible = document.visibilityState === 'visible';
             // 低概率状态（睡觉 / 不理人）不弹来电，只记未接，模拟「Ta 没空打」
-            if (curRate > 20 && state.currentContactId === c.id && !state.callState) {
+            if (fresh && visible && curRate > 20 && !state.callState) {
               // 弹窗
               showIncomingCall(c, Math.random()<0.5 ? 'video' : 'voice');
             } else {
@@ -553,13 +556,18 @@ async function initApp() {
   initRecallModule();
   // 问答：恢复未完成的延时选择
   initQaModule().catch(() => {});
-  // 迁移修复：旧版联系人默认头像二次编码损坏，统一替换
+  // 迁移修复：旧版联系人默认头像二次编码损坏统一替换；旧纪念日补「倒数 / 正数」模式（只加字段，不动日期）
   const _oldContacts = await dbAll('contacts');
   for (const _c of _oldContacts) {
+    let _fix = false;
     if (_c.avatar && _c.avatar.indexOf('%2523') !== -1) {
       _c.avatar = DEFAULT_AVATAR;
-      await dbPut('contacts', _c);
+      _fix = true;
     }
+    for (const _a of (_c.anniversaries || [])) {
+      if (_a && !_a.mode) { _a.mode = defaultAnniMode(_a.name); _fix = true; }
+    }
+    if (_fix) await dbPut('contacts', _c);
   }
   // 渲染我的头像
   await renderMeBrief();

@@ -1,6 +1,6 @@
 // 依赖：01-state.js, 02-core.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, dbUpdate, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
+import { $, anniversaryView, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, dbUpdate, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
 import { autoResize, cancelRoundTimers, renderChatMessages } from './04-chat.js';
 import { renderLetterList } from './05-call-letter.js';
 import { openContactSetting, renderContactSettingsList, renderMyStickersGrid, renderStickerPanel, renderThemeUI } from './06-ui.js';
@@ -518,11 +518,12 @@ export function getNearestAnniversary(list) {
   for (const a of list) {
     const r = countdownAnniversary(a.date);
     if (!r) continue;
-    if (r.diff < min) { min = r.diff; nearest = { ...a, diff: r.diff, today: r.todayIsOrigin }; }
+    if (r.diff < min) { min = r.diff; nearest = a; }
   }
   if (!nearest) return null;
-  const t = nearest.today ? '就是今天' : (nearest.diff === 0 ? '就是今天' : (nearest.diff > 0 ? `还有${nearest.diff}天` : `已过${Math.abs(nearest.diff)}天`));
-  return { name: nearest.name, text: `${escapeHtml(nearest.name)} · ${t}` };
+  // 展示文案跟随每条纪念日自己的「倒数 / 正数」模式
+  const v = anniversaryView(nearest);
+  return { name: nearest.name, text: `${escapeHtml(nearest.name)} · ${v.text}` };
 }
 
 // ============ 新建联系人 ============

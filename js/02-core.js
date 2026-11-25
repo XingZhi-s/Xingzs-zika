@@ -122,7 +122,9 @@ export function inputDialog(title, fields, okText='确定') {
     box.innerHTML = fields.map(f => `
       <div style="margin-bottom:12px;">
         <div style="font-size:13px;color:#7f96b8;margin-bottom:6px;">${f.label}</div>
-        <input type="${f.type||'text'}" class="input" data-ik="${f.key}" value="${f.value!=null?escapeHtml(String(f.value)):''}" placeholder="${f.placeholder||''}" ${f.required?'required':''}>
+        ${f.type === 'select'
+          ? `<select class="input" data-ik="${f.key}" ${f.required?'required':''}>${(f.options||[]).map(o => `<option value="${escapeHtml(String(o.value))}"${String(o.value)===String(f.value)?' selected':''}>${escapeHtml(String(o.label!=null?o.label:o.value))}</option>`).join('')}</select>`
+          : `<input type="${f.type||'text'}" class="input" data-ik="${f.key}" value="${f.value!=null?escapeHtml(String(f.value)):''}" placeholder="${f.placeholder||''}" ${f.required?'required':''}>`}
       </div>`).join('');
     $('input-dialog-ok').textContent = okText;
     $('input-dialog').classList.remove('hide');
@@ -140,7 +142,7 @@ export function _confirmInputDialog() {
   const box = $('input-dialog-fields');
   const values = {};
   let ok = true;
-  box.querySelectorAll('input[data-ik]').forEach(inp => {
+  box.querySelectorAll('[data-ik]').forEach(inp => {
     values[inp.dataset.ik] = inp.value;
     if (inp.required && !inp.value.trim()) { inp.style.borderColor = '#ef4444'; ok = false; }
     else inp.style.borderColor = '';
@@ -181,6 +183,29 @@ export function countdownAnniversary(dateStr) {
   const origin = new Date(y, m-1, d); origin.setHours(0,0,0,0);
   const todayIsOrigin = today.getMonth()+1 === m && today.getDate() === d;
   return { diff, todayIsOrigin };
+}
+// 纪念日计算方式：生日默认倒数（还有 N 天），其余默认正数（已经 N 天）
+export function defaultAnniMode(name) {
+  return /生日/.test(String(name || '')) ? 'countdown' : 'countup';
+}
+// 纪念日展示：{ cls, text }；mode 缺省按名称判定（兼容旧数据）
+export function anniversaryView(a) {
+  if (!a || !a.date) return { cls: 'anni-countdown', text: '' };
+  const mode = a.mode === 'countdown' || a.mode === 'countup' ? a.mode : defaultAnniMode(a.name);
+  if (mode === 'countdown') {
+    const r = countdownAnniversary(a.date);
+    if (!r) return { cls: 'anni-countdown', text: '' };
+    if (r.todayIsOrigin) return { cls: 'anni-countdown anni-today', text: '就是今天' };
+    return { cls: 'anni-countdown', text: `还有${r.diff}天` };
+  }
+  const [y, m, d] = String(a.date).split('-').map(Number);
+  if (!y || !m || !d) return { cls: 'anni-countdown', text: '' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const origin = new Date(y, m-1, d); origin.setHours(0,0,0,0);
+  const days = Math.round((today - origin) / 86400000);
+  if (days === 0) return { cls: 'anni-countdown anni-today', text: '就是今天' };
+  if (days < 0) return { cls: 'anni-countdown', text: `还有${-days}天` };
+  return { cls: 'anni-countdown', text: `已经${days}天` };
 }
 // 图片压缩
 export function compressImage(file, maxSide=1280, quality=0.8) {

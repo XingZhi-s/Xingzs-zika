@@ -194,6 +194,18 @@ function startCallInterval(dur) {
     if (s >= total) remoteHangUp();
   }, 1000);
 }
+// 仅计时、不预设时长：来电由用户接起后只走这个，挂断时刻按真实经过秒数写结局
+function startCallTimer() {
+  const cs = state.callState;
+  if (!cs) return;
+  if (cs.intervalId) { clearInterval(cs.intervalId); cs.intervalId = null; }
+  if (!cs.startTime) cs.startTime = now();
+  cs.duration = 0;
+  cs.intervalId = setInterval(() => {
+    if (!state.callState || !state.callState.startTime) return;
+    updateCallTimer(Math.floor((now() - state.callState.startTime)/1000));
+  }, 1000);
+}
 
 // 通话时长：长尾随机分布（30% 10~60秒 / 50% 1~5分钟 / 20% 5~30分钟），每次通话截然不同
 function randomCallDuration() {
@@ -265,7 +277,8 @@ export async function restoreCallState() {
     // 内存中已有进行中的通话：只补活可能被后台挂起的计时器，绝不重置 startTime
     const cs = state.callState;
     if (cs.connected && cs.startTime && !cs.intervalId) {
-      startCallInterval(cs.duration || randomCallDuration());
+      if (cs.incoming) startCallTimer();
+      else startCallInterval(cs.duration || randomCallDuration());
       updateCallTimer(Math.floor((now() - cs.startTime)/1000));
     }
     return;
@@ -297,41 +310,49 @@ export async function restoreCallState() {
   const statusText = state.callState.connected ? '通话中…'
     : (state.callState.incoming ? `来电中…（${type==='video'?'视频':'电话'}）` : `正在${type==='video'?'视频':'电话'}呼叫…`);
   if (state.callState.connected) {
-    // 已接通：补算时长；若离线期间已超过通话时长，直接按自动挂断补记
-    const dur = state.callState.duration || randomCallDuration();
-    const elapsed = Math.floor((now() - state.callState.startTime) / 1000);
-    if (elapsed >= dur) {
-      const mm = String(Math.floor(dur/60)).padStart(2,'0'), ss = String(dur%60).padStart(2,'0');
-      const callKey = state.callState.callKey || ('call:' + cid + ':' + state.callState.startTime);
-      pushCallEndSys(c, callKey + ':remote', `${type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, saved.incoming ? 'in' : 'out');
-      await saveContact(c);
+    // 来电已接起但页面离线太久：无法确认真实结束时刻，静默清理，绝不伪造「已通话 xx 分」
+    if (state.callState.incoming && now() - (saved.savedAt || 0) > 60 * 1000) {
       state.callState = null;
       clearPersistedCall();
-      if (state.currentContactId === cid) renderChatMessages(cid, true);
       return;
     }
-    showCallScreen({ name, avatar: av, status: statusText, showAnswer: false, timer: true });
-    updateCallStatus('通话中…', true);
-    updateCallTimer(elapsed);
-    startCallInterval(dur);
+    const elapsed = Math.floor((now() - state.callState.startTime) / 1000);
+    if (state.callState.incoming) {
+      // 来电：用户接起后按真实经过时间计时，不预设时长、不自动挂断
+      showCallScreen({ name, avatar: av, status: statusText, showAnswer: false, timer: true });
+      updateCallStatus('通话中…', true);
+      updateCallTimer(elapsed);
+      startCallTimer();
+    } else {
+      // 去电：保留对方按计划时长挂断的既有规则；离线已超时则按计划时长补记
+      const dur = state.callState.duration || randomCallDuration();
+      if (elapsed >= dur) {
+        const mm = String(Math.floor(dur/60)).padStart(2,'0'), ss = String(dur%60).padStart(2,'0');
+        const callKey = state.callState.callKey || ('call:' + cid + ':' + state.callState.startTime);
+        pushCallEndSys(c, callKey + ':remote', `${type==='video' ? '（视频已通话 ' : '（已通话 '}${mm}:${ss}）`, 'out');
+        await saveContact(c);
+        state.callState = null;
+        clearPersistedCall();
+        if (state.currentContactId === cid) renderChatMessages(cid, true);
+        return;
+      }
+      showCallScreen({ name, avatar: av, status: statusText, showAnswer: false, timer: true });
+      updateCallStatus('通话中…', true);
+      updateCallTimer(elapsed);
+      startCallInterval(dur);
+    }
   } else if (state.callState.incoming) {
-    // 来电振铃中：恢复接听界面 + 超时自动接/不接
+    // 来电振铃中：恢复接听界面；超时一律按未接处理，绝不自动接通
     showCallScreen({ name, avatar: av, status: statusText, showAnswer: true, timer: false });
     state.callState.timeoutId = setTimeout(async () => {
       if (!state.callState || !state.callState.incoming || state.callState.connected) return;
-      if (Math.random() < 0.5) {
-        answerIncomingReal();
-        persistCallState();
-      } else {
-        // 未接：记录 + 关闭
-        closeCallScreen();
-        const cc = await getContact(cid);
-        if (cc) {
-          pushMissedCall(cc);
-          await saveContact(cc);
-          renderContacts();
-          if (state.currentContactId === cid) renderChatMessages(cid, true);
-        }
+      closeCallScreen();
+      const cc = await getContact(cid);
+      if (cc) {
+        pushMissedCall(cc);
+        await saveContact(cc);
+        renderContacts();
+        if (state.currentContactId === cid) renderChatMessages(cid, true);
       }
     }, randInt(8, 15) * 1000);
   } else {
@@ -396,12 +417,11 @@ export function closeCallScreen() {
 export async function answerIncoming() {
   if (!state.callState || !state.callState.incoming) return;
   const cid = state.callState.contactId;
-  const dur = randomCallDuration();
   const startTime = now();
   updateCallStatus('通话中…', true);
   state.callState.startTime = startTime;
   state.callState.connected = true;
-  startCallInterval(dur);
+  startCallTimer();
   persistCallState();
   state.callState.hang = () => {
     if (state.callState.intervalId) clearInterval(state.callState.intervalId);
@@ -478,12 +498,12 @@ export function pushMissedCall(c, time) {
   return true;
 }
 
-// 联系人主动来电（停留在对话页时弹出）
+// 联系人主动来电（前台可见且无进行中通话时弹出，不限当前页面）
 export async function showIncomingCall(c, type='voice') {
   const cid = c.id;
   // 互斥：已有响铃/通话界面时，后续来电一律转未接记录，绝不弹全屏覆盖
-  // 同时不在该联系人对话页也记未接（多个联系人的未接都要记录，不作废）
-  if (state.callState || state.currentContactId !== cid) {
+  // 弹窗不要求停留在该联系人对话页（前台可见 + 无进行中通话即可），这里只守住「已有通话」
+  if (state.callState) {
     pushMissedCall(c);
     // 补算中途也会走到这里（持有本轮快照）：只增不减落库，避免覆盖并发写入的聊天消息
     await saveContactAppendOnly(c);
@@ -496,28 +516,23 @@ export async function showIncomingCall(c, type='voice') {
     status: `来电中…（${type==='video'?'视频':'电话'}）`,
     showAnswer: true, timer: false
   });
-  // 用户不操作，几秒后50%接/不接
+  // 用户不操作，几秒后按未接处理；绝不自动接通、绝不写「已通话」
   const timeout = randInt(8, 15);
   let done = false;
   state.callState = {
-    type, contactId: cid, incoming: true, connected: false, intervalId: null, startTime: 0,
+    type, contactId: cid, incoming: true, connected: false, intervalId: null, startTime: 0, duration: 0,
     micOn: true, _name: c.name, _avatar: c.avatar || DEFAULT_AVATAR,
     hang: () => {}, // 占位
     timeoutId: setTimeout(async () => {
       if (done) return;
-      const accept = Math.random() < 0.5;
       done = true;
-      if (accept) answerIncoming();
-      else {
-        // 未接
-        closeCallScreen();
-        const cc = await getContact(cid);
-        if (cc) {
-          pushMissedCall(cc);
-          await saveContact(cc);
-          renderContacts();
-          if (state.currentContactId === cid) renderChatMessages(cid, true);
-        }
+      closeCallScreen();
+      const cc = await getContact(cid);
+      if (cc) {
+        pushMissedCall(cc);
+        await saveContact(cc);
+        renderContacts();
+        if (state.currentContactId === cid) renderChatMessages(cid, true);
       }
     }, timeout*1000)
   };
@@ -542,14 +557,13 @@ export async function showIncomingCall(c, type='voice') {
   };
 }
 export function answerIncomingReal() {
-  // 真实接听
+  // 真实接听：从用户接起的这一刻才开始计时，不预设任何时长
   const cid = state.callState.contactId;
-  const dur = randomCallDuration();
   const startTime = now();
   updateCallStatus('通话中…', true);
   state.callState.startTime = startTime;
   state.callState.connected = true;
-  startCallInterval(dur);
+  startCallTimer();
   persistCallState();
   state.callState.hang = () => {
     if (state.callState.intervalId) clearInterval(state.callState.intervalId);

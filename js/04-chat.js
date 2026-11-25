@@ -1,6 +1,6 @@
 // 依赖：03-data.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, closeModal, compressImage, confirmDialog, countdownAnniversary, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
+import { $, anniversaryView, closeModal, compressImage, confirmDialog, defaultAnniMode, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
 import { applyNickname, clearContactUnread, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
 import { recordCardUsage } from './17-card-usage.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
@@ -1096,19 +1096,13 @@ export async function renderAnniversaryPanel(cid) {
   const c = await getContact(cid);
   const items = c.anniversaries || [];
   const rows = items.map(a => {
-    const r = countdownAnniversary(a.date);
-    let cls = 'anni-countdown', txt = '';
-    if (r) {
-      if (r.todayIsOrigin) { cls += ' anni-today'; txt = '就是今天'; }
-      else if (r.diff > 0) txt = `还有${r.diff}天`;
-      else { cls += ' anni-past'; txt = `已过${Math.abs(r.diff)}天`; }
-    }
+    const v = anniversaryView(a);
     return `<div class="anni-item">
       <div class="anni-info">
         <div class="anni-name">${escapeHtml(a.name)}</div>
         <div class="anni-date">${escapeHtml(a.date)}</div>
       </div>
-      <div class="${cls}">${txt}</div>
+      <div class="${v.cls}">${v.text}</div>
       <div style="display:flex;gap:4px;margin-left:8px;">
         <button style="background:#dbeafe;color:#1e40af;width:32px;height:32px;border-radius:6px;min-width:32px;min-height:32px;display:flex;align-items:center;justify-content:center;" onclick="editAnni('${a.id}')"><svg class="i i-sm" style="stroke:#1e40af;"><use href="#icon-pencil"/></svg></button>
         <button style="background:#fee2e2;color:#991b1b;width:32px;height:32px;border-radius:6px;min-width:32px;min-height:32px;display:flex;align-items:center;justify-content:center;" onclick="delAnni('${a.id}')"><svg class="i i-sm" style="stroke:#991b1b;"><use href="#icon-trash"/></svg></button>
@@ -1121,19 +1115,36 @@ export async function renderAnniversaryPanel(cid) {
   </div>`;
   showModal(`${c.name}的纪念日`, body, [{label:'关闭', cls:'btn-outline', onClick:closeModal}]);
 }
+const ANNI_MODE_OPTIONS = [
+  { value: 'countdown', label: '倒数（还有 N 天）' },
+  { value: 'countup', label: '正数（已经 N 天）' }
+];
 export async function addAnni() {
   const cid = state.currentContactId;
   const c = await getContact(cid);
-  const r = await inputDialog('添加纪念日', [
+  const p = inputDialog('添加纪念日', [
     { key: 'name', label: '纪念日名称', value: '纪念日', required: true },
-    { key: 'date', label: '日期', type: 'date', value: new Date().toISOString().slice(0,10), required: true }
+    { key: 'date', label: '日期', type: 'date', value: new Date().toISOString().slice(0,10), required: true },
+    { key: 'mode', label: '计算方式', type: 'select', value: 'countup', options: ANNI_MODE_OPTIONS }
   ], '保存');
+  // 默认值按名称走：未手动改过下拉时，名称含「生日」自动切倒数，其余正数
+  try {
+    const box = $('input-dialog-fields');
+    const nameInp = box && box.querySelector('input[data-ik="name"]');
+    const modeSel = box && box.querySelector('select[data-ik="mode"]');
+    if (nameInp && modeSel) {
+      let touched = false;
+      modeSel.addEventListener('change', () => { touched = true; });
+      nameInp.addEventListener('input', () => { if (!touched) modeSel.value = defaultAnniMode(nameInp.value); });
+    }
+  } catch (e) {}
+  const r = await p;
   if (!r) return;
   const name = (r.name || '').trim() || '纪念日';
   const date = r.date || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式错误');
   c.anniversaries = c.anniversaries || [];
-  c.anniversaries.push({ id: uid(), name, date });
+  c.anniversaries.push({ id: uid(), name, date, mode: r.mode === 'countdown' ? 'countdown' : 'countup' });
   await saveContact(c);
   renderAnniversaryPanel(cid);
   renderContacts();
@@ -1145,12 +1156,14 @@ export async function editAnni(id) {
   if (!a) return;
   const r = await inputDialog('编辑纪念日', [
     { key: 'name', label: '纪念日名称', value: a.name, required: true },
-    { key: 'date', label: '日期', type: 'date', value: a.date, required: true }
+    { key: 'date', label: '日期', type: 'date', value: a.date, required: true },
+    { key: 'mode', label: '计算方式', type: 'select', value: a.mode || defaultAnniMode(a.name), options: ANNI_MODE_OPTIONS }
   ], '保存');
   if (!r) return;
   const date = r.date || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return toast('日期格式错误');
   a.name = (r.name || '').trim() || a.name; a.date = date;
+  a.mode = r.mode === 'countdown' ? 'countdown' : 'countup';
   await saveContact(c);
   renderAnniversaryPanel(cid);
   renderContacts();
