@@ -648,6 +648,80 @@ export async function sendImageMessage(input) {
 export async function sendStickerMessage(data) {
   await sendMessageCore({ type:'sticker', content:data, replyTo: null });
 }
+
+/* ============ 表情包回收：对方已读我发的表情包后，按概率收进他自己的表情包库 ============
+   规则：
+   - 只在消息 read=true（对方已读）之后才掷概率；未读永远不判定
+   - 命中后延迟几分钟（2~6 分钟，基于已读时刻）才到账，不立刻收
+   - 同一张图已在其库中则跳过，不重复添加；库不设上限
+   - 收进去的是复制品（同 data 的新对象），我之后删原图不影响
+   - 全程不写任何聊天消息，只改联系人自己的 stickers
+   判定结果写在消息上（recycleRolled/recycleHit/recycleDueAt/recycleDone），刷新后可续。 */
+const STICKER_RECYCLE_DEFAULT = 30;
+const STICKER_RECYCLE_DELAY_MIN = 2; // 分钟
+const STICKER_RECYCLE_DELAY_MAX = 6;
+
+export function stickerRecycleRate(c) {
+  const raw = c && c.settings ? c.settings.stickerRecycleRate : undefined;
+  if (raw === undefined || raw === null || raw === '') return STICKER_RECYCLE_DEFAULT;
+  let v = Number(raw);
+  if (!Number.isFinite(v)) return STICKER_RECYCLE_DEFAULT;
+  v = Math.round(v);
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  return v;
+}
+
+export function processStickerRecycle(c, t) {
+  if (!c) return false;
+  const at = Number.isFinite(Number(t)) ? Number(t) : now();
+  let changed = false;
+  for (const m of (c.messages || [])) {
+    if (m.from !== 'me' || m.type !== 'sticker' || !m.content || m.recalled || m.recycleDone) continue;
+    if (!m.read) continue; // 对方没读之前不判定
+    if (!m.recycleRolled) {
+      m.recycleRolled = true;
+      m.recycleHit = Math.random() * 100 < stickerRecycleRate(c);
+      changed = true;
+      if (!m.recycleHit) { m.recycleDone = true; continue; }
+      const base = Number(m.readAt) || at;
+      m.recycleDueAt = base + randInt(STICKER_RECYCLE_DELAY_MIN, STICKER_RECYCLE_DELAY_MAX) * 60000;
+    }
+    if (m.recycleHit && m.recycleDueAt && at >= m.recycleDueAt) {
+      const lib = c.stickers || (c.stickers = []);
+      if (!lib.some(s => s && s.data === m.content)) {
+        lib.push({ id: uid(), name: '', data: m.content });
+      }
+      m.recycleDone = true;
+      changed = true;
+    } else if (m.recycleHit && m.recycleDueAt) {
+      armStickerRecycleTimer(c.id, m.id, m.recycleDueAt);
+    }
+  }
+  return changed;
+}
+
+// 到点自动入账（定时器丢失时由补算/周期检查兜底）
+function armStickerRecycleTimer(cid, msgId, dueAt) {
+  const key = 'rk_' + cid + '_' + msgId;
+  if (state.chatTimers[key]) return;
+  const remain = Math.max(0, Number(dueAt) - now());
+  state.chatTimers[key] = setTimeout(() => {
+    delete state.chatTimers[key];
+    const task = async () => {
+      const cc = await getContact(cid);
+      if (!cc) return;
+      if (!processStickerRecycle(cc, now())) return;
+      await saveContact(cc);
+      if (document.getElementById('page-sticker-lib')?.classList.contains('active')) {
+        if (typeof window.renderStkLibGrid === 'function') {
+          window.renderStkLibGrid(state.currentStkLibTab, state.currentContactSettingId);
+        }
+      }
+    };
+    if (typeof window.__enqueueTask === 'function') window.__enqueueTask(task); else task();
+  }, remain);
+}
 export async function sendChoiceMessage(question, options, result, allowMulti) {
   await sendMessageCore({ type:'choice', choice:{ question, options, result, allowMulti: !!allowMulti }, content: '', replyTo: null });
 }
@@ -756,6 +830,8 @@ function scheduleJudgement(cid, key, msgIds, judgement, readAt, replyAt, replyCo
         cascadeReadFromMe(cc, msgIds[msgIds.length - 1]);
         await saveContact(cc);
       }
+      // 已读后：我发出的表情包按概率被他收进自己的库（延迟几分钟到账，无聊天提示）
+      if (processStickerRecycle(cc, now())) await saveContact(cc);
       if (state.currentContactId === cid) renderChatIncremental(cid);
       if (judgement === 'reply') {
         state.chatTypingState[cid] = true;

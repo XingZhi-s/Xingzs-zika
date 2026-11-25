@@ -1,6 +1,6 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
-import { $, closeModal, compressImage, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
+import { $, closeModal, compressImage, compressSticker, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
 import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme, statusGapRange } from './03-data.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
@@ -62,7 +62,7 @@ export async function addMyStickers(input) {
   let added = 0, dup = 0;
   for (const f of files) {
     try {
-      const d = await compressImage(f, 800, 0.85);
+      const d = await compressSticker(f);
       if (existSet.has(d)) { dup++; continue; }
       m.stickers.push({ id: uid(), name:'', data: d });
       existSet.add(d);
@@ -393,6 +393,23 @@ export async function renderContactSetting(id) {
         </div>
         <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveCallRate()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存来电设置</button>
         <div class="cs-hint">每个联系人每天按此概率来电一次，睡觉类状态会顺延</div>
+      </div>
+    </div>
+
+    <div class="cs-section">
+      <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-smile"/></svg> 表情包回收</div>
+      <div class="cs-card">
+        <div class="cs-row">
+          <span class="cs-label">收到概率</span>
+          <span class="cs-value">
+            <div class="range-row" style="justify-content:flex-end;">
+              <input type="number" min="0" max="100" step="1" value="${(() => { const v = Number(c.settings && c.settings.stickerRecycleRate); const raw = c.settings && c.settings.stickerRecycleRate; return raw !== null && raw !== '' && Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 30; })()}" id="cs-stkrate">
+              <span class="cs-unit">%</span>
+            </div>
+          </span>
+        </div>
+        <button class="btn" style="width:100%;margin-top:10px;" onclick="csSaveStickerRecycle()"><svg class="i i-sm" style="margin-right:4px;stroke:#fff;"><use href="#icon-check"/></svg> 保存表情包回收设置</button>
+        <div class="cs-hint">Ta 看到你发的表情包后，按此概率收进自己的表情包库（0–100，默认 30%）</div>
       </div>
     </div>
 
@@ -729,6 +746,19 @@ export async function csToggleIncomingCall() {
   c.settings.incomingCall = !c.settings.incomingCall;
   await saveContact(c);
   renderContactSetting(state.currentContactSettingId);
+}
+// 表情包回收概率：0–100 整数，非法/空回落到默认 30
+export async function csSaveStickerRecycle() {
+  const c = await getContact(state.currentContactSettingId); if (!c) return;
+  const el = $('cs-stkrate');
+  let v = parseInt(el ? el.value : '', 10);
+  if (isNaN(v)) v = 30;
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  c.settings.stickerRecycleRate = v;
+  await saveContact(c);
+  if (el) el.value = String(v); // 回填夹取后的值，避免输入框里留着非法值
+  toast(`表情包回收概率已保存：${v}%`);
 }
 // 对我的专属称呼
 export async function csEditMyNickname() {
@@ -1125,7 +1155,7 @@ export async function addLibStickers(input) {
     const ex = new Set(m.stickers.map(s => s.data));
     for (const f of files) {
       try {
-        const d = await compressImage(f, 800, 0.85);
+        const d = await compressSticker(f);
         if (ex.has(d)) { dup++; continue; }
         m.stickers.push({ id: uid(), name:'', data:d });
         ex.add(d); added++;
@@ -1138,7 +1168,7 @@ export async function addLibStickers(input) {
     const ex = new Set(c.stickers.map(s => s.data));
     for (const f of files) {
       try {
-        const d = await compressImage(f, 800, 0.85);
+        const d = await compressSticker(f);
         if (ex.has(d)) { dup++; continue; }
         c.stickers.push({ id: uid(), name:'', data:d });
         ex.add(d); added++;

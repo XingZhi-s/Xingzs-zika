@@ -234,6 +234,166 @@ export function estimateSizeMB(str) {
   return (new Blob([str]).size / 1024 / 1024).toFixed(2);
 }
 
+/* ============ 表情包专用压缩：WebP + 保留透明 + 长边 320 + 动图保留动画 ============
+   浏览器本地完成，不依赖第三方库：
+   - 静图：canvas 等比缩放到长边 320 → toDataURL('image/webp')，透明通道保留
+   - 动图：ImageDecoder 逐帧解码（GIF / 动图 WebP / APNG），逐帧编码为 WebP 后
+     按 RIFF/ANMF 容器拼成动态 WebP，帧数与每帧时长原样保留
+   - 已是合规尺寸（长边 ≤320）的 WebP 直接原样入库，避免二次编码导致体积变大 */
+export function compressSticker(file, maxSide = 320, quality = 0.85) {
+  return (async () => {
+    const src = await readFileAsDataURL(file);
+    const img = await loadImgEl(src).catch(() => null);
+    if (!img) return src;
+    const sw = img.naturalWidth || img.width || 0;
+    const sh = img.naturalHeight || img.height || 0;
+    if (!sw || !sh) return src;
+    const scale = Math.min(1, maxSide / Math.max(sw, sh));
+    if (/^data:image\/webp/i.test(src) && scale === 1) return src;
+    const w = Math.max(1, Math.round(sw * scale));
+    const h = Math.max(1, Math.round(sh * scale));
+    if (typeof ImageDecoder === 'function') {
+      const anim = await encodeAnimatedSticker(file, w, h, quality).catch(() => null);
+      if (anim) return anim;
+    }
+    return encodeStillSticker(img, w, h, quality);
+  })();
+}
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+function loadImgEl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+function encodeStillSticker(img, w, h, quality) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const out = canvas.toDataURL('image/webp', quality);
+  // 极老浏览器不支持 WebP 编码时退回 PNG（仍保留透明，绝不转 JPEG）
+  return /^data:image\/webp/i.test(out) ? out : canvas.toDataURL('image/png');
+}
+async function encodeAnimatedSticker(file, w, h, quality) {
+  const type = file.type || '';
+  if (!/^image\/(gif|webp|png|apng)$/i.test(type)) return null;
+  const buf = await file.arrayBuffer();
+  const dec = new ImageDecoder({ data: buf, type });
+  try {
+    if (dec.tracks && dec.tracks.ready) await dec.tracks.ready;
+    else await dec.completed;
+    const track = dec.tracks && (dec.tracks.selectedTrack || dec.tracks[0]);
+    if (!track || !track.animated || !(track.frameCount > 1)) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const frames = [];
+    let lastDur = 100000;
+    for (let i = 0; i < track.frameCount; i++) {
+      const res = await dec.decode({ frameIndex: i });
+      const frame = res && (res.image || res);
+      if (!frame) continue;
+      const durUs = Number(frame.duration) || lastDur;
+      lastDur = durUs;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(frame, 0, 0, w, h);
+      if (typeof frame.close === 'function') frame.close();
+      const url = canvas.toDataURL('image/webp', quality);
+      const chunks = /^data:image\/webp/i.test(url) ? extractWebpBitstream(url) : null;
+      if (!chunks) return null;
+      frames.push({ chunks, duration: Math.max(10, Math.round(durUs / 1000)) });
+    }
+    if (frames.length < 2) return null;
+    const loop = Number.isFinite(track.repetitionCount) ? Math.max(0, Math.min(65535, track.repetitionCount)) : 0;
+    return assembleAnimatedWebp(frames, w, h, loop);
+  } finally {
+    try { dec.close(); } catch (e) {}
+  }
+}
+function extractWebpBitstream(dataUrl) {
+  const i = dataUrl.indexOf(',');
+  if (i < 0) return null;
+  const bin = atob(dataUrl.slice(i + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+  if (bytes.length < 12) return null;
+  let off = 12, alpha = null, vp8 = null;
+  while (off + 8 <= bytes.length) {
+    const cc = String.fromCharCode(bytes[off], bytes[off + 1], bytes[off + 2], bytes[off + 3]);
+    const size = bytes[off + 4] | (bytes[off + 5] << 8) | (bytes[off + 6] << 16) | (bytes[off + 7] << 24);
+    const s = off + 8, e = s + size;
+    if (e > bytes.length) break;
+    if (cc === 'ALPH') alpha = bytes.slice(s, e);
+    else if (cc === 'VP8 ' || cc === 'VP8L') vp8 = bytes.slice(s, e);
+    off = e + (size & 1);
+  }
+  if (!vp8) return null;
+  return { alpha, vp8 };
+}
+function u16(v) { return new Uint8Array([v & 255, (v >>> 8) & 255]); }
+function u24(v) { return new Uint8Array([v & 255, (v >>> 8) & 255, (v >>> 16) & 255]); }
+function u32(v) { return new Uint8Array([v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]); }
+function chunkBytes(fourcc, data) {
+  const pad = data.length & 1;
+  const out = new Uint8Array(8 + data.length + pad);
+  for (let i = 0; i < 4; i++) out[i] = fourcc.charCodeAt(i);
+  out.set(u32(data.length), 4);
+  out.set(data, 8);
+  return out;
+}
+function concatBytes(list) {
+  let n = 0;
+  for (const b of list) n += b.length;
+  const out = new Uint8Array(n);
+  let off = 0;
+  for (const b of list) { out.set(b, off); off += b.length; }
+  return out;
+}
+function bytesToBase64(bytes) {
+  let s = '';
+  const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  return btoa(s);
+}
+function assembleAnimatedWebp(frames, w, h, loop) {
+  const vp8x = new Uint8Array(10);
+  vp8x[0] = 0x12; // 动画 + 透明
+  vp8x.set(u24(w - 1), 4);
+  vp8x.set(u24(h - 1), 7);
+  const anim = new Uint8Array(6);
+  anim.set(u16(loop), 4);
+  const parts = [chunkBytes('VP8X', vp8x), chunkBytes('ANIM', anim)];
+  for (const f of frames) {
+    const head = new Uint8Array(16);
+    head.set(u24(0), 0); head.set(u24(0), 3);
+    head.set(u24(w - 1), 6); head.set(u24(h - 1), 9);
+    head.set(u24(f.duration), 12);
+    head[15] = 0x02; // 不混合：整帧覆盖，避免透明区露出上一帧
+    const bodyParts = [head];
+    if (f.chunks.alpha) bodyParts.push(chunkBytes('ALPH', f.chunks.alpha));
+    bodyParts.push(chunkBytes('VP8 ', f.chunks.vp8));
+    parts.push(chunkBytes('ANMF', concatBytes(bodyParts)));
+  }
+  const body = concatBytes(parts);
+  const file = new Uint8Array(12 + body.length);
+  file.set([0x52, 0x49, 0x46, 0x46], 0); // RIFF
+  file.set(u32(4 + body.length), 4);
+  file.set([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+  file.set(body, 12);
+  return 'data:image/webp;base64,' + bytesToBase64(file);
+}
+
 // ============ 通用弹窗 ============
 export function showModal(title, bodyHtml, buttons, onClose) {
   // 清理旧的

@@ -942,7 +942,8 @@ a { text-decoration:none; color:inherit; }
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: 0 !important;
+    /* 软键盘以覆盖方式弹出时，用视觉视口把输入区整体抬起，避免输入框被顶出屏幕 */
+    bottom: var(--chat-kb-bottom, 0px) !important;
     background: var(--card-bg) !important;
     border-top: 1px solid var(--border-color) !important;
     padding: 6px 10px calc(6px + env(safe-area-inset-bottom)) !important;
@@ -951,8 +952,8 @@ a { text-decoration:none; color:inherit; }
     width: 100% !important;
   }
   body.page-chat-active #chat-content-wrap .chat-messages {
-    /* 预留输入栏高度，内容不被挡住 */
-    padding-bottom: 86px !important;
+    /* 预留输入栏（含内联工具条）实际高度，内容不被挡住；高度由 JS 实时同步 */
+    padding-bottom: var(--chat-input-space, 86px) !important;
   }
   /* 其余二级页隐藏底部导航栏（一级页：手机桌面/联系人/写信/我的/设置 保留导航） */
   body.nav-hidden-page .bottom-nav { display: none !important; }
@@ -1708,33 +1709,36 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 ::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.15); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,0.3); }
 
-/* ========== 聊天输入区「＋」工具抽屉（条目由数组驱动） ========== */
-.chat-tool-drawer { position:fixed; inset:0; z-index:700; display:flex; align-items:flex-end; }
-.chat-tool-mask { position:absolute; inset:0; background:color-mix(in srgb, var(--text-primary) 30%, transparent); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
-.chat-tool-panel {
-  position:relative; width:100%; max-width:520px; margin:0 auto;
-  border-radius:18px 18px 0 0; padding:14px 14px calc(18px + env(safe-area-inset-bottom));
-  background:color-mix(in srgb, var(--card-bg) 88%, transparent);
-  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
-  box-shadow:0 -8px 28px color-mix(in srgb, var(--theme-color) 18%, transparent);
-  animation:chatToolUp .22s ease;
+/* ========== 聊天输入区「＋」内联工具条（贴在输入栏正下方，单行横向滑动） ========== */
+.chat-tool-drawer {
+  flex-shrink:0; width:100%; max-width:100%; overflow:hidden;
+  background:var(--card-bg); border-top:1px solid var(--border-color);
+  padding:7px 0 3px;
+  animation:chatToolIn .18s ease;
 }
-@keyframes chatToolUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
-.chat-tool-title { font-size:12px; color:var(--text-secondary); margin:0 4px 10px; }
-.chat-tool-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+@keyframes chatToolIn { from { transform:translateY(10px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+.chat-tool-grid {
+  display:flex; align-items:stretch; gap:8px;
+  overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;
+  touch-action:pan-x; scrollbar-width:none;
+  padding:2px 10px 5px;
+}
+.chat-tool-grid::-webkit-scrollbar { display:none; width:0; height:0; }
 .chat-tool-item {
-  display:flex; flex-direction:column; align-items:center; gap:6px;
-  padding:12px 4px 8px; border-radius:14px;
+  flex:0 0 62px; width:62px; min-width:62px; min-height:0;
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  padding:7px 2px 6px; border-radius:14px;
   background:color-mix(in srgb, var(--theme-light) 70%, transparent);
 }
 .chat-tool-item:active { transform:scale(0.96); }
 .chat-tool-item .ct-icon {
-  width:40px; height:40px; border-radius:12px; background:var(--theme-color);
+  width:38px; height:38px; border-radius:12px; background:var(--theme-color);
   display:flex; align-items:center; justify-content:center;
   box-shadow:0 4px 12px color-mix(in srgb, var(--theme-color) 25%, transparent);
 }
-.chat-tool-item .ct-icon svg { width:18px; height:18px; stroke:var(--my-bubble-text); }
-.chat-tool-item .ct-name { font-size:12px; color:var(--text-primary); }
+.chat-tool-item .ct-icon svg { width:17px; height:17px; stroke:var(--my-bubble-text); }
+.chat-tool-item .ct-name { font-size:11px; line-height:1.2; color:var(--text-primary); white-space:nowrap; }
 
 /* ========== 提醒卡片消息（复用聊天卡片容器 .msg-choice） ========== */
 .msg-reminder { border-left:3px solid var(--theme-color); }
@@ -2621,12 +2625,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
                 <svg class="i i-sm"><use href="#icon-send"/></svg>
               </button>
             </div>
-          </div>
-          <!-- 从底部升起的工具抽屉：条目由 CHAT_TOOLS 数组驱动 -->
-          <div id="chat-tool-drawer" class="chat-tool-drawer hide">
-            <div class="chat-tool-mask" onclick="closeChatToolDrawer()"></div>
-            <div class="chat-tool-panel">
-              <div class="chat-tool-title">聊天工具</div>
+            <!-- 内联工具条：贴在输入栏正下方，展开时输入栏整体上移 -->
+            <div id="chat-tool-drawer" class="chat-tool-drawer hide">
               <div class="chat-tool-grid" id="chat-tool-grid"></div>
             </div>
           </div>

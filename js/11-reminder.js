@@ -29,21 +29,79 @@ export function toggleChatToolDrawer() {
   const d = $('chat-tool-drawer');
   if (!d) return;
   if (d.classList.contains('hide')) {
+    const atBottom = chatBoxAtBottom();
     renderChatToolDrawer();
+    // 与表情 / 拍一拍 / 问答面板互斥，避免同时挤占输入区
+    ['closeStickerPanel', 'closePokePanel', 'closeQaPanel'].forEach(fn => {
+      if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} }
+    });
     d.classList.remove('hide');
+    keepChatBottom(atBottom);
   } else {
     closeChatToolDrawer();
   }
 }
 export function closeChatToolDrawer() {
   const d = $('chat-tool-drawer');
-  if (d) d.classList.add('hide');
+  if (!d || d.classList.contains('hide')) return;
+  const atBottom = chatBoxAtBottom();
+  d.classList.add('hide');
   // A25：关闭后主动失焦，避免触发按钮残留高亮/焦点
   const ae = document.activeElement;
   if (ae && ae.classList && ae.classList.contains('chat-input-btn')) {
     ae.blur();
     ae.classList.remove('active', 'focus');
   }
+  keepChatBottom(atBottom);
+}
+
+// 输入区（含内联工具条）实际占高 → 同步消息区底部留白；同时把覆盖式软键盘的高度抬升量写进 CSS 变量
+export function syncChatInputSpace() {
+  const wrap = document.querySelector('.chat-input-wrap');
+  const host = $('chat-content-wrap');
+  if (wrap && host) {
+    const h = Math.ceil(wrap.getBoundingClientRect().height);
+    if (h > 0) host.style.setProperty('--chat-input-space', (h + 10) + 'px');
+  }
+  const vv = window.visualViewport;
+  if (vv) {
+    const kb = Math.round(window.innerHeight - (vv.offsetTop + vv.height));
+    document.documentElement.style.setProperty('--chat-kb-bottom', (kb > 80 ? kb : 0) + 'px');
+  }
+}
+function chatBoxAtBottom() {
+  const b = $('chat-messages');
+  return !!b && (b.scrollHeight - b.scrollTop - b.clientHeight < 60);
+}
+function keepChatBottom(atBottom) {
+  requestAnimationFrame(() => {
+    syncChatInputSpace();
+    const b = $('chat-messages');
+    if (b && atBottom) b.scrollTop = b.scrollHeight;
+  });
+}
+let _chatSpaceBound = false;
+function bindChatInputSpace() {
+  if (_chatSpaceBound) return;
+  _chatSpaceBound = true;
+  const wrap = document.querySelector('.chat-input-wrap');
+  if (wrap && typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => syncChatInputSpace()).observe(wrap);
+  }
+  window.addEventListener('resize', syncChatInputSpace);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncChatInputSpace);
+    window.visualViewport.addEventListener('scroll', syncChatInputSpace);
+  }
+  const box = $('chat-messages');
+  if (box) {
+    // 点消息区收起工具条（点「＋」再点一次同样收起）
+    box.addEventListener('click', () => {
+      const d = $('chat-tool-drawer');
+      if (d && !d.classList.contains('hide')) closeChatToolDrawer();
+    });
+  }
+  syncChatInputSpace();
 }
 export function runChatTool(id) {
   closeChatToolDrawer();
@@ -236,4 +294,5 @@ function advanceReminder(r, t) {
 
 export function initReminderModule() {
   renderChatToolDrawer();
+  bindChatInputSpace();
 }
