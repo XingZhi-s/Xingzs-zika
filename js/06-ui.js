@@ -103,6 +103,8 @@ function onStickerEsc(e) {
 }
 export function openStickerPanel() {
   const p = $('sticker-panel'); if (!p) return;
+  // 与「＋」工具条互斥：展开表情面板时先收起工具条
+  if (typeof window.closeChatToolDrawer === 'function') window.closeChatToolDrawer();
   p.classList.remove('hide');
   if (!_stickerDocBound) {
     document.addEventListener('pointerdown', onStickerOutside, true);
@@ -1081,27 +1083,20 @@ export function openBatchImport() {
   }, 0);
 }
 
-// ============ 表情包库（管理页，两个tab） ============
+// ============ 表情包库（单库单归属：联系人进来只看联系人，「我的」进来只看我） ============
 
-export function openStickerLib(defaultTab='contact') {
-  state.currentStkLibTab = defaultTab;
-  state.stkLibFrom = 'page-contact-setting';
-  // 设置tab名称
-  const contactTabBtn = $('stk-tab-contact-name');
-  if (state.currentContactSettingId) {
-    getContact(state.currentContactSettingId).then(c => { if (c && contactTabBtn) contactTabBtn.textContent = `${c.name}的表情包`; });
-  }
-  switchStkTab(defaultTab, true);
+export function openStickerLib(defaultTab = 'contact') {
+  const tab = defaultTab === 'mine' ? 'mine' : 'contact';
+  state.currentStkLibTab = tab;
+  // 返回目标取当前实际页面，避免从「我的」进来却退回联系人设置
+  const cur = document.querySelector('.page.active');
+  state.stkLibFrom = (cur && cur.id && cur.id !== 'page-sticker-lib') ? cur.id : 'page-contact-setting';
+  const label = $('stk-lib-label');
+  if (label) label.textContent = tab === 'mine' ? '我的表情包' : '表情包库';
+  renderStkLibGrid(tab, state.currentContactSettingId);
   openPage('page-sticker-lib');
 }
 export function backFromStickerLib() { openPage(state.stkLibFrom); }
-export function switchStkTab(tab, first=false) {
-  state.currentStkLibTab = tab;
-  document.querySelectorAll('.stk-tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.tab === tab);
-  });
-  renderStkLibGrid(tab, state.currentContactSettingId);
-}
 // 渲染表情包库：来源由参数显式指定（mine=我的 / contact=当前联系人），不跨来源混用。
 // 异步返回后会校验 tab 与联系人是否仍是发起时的那一个，避免晚到的「我的」结果盖到联系人页。
 export async function renderStkLibGrid(tab, cid) {
@@ -1113,11 +1108,15 @@ export async function renderStkLibGrid(tab, cid) {
   if (activeTab === 'mine') {
     const m = await getMe();
     if (state.currentStkLibTab !== activeTab) return;
+    const label = $('stk-lib-label');
+    if (label) label.textContent = '我的表情包';
     list = (m.stickers || []).map(s => ({...s, _owner:'me'}));
   } else {
     const c = await getContact(targetCid);
     if (state.currentStkLibTab !== activeTab || state.currentContactSettingId !== targetCid) return;
     if (!c) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有选择联系人</div>`; return; }
+    const label = $('stk-lib-label');
+    if (label) label.textContent = c.name; // 单库标题就是该联系人名字
     list = (c.stickers || []).map(s => ({...s, _owner:'contact'}));
   }
   if (!list.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">还没有表情包</div>`; return; }

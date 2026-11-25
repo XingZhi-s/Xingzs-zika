@@ -20,6 +20,8 @@ const CHAT_TOOLS = [
 export function renderChatToolDrawer() {
   const box = $('chat-tool-grid');
   if (!box) return;
+  // 固定两排：列数 = ceil(项数/2)，8 项为 4 列；以后加项自动增加列并横向滑动
+  box.style.gridTemplateColumns = `repeat(${Math.ceil(CHAT_TOOLS.length / 2)}, 62px)`;
   box.innerHTML = CHAT_TOOLS.map(t => `<button class="chat-tool-item" onclick="runChatTool('${t.id}')">
     <span class="ct-icon"><svg class="i"><use href="#${t.icon}"/></svg></span>
     <span class="ct-name">${t.name}</span>
@@ -73,6 +75,18 @@ function chatBoxAtBottom() {
   const b = $('chat-messages');
   return !!b && (b.scrollHeight - b.scrollTop - b.clientHeight < 60);
 }
+// 点输入框：滚到最新一条（包括往上翻过或有未读在下面的情况）
+function scrollChatToLatest() {
+  const b = $('chat-messages');
+  if (!b) return;
+  b.scrollTop = b.scrollHeight;
+  requestAnimationFrame(() => {
+    syncChatInputSpace();
+    b.scrollTop = b.scrollHeight;
+    // 收起工具条/表情面板有 180ms 高度动画，动画结束后再贴底一次
+    setTimeout(() => { if (b.isConnected) b.scrollTop = b.scrollHeight; }, 220);
+  });
+}
 function keepChatBottom(atBottom) {
   requestAnimationFrame(() => {
     syncChatInputSpace();
@@ -95,11 +109,27 @@ function bindChatInputSpace() {
   }
   const box = $('chat-messages');
   if (box) {
-    // 点消息区收起工具条（点「＋」再点一次同样收起）
+    // 点消息区收起工具条/表情面板（点「＋」或表情按钮再点一次同样收起）
     box.addEventListener('click', () => {
       const d = $('chat-tool-drawer');
       if (d && !d.classList.contains('hide')) closeChatToolDrawer();
+      if (typeof window.closeStickerPanel === 'function') window.closeStickerPanel();
     });
+  }
+  // 点输入框：自动收起工具条，焦点保留在输入框；同时把聊天滚到最新一条
+  const inputBox = $('chat-input-box');
+  if (inputBox) {
+    const onInputTap = () => {
+      // 先把焦点给输入框，再收起工具条，避免 blur 落到按钮上导致无法直接打字
+      if (document.activeElement !== inputBox) {
+        try { inputBox.focus({ preventScroll: true }); } catch (e) { inputBox.focus(); }
+      }
+      const d = $('chat-tool-drawer');
+      if (d && !d.classList.contains('hide')) closeChatToolDrawer();
+      scrollChatToLatest();
+    };
+    inputBox.addEventListener('pointerdown', onInputTap);
+    inputBox.addEventListener('focus', scrollChatToLatest);
   }
   syncChatInputSpace();
 }

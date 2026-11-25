@@ -1305,7 +1305,8 @@ a { text-decoration:none; color:inherit; }
 .top-bar-btn:focus-visible { outline:2px solid var(--theme-color); outline-offset:2px; }
 
 /* 表情下面板 */
-.sticker-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:260px; overflow-y:auto; }
+/* 表情面板：与「＋」工具条一致，内联贴在输入栏下方 */
+.sticker-panel { width:100%; flex-shrink:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:10px 12px; max-height:min(40vh, 280px); max-height:min(40dvh, 280px); overflow-y:auto; animation:chatToolIn .18s ease; }
 .poke-panel { position:absolute; bottom:100%; left:0; right:0; background:var(--card-bg); border-top:1px solid var(--border-color); padding:12px; max-height:min(42vh, 300px); max-height:min(42dvh, 300px); display:flex; flex-direction:column; }
 .poke-panel-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-shrink:0; }
 .poke-panel-head strong { flex:1; min-width:0; }
@@ -1585,6 +1586,7 @@ a { text-decoration:none; color:inherit; }
 .stk-tabs { display:flex; border-bottom:1px solid var(--border-color); margin-bottom:12px; }
 .stk-tab { flex:1; padding:12px; text-align:center; cursor:pointer; font-weight:500; color:var(--text-secondary); }
 .stk-tab.active { color:var(--theme-color); border-bottom:2px solid var(--theme-color); }
+#stk-lib-label { cursor:default; }
 
 .sticker-mgr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:10px; padding:4px 0; }
 .sticker-mgr-item { position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#f3f4f6; }
@@ -1709,7 +1711,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 ::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.15); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,0.3); }
 
-/* ========== 聊天输入区「＋」内联工具条（贴在输入栏正下方，单行横向滑动） ========== */
+/* ========== 聊天输入区「＋」内联工具条（贴在输入栏正下方，上下两排，可横向滑动） ========== */
 .chat-tool-drawer {
   flex-shrink:0; width:100%; max-width:100%; overflow:hidden;
   background:var(--card-bg); border-top:1px solid var(--border-color);
@@ -1718,7 +1720,8 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 }
 @keyframes chatToolIn { from { transform:translateY(10px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 .chat-tool-grid {
-  display:flex; align-items:stretch; gap:8px;
+  display:grid; grid-template-rows:repeat(2, auto); grid-auto-flow:row;
+  grid-auto-columns:62px; gap:6px 8px;
   overflow-x:auto; overflow-y:hidden;
   -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;
   touch-action:pan-x; scrollbar-width:none;
@@ -1726,14 +1729,14 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
 }
 .chat-tool-grid::-webkit-scrollbar { display:none; width:0; height:0; }
 .chat-tool-item {
-  flex:0 0 62px; width:62px; min-width:62px; min-height:0;
+  width:62px; min-width:62px; min-height:0;
   display:flex; flex-direction:column; align-items:center; gap:5px;
-  padding:7px 2px 6px; border-radius:14px;
+  padding:6px 2px 5px; border-radius:14px;
   background:color-mix(in srgb, var(--theme-light) 70%, transparent);
 }
 .chat-tool-item:active { transform:scale(0.96); }
 .chat-tool-item .ct-icon {
-  width:38px; height:38px; border-radius:12px; background:var(--theme-color);
+  width:36px; height:36px; border-radius:11px; background:var(--theme-color);
   display:flex; align-items:center; justify-content:center;
   box-shadow:0 4px 12px color-mix(in srgb, var(--theme-color) 25%, transparent);
 }
@@ -2566,19 +2569,6 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
           <div id="chat-menu" class="popup-menu hide" style="top:54px;"></div>
           <div class="chat-messages" id="chat-messages"></div>
           <div class="chat-input-wrap" style="flex-shrink:0;">
-            <div class="sticker-panel hide" id="sticker-panel">
-              <div class="sticker-panel-head">
-                <strong>我的表情包</strong>
-                <button style="background:var(--theme-light);color:var(--theme-color);border-radius:8px;padding:6px 12px;min-height:36px;" onclick="document.getElementById('sticker-panel-file').click()">
-                  <svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg>添加
-                </button>
-                <button class="sticker-panel-close" title="关闭表情面板" onclick="closeStickerPanel()">
-                  <svg class="i i-sm"><use href="#icon-close"/></svg>
-                </button>
-                <input type="file" accept="image/*" id="sticker-panel-file" class="hide" multiple onchange="quickAddMyStickers(this)">
-              </div>
-              <div class="sticker-grid" id="sticker-panel-grid"></div>
-            </div>
             <div class="poke-panel hide" id="poke-panel">
               <div class="poke-panel-head">
                 <strong>选择一句拍一拍</strong>
@@ -2624,6 +2614,20 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
               <button class="chat-send-btn" title="发送" onclick="sendTextMessage()">
                 <svg class="i i-sm"><use href="#icon-send"/></svg>
               </button>
+            </div>
+            <!-- 表情面板：与「＋」一样内联在输入栏下方 -->
+            <div class="sticker-panel hide" id="sticker-panel">
+              <div class="sticker-panel-head">
+                <strong>我的表情包</strong>
+                <button style="background:var(--theme-light);color:var(--theme-color);border-radius:8px;padding:6px 12px;min-height:36px;" onclick="document.getElementById('sticker-panel-file').click()">
+                  <svg class="i i-sm" style="margin-right:4px;"><use href="#icon-plus"/></svg>添加
+                </button>
+                <button class="sticker-panel-close" title="关闭表情面板" onclick="closeStickerPanel()">
+                  <svg class="i i-sm"><use href="#icon-close"/></svg>
+                </button>
+                <input type="file" accept="image/*" id="sticker-panel-file" class="hide" multiple onchange="quickAddMyStickers(this)">
+              </div>
+              <div class="sticker-grid" id="sticker-panel-grid"></div>
             </div>
             <!-- 内联工具条：贴在输入栏正下方，展开时输入栏整体上移 -->
             <div id="chat-tool-drawer" class="chat-tool-drawer hide">
@@ -2897,8 +2901,7 @@ input[type=color] { width:44px; height:44px; border:2px solid var(--border-color
         </div>
         <div style="padding:16px;">
           <div class="stk-tabs">
-            <div class="stk-tab active" data-tab="mine" onclick="switchStkTab('mine')">我的表情包</div>
-            <div class="stk-tab" data-tab="contact" onclick="switchStkTab('contact')" id="stk-tab-contact-name">联系人的表情包</div>
+            <div class="stk-tab active" id="stk-lib-label">表情包库</div>
           </div>
           <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
             <button class="btn btn-ghost" onclick="document.getElementById('stk-lib-file').click()">＋ 添加图片</button>
