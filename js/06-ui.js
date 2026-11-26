@@ -95,7 +95,7 @@ let _stickerDocBound = false;
 function onStickerOutside(e) {
   const p = $('sticker-panel');
   if (!p || p.classList.contains('hide')) return;
-  if (e.target.closest && (e.target.closest('#sticker-panel') || e.target.closest('#chat-sticker-toggle'))) return;
+  if (e.target.closest && (e.target.closest('#sticker-panel') || e.target.closest('#chat-sticker-toggle') || e.target.closest('#chat-input-box'))) return;
   closeStickerPanel();
 }
 function onStickerEsc(e) {
@@ -115,9 +115,9 @@ export function openStickerPanel() {
 export function closeStickerPanel() {
   const p = $('sticker-panel'); if (!p) return;
   p.classList.add('hide');
-  // A25：关闭后主动失焦，避免触发按钮残留高亮/焦点
+  // A25：仅当触发按钮自己持有焦点时才失焦，避免影响正在输入的输入框
   const btn = $('chat-sticker-toggle');
-  if (btn) { btn.blur(); btn.classList.remove('active', 'focus'); }
+  if (btn && document.activeElement === btn) { btn.blur(); btn.classList.remove('active', 'focus'); }
   if (_stickerDocBound) {
     document.removeEventListener('pointerdown', onStickerOutside, true);
     document.removeEventListener('keydown', onStickerEsc);

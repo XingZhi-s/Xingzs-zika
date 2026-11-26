@@ -20,12 +20,18 @@ const CHAT_TOOLS = [
 export function renderChatToolDrawer() {
   const box = $('chat-tool-grid');
   if (!box) return;
-  // 固定两排：列数 = ceil(项数/2)，8 项为 4 列；以后加项自动增加列并横向滑动
-  box.style.gridTemplateColumns = `repeat(${Math.ceil(CHAT_TOOLS.length / 2)}, 62px)`;
+  // 固定两排：列数 = ceil(项数/2)，8 项为 4 列；列宽用 minmax 在可用宽度内均匀铺满，
+  // 项数变多、最小宽度放不下时由容器横向滑动，不会留半截空格。
+  const cols = Math.ceil(CHAT_TOOLS.length / 2);
+  box.style.gridTemplateColumns = `repeat(${cols}, minmax(62px, 1fr))`;
   box.innerHTML = CHAT_TOOLS.map(t => `<button class="chat-tool-item" onclick="runChatTool('${t.id}')">
     <span class="ct-icon"><svg class="i"><use href="#${t.icon}"/></svg></span>
     <span class="ct-name">${t.name}</span>
   </button>`).join('');
+  // 奇数项时第二排末尾会空半格：让最后一项横跨剩余两格铺满
+  if (cols > 1 && CHAT_TOOLS.length % 2 === 1 && box.lastElementChild) {
+    box.lastElementChild.style.gridColumn = `${cols - 1} / span 2`;
+  }
 }
 export function toggleChatToolDrawer() {
   const d = $('chat-tool-drawer');
@@ -57,18 +63,15 @@ export function closeChatToolDrawer() {
   keepChatBottom(atBottom);
 }
 
-// 输入区（含内联工具条）实际占高 → 同步消息区底部留白；同时把覆盖式软键盘的高度抬升量写进 CSS 变量
+// 输入区（含内联工具条）实际占高 → 同步消息区底部留白。
+// 不再监听/改写 visualViewport：键盘一律交给 viewport 的 resizes-content 处理，
+// 避免键盘弹出时反复抬升输入区导致输入框被重新布局、输入法被意外收起。
 export function syncChatInputSpace() {
   const wrap = document.querySelector('.chat-input-wrap');
   const host = $('chat-content-wrap');
   if (wrap && host) {
     const h = Math.ceil(wrap.getBoundingClientRect().height);
     if (h > 0) host.style.setProperty('--chat-input-space', (h + 10) + 'px');
-  }
-  const vv = window.visualViewport;
-  if (vv) {
-    const kb = Math.round(window.innerHeight - (vv.offsetTop + vv.height));
-    document.documentElement.style.setProperty('--chat-kb-bottom', (kb > 80 ? kb : 0) + 'px');
   }
 }
 function chatBoxAtBottom() {
@@ -103,10 +106,6 @@ function bindChatInputSpace() {
     new ResizeObserver(() => syncChatInputSpace()).observe(wrap);
   }
   window.addEventListener('resize', syncChatInputSpace);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', syncChatInputSpace);
-    window.visualViewport.addEventListener('scroll', syncChatInputSpace);
-  }
   const box = $('chat-messages');
   if (box) {
     // 点消息区收起工具条/表情面板（点「＋」或表情按钮再点一次同样收起）
@@ -116,19 +115,21 @@ function bindChatInputSpace() {
       if (typeof window.closeStickerPanel === 'function') window.closeStickerPanel();
     });
   }
-  // 点输入框：自动收起工具条，焦点保留在输入框；同时把聊天滚到最新一条
+  // 点输入框：只收起工具条，焦点和输入法保持；同时把聊天滚到最新一条。
+  // 用 click（松手后）而不是 pointerdown：避免面板收起导致输入框在手指抬起前移位，
+  // 让松手那一下落到消息区从而把刚打开的输入法又收掉。
   const inputBox = $('chat-input-box');
   if (inputBox) {
-    const onInputTap = () => {
-      // 先把焦点给输入框，再收起工具条，避免 blur 落到按钮上导致无法直接打字
+    inputBox.addEventListener('click', () => {
+      const d = $('chat-tool-drawer');
+      if (d && !d.classList.contains('hide')) closeChatToolDrawer();
+      if (typeof window.closeStickerPanel === 'function') window.closeStickerPanel();
+      // 面板收起会改变布局，若焦点在移位过程中丢失则在这里补回（本次是用户点输入框，补焦点不会抢走别处的焦点）
       if (document.activeElement !== inputBox) {
         try { inputBox.focus({ preventScroll: true }); } catch (e) { inputBox.focus(); }
       }
-      const d = $('chat-tool-drawer');
-      if (d && !d.classList.contains('hide')) closeChatToolDrawer();
       scrollChatToLatest();
-    };
-    inputBox.addEventListener('pointerdown', onInputTap);
+    });
     inputBox.addEventListener('focus', scrollChatToLatest);
   }
   syncChatInputSpace();
