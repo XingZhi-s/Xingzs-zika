@@ -1,10 +1,10 @@
 // 依赖：全部前置文件，必须最后加载
 import { _taskQueue, DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, closeModal, dbAll, dbDel, dbGet, dbPut, defaultAnniMode, escapeHtml, now, openDB, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveContactMerged, statusGapRange } from './03-data.js';
-import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, processStickerRecycle, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, toggleChatMenu, triggerReply } from './04-chat.js';
+import { applyNickname, applyTheme, backFromApp, backFromChat, createNewContact, exitChatMode, getAllContacts, getContactCardPool, getCurrentReplyRate, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openContactSettingsFromChatDirect, openPage, proactiveGapRange, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveContactMerged, statusGapRange } from './03-data.js';
+import { addAnni, addChoiceOpt, appendReplyMessages, autoResize, cascadeReadFromMe, clearQuoteReply, closeImgPreview, delAnni, deleteMsg, editAnni, jumpToMsg, onChatKeydown, openAnniversary, openChoice, pickQuoteId, pickReplyCount, previewImg, processChoiceQuestions, processStickerRecycle, quoteReply, renderChatIncremental, renderChatMessages, replyCountRange, sendImageMessage, sendTextMessage, setContactAnni, toggleChatMenu, toggleAnniPin, triggerReply } from './04-chat.js';
 import { answerIncoming, backLetterDetail, backLetterList, composeLetterToCurrent, deleteCurrentLetter, ensureLetterDay, genLetterContent, makeCall, openLetterCompose, openLetterDetail, openLetterInbox, persistCallState, pushMissedCall, rejectIncoming, renderLetterList, restoreCallState, sendLetter, showIncomingCall, toggleCallMic, toggleCallMinimize } from './05-call-letter.js';
-import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSaveStatusGap, csSaveStickerRecycle, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderStkLibGrid, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
+import { addCard, addLibStickers, addMyStickers, applyCustomColor, applyPresetBg, applyPresetColor, backFromCardLib, backFromChatSearch, backFromContactSetting, backFromStickerLib, createCardGroup, csAddStatus, csDeleteContact, csEditMyNickname, csEditName, csResetBg, csSaveCallRate, csSaveProactive, csSaveReply, csSaveStatusGap, csSaveStickerRecycle, csSearchChat, csSearchChatRender, csSearchJump, csSetBgPos, csSetSplit, csToggleIncomingCall, csToggleLetter, csToggleBuiltinCards, csToggleProactive, csToggleStatusAuto, csUpdateAvatar, csUploadBg, deleteCard, deleteCardGroup, deleteLibSticker, deleteMySticker, deleteStatus, editCard, editCardGroup, editMyName, editStatus, filterCardLib, openBatchImport, openCardLib, openContactSetting, openContactSettingsList, openMyStickers, openStickerLib, quickAddMyStickers, renderStkLibGrid, renderThemeUI, resetBg, saveCustomCSS, sendStickerAndClose, setBgPos, setStatusCurrent, toggleCardGroup, toggleStatusHelp, toggleStickerPanel, updateMyAvatar, uploadBg, closeStickerPanel } from './06-ui.js';
 import { applyDIYVariables, checkTodoReminders, clearHomeDecos, closeDecoEditor, closeDIY, closeDiyPage, closeTodoPanel, deleteHomeDeco, deleteTodo, openDecoEditor, openDiyPage, openHomeStickerUploader, openTodoEditor, pickDIYImage, previewDIYFontSize, promptTodoAdd, renderHomeAvatar, saveDIYFontSize, renderStorageStats, renderTodos, resetDIYAll, resetDIYItem, resetDIYSection, saveHomeFreeText, setDIYColor, setDiyMode, setDIYText, toggleTodo, uploadHomeBanner, applyCustomCSS, clearBubbleCSS, clearCustomCSS, resetHomeBg, saveBubbleCSS, uploadHomeBg, uploadHomeSquareImg } from './07-diy-todo.js';
 import { addInspiration, deleteInspiration, editInspiration, ensureDailyMoods, initInspirationModule, initMoodModule, inspClearSearch, inspSearch, moodNextMonth, moodPrevMonth, openInspirationPage, openLoveMoodDay, openLoveMoodPage, openMoodDay, openMoodPage, pickMoodEmoji, pickMoodRole, renderLoveMoodCalendar, renderMoodDrawer, saveInspirationEdit, saveMyMood, switchMoodRole, toggleMoodDrawer } from './09-mood.js';
 import { clearDivineHistory, copyDivineResult, deleteDivineHistory, divineBackStep, divineConfirmSpread, divinePickKind, divineRestart, divineToInspiration, drawDivine, dvImgError, flipDivineCard, initDivineModule, openDivineCardMeaning, openDivineHistory, openDivinePage, selectDivineSpread, sendDivineToChat, sendDivineToContact, setDivineDrawMode, startDivineDraw, switchDivineType, toggleDivineMeaning, viewDivineHistory } from './10-divine.js';
@@ -278,7 +278,7 @@ export async function runCatchUp(onlyCid) {
             c.settings.nextProactiveAt = t + randInt(pgap.min, pgap.max) * 3600 * 1000;
             changed = true;
           } else {
-            const cards = c.cardGroups.flatMap(g => g.cards || []);
+            const cards = getContactCardPool(c);
             const pMin = c.settings.proactiveMin != null ? Math.max(0, c.settings.proactiveMin) : 1;
             const pMax = c.settings.proactiveMax != null ? Math.max(pMin, c.settings.proactiveMax) : 3;
             const cnt = cards.length ? (pMin === pMax ? pMin : randInt(pMin, pMax)) : 0;
@@ -555,7 +555,7 @@ async function initApp() {
   initBackgroundModule().catch(() => {});
   // 拍一拍：每小时概率判定（首次只排期，不立即判定）
   initPokeModule();
-  // 撤回：联系人每 10 分钟一次机会，按状态决定概率与延时
+  // 撤回：按联系人消息条数分批（每批 3~5 条随机），按状态决定概率与延时
   initRecallModule();
   // 问答：恢复未完成的延时选择
   initQaModule().catch(() => {});
@@ -742,6 +742,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // 内联事件（如挂断按钮 onclick="state.callState && ..."）需要访问模块作用域的 state 对象
 window.state = state;
 window.addAnni = addAnni;
+window.toggleAnniPin = toggleAnniPin;
+window.setContactAnni = setContactAnni;
 window.addInspiration = addInspiration;
 window.addCard = addCard;
 window.addChoiceOpt = addChoiceOpt;
@@ -792,6 +794,7 @@ window.csSetBgPos = csSetBgPos;
 window.csToggleIncomingCall = csToggleIncomingCall;
 window.csToggleLetter = csToggleLetter;
 window.csToggleProactive = csToggleProactive;
+window.csToggleBuiltinCards = csToggleBuiltinCards;
 window.csToggleStatusAuto = csToggleStatusAuto;
 window.csUpdateAvatar = csUpdateAvatar;
 window.csUpdateMyAvatar = csUpdateMyAvatar;

@@ -1,7 +1,8 @@
 // 依赖：04-chat.js
 import { DEFAULT_AVATAR, PRESET_BGS, PRESET_COLORS, state, uid } from './01-state.js';
 import { $, closeModal, compressImage, compressSticker, confirmDialog, escapeHtml, formatTime, inputDialog, now, randInt, showModal, toast } from './02-core.js';
-import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme, statusGapRange } from './03-data.js';
+import { applyChatBg, deleteContact, getAllContacts, getContact, getMe, getStatusCategories, getStatusPool, getTheme, normalizeContactStatus, openChat, openPage, proactiveGapRange, rateColor, recordStatusWindow, renderContacts, renderMeBrief, saveContact, saveMe, saveStatusCategories, saveStatusPool, saveTheme, statusGapRange, useBuiltinCardsOf } from './03-data.js';
+import { BUILTIN_CARD_TOTAL } from './23-builtin-cards.js';
 import { renderChatMessages, sendStickerMessage } from './04-chat.js';
 import { runCatchUp } from './08-main.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
@@ -453,6 +454,13 @@ export async function renderContactSetting(id) {
     <div class="cs-section">
       <div class="section-title"><svg class="i i-sm" style="margin-right:4px;"><use href="#icon-storage"/></svg> 内容库入口</div>
       <div class="cs-card">
+        <div class="cs-row cs-row-switch">
+          <span class="cs-label">使用内置字卡</span>
+          <span class="cs-value">
+            <div class="switch ${useBuiltinCardsOf(c) ? 'on' : ''}" onclick="csToggleBuiltinCards()"></div>
+          </span>
+        </div>
+        <div class="cs-hint" style="padding:0 0 12px;">内置池 ${BUILTIN_CARD_TOTAL} 张，开启后与该联系人的自建字卡合并、每张等概率抽取；内置卡不会出现在字卡库，也不能编辑或删除。</div>
         <div class="setting-item" style="padding:14px 0;box-shadow:none;" onclick="openCardLib()">
           <div class="setting-label"><span class="setting-icon"><svg class="i"><use href="#icon-pencil"/></svg></span><span>字卡库（${c.cardGroups.reduce((s,g)=>s+(g.cards?g.cards.length:0),0)} 张）</span></div>
           <span class="setting-arrow"><svg class="i i-sm"><use href="#icon-chevron-right"/></svg></span>
@@ -716,8 +724,15 @@ export async function csSaveProactive() {
   await saveContact(c);
   toast('主动消息设置已保存');
 }
-export async function csToggleProactive() {
+// 使用内置字卡：显式写入布尔值；未设置时按「有无自建字卡」给默认值
+export async function csToggleBuiltinCards() {
   const c = await getContact(state.currentContactSettingId); if (!c) return;
+  if (!c.settings) c.settings = {};
+  c.settings.useBuiltinCards = !useBuiltinCardsOf(c);
+  await saveContact(c);
+  renderContactSetting(state.currentContactSettingId);
+}
+export async function csToggleProactive() {  const c = await getContact(state.currentContactSettingId); if (!c) return;
   c.settings.proactiveMsg = !c.settings.proactiveMsg;
   if (c.settings.proactiveMsg) {
     const gap = proactiveGapRange(c);

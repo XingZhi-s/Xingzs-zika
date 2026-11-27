@@ -1,10 +1,11 @@
 // 依赖：01-state.js, 02-core.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
-import { $, anniversaryView, countdownAnniversary, dbAll, dbDel, dbGet, dbPut, dbUpdate, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
+import { $, anniversaryView, dbAll, dbDel, dbGet, dbPut, dbUpdate, escapeHtml, formatTime, inputDialog, now, pick, randInt, toast } from './02-core.js';
 import { autoResize, cancelRoundTimers, renderChatMessages } from './04-chat.js';
 import { renderLetterList } from './05-call-letter.js';
 import { openContactSetting, renderContactSettingsList, renderMyStickersGrid, renderStickerPanel, renderThemeUI } from './06-ui.js';
 import { renderHomeAvatar, renderStorageStats, renderTodos } from './07-diy-todo.js';
+import { BUILTIN_CARDS } from './23-builtin-cards.js';
 
 // ============ 我的资料读写 ============
 export async function getMe() {
@@ -316,6 +317,23 @@ export function createEmptyContact(name) {
   };
 }
 
+// ============ 字卡池：自建 + 可选的内置池 ============
+export function ownCardsOf(c) {
+  return ((c && c.cardGroups) || []).flatMap(g => (g.cards || []).filter(x => x && x.id && x.content));
+}
+// 开关默认值：有自己的字卡 → 默认关闭（保持原行为）；一张自建都没有 → 默认打开，避免无法回复
+export function useBuiltinCardsOf(c) {
+  const v = c && c.settings ? c.settings.useBuiltinCards : undefined;
+  if (typeof v === 'boolean') return v;
+  return ownCardsOf(c).length === 0;
+}
+// 抽取池：开启时自建与内置合并，每张等概率；内置卡带 source 标记，便于统计区分来源
+export function getContactCardPool(c) {
+  const own = ownCardsOf(c).map(x => ({ id: x.id, content: x.content, source: 'own' }));
+  if (!useBuiltinCardsOf(c)) return own;
+  return own.concat(BUILTIN_CARDS.map(x => ({ id: x.id, content: x.content, source: 'builtin' })));
+}
+
 // ============ 主题应用 ============
 export function applyTheme(theme) {
   const r = document.documentElement;
@@ -488,8 +506,8 @@ export async function renderContacts(search='') {
   const renderCard = (c) => {
     const last = c.messages.length ? c.messages[c.messages.length-1] : null;
     let preview = last ? (last.type === 'text' ? last.content : last.type === 'image' ? '[图片]' : last.type === 'sticker' ? '[表情包]' : last.type === 'choice' ? '[选择]' : last.type === 'reminder' ? '[提醒] ' + (last.reminder && last.reminder.text || last.content) : last.type === 'musicInvite' ? '[一起听] ' + ((last.musicInvite && last.musicInvite.trackName) || '本地歌曲') : last.type === 'redpacket' ? '[红包]' : last.type === 'transfer' ? '[转账] 往共用卡转了' : last.type === 'poke' ? '[拍一拍] ' + (last.content || '') : '') : '还没有消息，点击开始聊天';
-    const anni = getNearestAnniversary(c.anniversaries);
-    const anniHtml = anni ? `<div class="contact-card-anni">${anni.text}</div>` : '';
+    const anni = getFeaturedAnniversary(c);
+    const anniHtml = anni ? `<span class="contact-card-anni">${anni.text}</span>` : '';
     const mc = (c.missedCalls && c.missedCalls.length > 0) ? `<div class="missed-call-badge"><svg class="i i-sm" style="margin-right:2px;"><use href="#icon-phone"/></svg>${c.missedCalls.length}个未接</div>` : '';
     const unread = c.unread ? `<span class="badge" style="margin-left:4px;"></span>` : '';
     return `<div class="contact-card" onclick="openChat('${c.id}')">
@@ -497,10 +515,10 @@ export async function renderContacts(search='') {
       <div class="contact-card-info">
         <div class="contact-card-name">${escapeHtml(c.name)}${unread}</div>
         <div class="contact-card-status">
-          ${c.status ? `<span class="status-dot" style="background:var(--success);"></span>${escapeHtml(c.status)}` : ''}
+          ${c.status ? `<span class="status-dot" style="background:var(--success);"></span><span class="contact-card-status-text">${escapeHtml(c.status)}</span>` : ''}
+          ${anniHtml}
         </div>
         <div class="contact-card-preview ellipsis">${escapeHtml(preview)}</div>
-        ${anniHtml}
       </div>
       <div style="text-align:right;flex-shrink:0;">
         <div class="contact-card-time">${last ? formatTime(last.time) : ''}</div>
@@ -512,18 +530,15 @@ export async function renderContacts(search='') {
   const mc = $('mobile-contacts'); if (mc) mc.innerHTML = html;
   const sc = $('sidebar-contacts'); if (sc) sc.innerHTML = filtered.length ? filtered.map(renderCard).join('') : `<div class="empty" style="font-size:13px;">暂无联系人</div>`;
 }
-export function getNearestAnniversary(list) {
-  if (!list || !list.length) return null;
-  let min = Infinity, nearest = null;
-  for (const a of list) {
-    const r = countdownAnniversary(a.date);
-    if (!r) continue;
-    if (r.diff < min) { min = r.diff; nearest = a; }
-  }
-  if (!nearest) return null;
-  // 展示文案跟随每条纪念日自己的「倒数 / 正数」模式
-  const v = anniversaryView(nearest);
-  return { name: nearest.name, text: `${escapeHtml(nearest.name)} · ${v.text}` };
+// 联系人条目展示：只显示用户指定的一条（contactAnniId），未指定/已删除则不显示
+export function getFeaturedAnniversary(c) {
+  const id = c && c.contactAnniId;
+  if (!id) return null;
+  const a = (c.anniversaries || []).find(x => x.id === id);
+  if (!a) return null;
+  const v = anniversaryView(a);
+  if (!v.text) return null;
+  return { name: a.name, text: `${escapeHtml(a.name)} · ${v.text}` };
 }
 
 // ============ 新建联系人 ============

@@ -4,7 +4,8 @@ import { state } from './01-state.js';
 import { $, dbGet, dbPut, now, toast } from './02-core.js';
 
 const CFG_PREFIX = 'recall_cfg_';
-const BATCH = 10;                     // 每累计 10 条「联系人自己发出的消息」给一次机会
+const BATCH_MIN = 3;                  // 每批消耗的「联系人自己发出的消息」条数下限
+const BATCH_MAX = 5;                  // 上限；每消耗一批后重新随机
 const DEFAULT_ENABLED = true;         // 默认允许对方撤回（与旧行为一致）
 const DEFAULT_CHANCE = 3;             // 默认概率 3%（旧行为工作日状态下的概率）
 // 决定撤回后到真正生效的延时（毫秒）
@@ -15,6 +16,13 @@ const COUNT_TYPES = ['text', 'image', 'sticker', 'card', 'voice', 'video', 'redp
 
 function countContactAuthored(c) {
   return (c.messages || []).filter(m => m.from === 'other' && !m.sysKey && COUNT_TYPES.indexOf(m.type) !== -1).length;
+}
+// 下一批的条数：3~5 之间随机（含两端）
+function randBatch() {
+  return BATCH_MIN + Math.floor(Math.random() * (BATCH_MAX - BATCH_MIN + 1));
+}
+function validBatch(v) {
+  return typeof v === 'number' && Number.isInteger(v) && v >= BATCH_MIN && v <= BATCH_MAX;
 }
 
 const chains = new Map();
@@ -45,6 +53,7 @@ export async function getRecallConfig(cid) {
     enabled: rec && typeof rec.enabled === 'boolean' ? rec.enabled : DEFAULT_ENABLED,
     chance: rec && rec.chance != null ? clampChance(rec.chance) : DEFAULT_CHANCE,
     counted: rec && typeof rec.counted === 'number' ? rec.counted : null,
+    batch: rec && validBatch(rec.batch) ? rec.batch : null,
     nextAt: rec && rec.nextAt ? rec.nextAt : 0,
     lastAt: rec && rec.lastAt ? rec.lastAt : 0
   };
@@ -72,7 +81,7 @@ export async function getRecallSectionHtml(cid) {
             </div>
           </span>
         </div>
-        <div class="cs-hint">每累计 10 条对方发出的消息判定一次（只算 Ta 自己发的，不算我发的）：命中后，对方会从自己最近 5 条消息里随机撤回 1~2 条。睡觉类状态不会撤回。</div>
+        <div class="cs-hint">每累计 3~5 条对方发出的消息判定一次（每批条数随机，消耗一批后重新随机；只算 Ta 自己发的，不算我发的）：命中后，对方会从自己最近 5 条消息里随机撤回 1~2 条。睡觉类状态不会撤回。</div>
       </div>
     </div>`;
 }
@@ -195,7 +204,7 @@ export async function recallFromContact(cid, opts) {
   return { ok: true, ids, count, delay: 0, chance, roll };
 }
 
-/* ============ 巡检：每累计 10 条联系人消息给一次机会（首次只记基线，不补判历史） ============ */
+/* ============ 巡检：每消耗 3~5 条联系人消息给一次机会（每批条数随机，首次只记基线） ============ */
 function updateCfg(cid, patch) {
   const key = CFG_PREFIX + cid;
   return serialized(key, async () => {
@@ -208,8 +217,8 @@ function updateCfg(cid, patch) {
 }
 
 let _checking = false;
-async function runRecallChecks() {
-  if (_checking) return; // 上一轮还没跑完时本轮直接跳过，避免同一批 10 条被重复消费
+export async function runRecallChecks() {
+  if (_checking) return; // 上一轮还没跑完时本轮直接跳过，避免同一批被重复消费
   _checking = true;
   try {
     await runRecallChecksInner();
@@ -227,17 +236,20 @@ async function runRecallChecksInner() {
     if (pending) { try { await pending; } catch (e) {} }
     const rec = await dbGet('meta', key);
     const total = countContactAuthored(c);
+    const batch = rec && validBatch(rec.batch) ? rec.batch : randBatch();
     // 首次接入（或旧数据没有 counted）：以当前条数为基线，不对历史消息补判
     if (!rec || typeof rec.counted !== 'number') {
-      await updateCfg(c.id, { counted: total });
+      await updateCfg(c.id, { counted: total, batch });
       continue;
     }
     // 消息被删除后条数回退：重新对齐基线，不清零到负数
-    if (total < rec.counted) { await updateCfg(c.id, { counted: total }); continue; }
-    // 未满 10 条：继续累计（余数保留，不清零）
-    if (total - rec.counted < BATCH) continue;
-    // 满 10 条：消耗这一批，掷一次骰（每批最多一次，剩余批次留给下一分钟继续递减）
-    await updateCfg(c.id, { counted: rec.counted + BATCH, lastAt: now() });
+    if (total < rec.counted) { await updateCfg(c.id, { counted: total, batch }); continue; }
+    // 旧配置没有 batch：先把本批条数落库，保证后续巡检用同一个随机值
+    if (!validBatch(rec.batch)) await updateCfg(c.id, { batch });
+    // 未满本批条数：继续累计（余数保留，不清零）
+    if (total - rec.counted < batch) continue;
+    // 满一批：消耗本批条数，并立刻为下一批重新随机 3~5（剩余批次留给下一分钟继续递减）
+    await updateCfg(c.id, { counted: rec.counted + batch, batch: randBatch(), lastAt: now() });
     // 已关闭该联系人的撤回：只推进计数，不判定
     if (rec.enabled === false) continue;
     try { await recallFromContact(c.id); } catch (e) {}
@@ -251,10 +263,10 @@ export function initRecallModule() {
   _timer = setInterval(() => { runRecallChecks().catch(() => {}); }, 60000);
 }
 
-// 供测试/外部使用：把某联系人的计数基线重置为当前消息条数（不影响消息、不清概率配置）
+// 供测试/外部使用：把某联系人的计数基线重置为当前消息条数，并重新随机下一批条数（不影响消息、不清概率配置）
 export async function resetRecallSchedule(cid) {
   if (!cid) return;
   const { getContact } = await import('./03-data.js');
   const c = await getContact(cid);
-  await updateCfg(cid, { counted: c ? countContactAuthored(c) : 0 });
+  await updateCfg(cid, { counted: c ? countContactAuthored(c) : 0, batch: randBatch() });
 }

@@ -1,7 +1,7 @@
 // 依赖：03-data.js
 import { DEFAULT_AVATAR, state, uid } from './01-state.js';
 import { $, anniversaryView, closeModal, compressImage, confirmDialog, defaultAnniMode, escapeHtml, formatTime, inputDialog, now, pick, randInt, showModal, toast } from './02-core.js';
-import { applyNickname, clearContactUnread, getContact, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
+import { applyNickname, clearContactUnread, getContact, getContactCardPool, getCurrentReplyRate, getMe, getReplyRateOf, getStatusCategories, getStatusPool, renderContacts, saveContact } from './03-data.js';
 import { recordCardUsage } from './17-card-usage.js';
 import { getMyAvatarFor } from './18-my-avatar.js';
 import { openPokePanel } from './19-poke.js';
@@ -767,7 +767,7 @@ export function pickQuoteId(c) {
 }
 // 生成一批回复（条数由调用方决定，不超上限；时间戳=命中时刻，按 1~3 秒递增且不晚于当前）
 export async function appendReplyMessages(c, anchor, count, atTime) {
-  const cards = (c.cardGroups || []).flatMap(g => (g.cards || []).map(x => ({ id: x.id, content: x.content })));
+  const cards = getContactCardPool(c);
   const stickers = c.stickers || [];
   const total = Math.max(0, count || 0);
   const base = Math.min(Number(atTime) || now(), now());
@@ -1005,7 +1005,7 @@ export function resolveChoiceQuestion(c, qMsg, atTime) {
   } else {
     letters = String.fromCharCode(65 + randInt(0, options.length - 1));
   }
-  const all = (c.cardGroups || []).flatMap(g => g.cards || []);
+  const all = getContactCardPool(c);
   let lead = '';
   if (all.length) lead = pick(all).content + ' ';
   c.messages.push({
@@ -1171,7 +1171,10 @@ export function openAnniversary() {
 export async function renderAnniversaryPanel(cid) {
   const c = await getContact(cid);
   const items = c.anniversaries || [];
-  const rows = items.map(a => {
+  // 置顶仅影响展示顺序：置顶组在上，组内保持原有顺序；取消置顶回到原位
+  const order = new Map(items.map((x, i) => [x.id, i]));
+  const sorted = items.slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || order.get(a.id) - order.get(b.id));
+  const rows = sorted.map(a => {
     const v = anniversaryView(a);
     return `<div class="anni-item">
       <div class="anni-info">
@@ -1180,12 +1183,22 @@ export async function renderAnniversaryPanel(cid) {
       </div>
       <div class="${v.cls}">${v.text}</div>
       <div style="display:flex;gap:4px;margin-left:8px;">
+        <button class="anni-pin${a.pinned ? ' on' : ''}" title="${a.pinned ? '取消置顶' : '置顶'}" onclick="toggleAnniPin('${a.id}')"><svg class="i i-sm"><use href="#icon-star"/></svg></button>
         <button style="background:#dbeafe;color:#1e40af;width:32px;height:32px;border-radius:6px;min-width:32px;min-height:32px;display:flex;align-items:center;justify-content:center;" onclick="editAnni('${a.id}')"><svg class="i i-sm" style="stroke:#1e40af;"><use href="#icon-pencil"/></svg></button>
         <button style="background:#fee2e2;color:#991b1b;width:32px;height:32px;border-radius:6px;min-width:32px;min-height:32px;display:flex;align-items:center;justify-content:center;" onclick="delAnni('${a.id}')"><svg class="i i-sm" style="stroke:#991b1b;"><use href="#icon-trash"/></svg></button>
       </div>
     </div>`;
   }).join('');
+  // 联系人条目展示：单选，未指定则不显示；可选范围是该联系人的全部纪念日
+  const feature = items.length ? `<div class="anni-feature">
+      <div class="anni-feature-label">联系人条目展示</div>
+      <select class="input anni-feature-select" onchange="setContactAnni(this.value)">
+        <option value=""${!c.contactAnniId ? ' selected' : ''}>不显示</option>
+        ${items.map(a => `<option value="${a.id}"${c.contactAnniId === a.id ? ' selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}
+      </select>
+    </div>` : '';
   const body = `<div id="anni-list-wrap">
+    ${feature}
     ${items.length ? rows : '<div class="empty" style="padding:30px 10px;">还没有纪念日</div>'}
     <button class="btn" style="width:100%;margin-top:14px;" onclick="addAnni()">＋ 添加纪念日</button>
   </div>`;
@@ -1249,6 +1262,28 @@ export async function delAnni(id) {
   const cid = state.currentContactId;
   const c = await getContact(cid);
   c.anniversaries = (c.anniversaries || []).filter(x => x.id !== id);
+  // 被指定展示的那条被删除时一并清空，避免联系人条目引用不存在的纪念日
+  if (c.contactAnniId === id) c.contactAnniId = '';
+  await saveContact(c);
+  renderAnniversaryPanel(cid);
+  renderContacts();
+}
+// 置顶开关：多条可同时置顶，独立存于每条纪念日上
+export async function toggleAnniPin(id) {
+  const cid = state.currentContactId;
+  const c = await getContact(cid);
+  const a = (c.anniversaries || []).find(x => x.id === id);
+  if (!a) return;
+  a.pinned = !a.pinned;
+  await saveContact(c);
+  renderAnniversaryPanel(cid);
+}
+// 联系人条目展示哪一条：独立存于联系人的 contactAnniId，空值表示不显示
+export async function setContactAnni(id) {
+  const cid = state.currentContactId;
+  const c = await getContact(cid);
+  if (id && !(c.anniversaries || []).some(x => x.id === id)) return;
+  c.contactAnniId = id || '';
   await saveContact(c);
   renderAnniversaryPanel(cid);
   renderContacts();

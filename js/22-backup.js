@@ -114,6 +114,7 @@ function pickContactForBackup(c) {
       cards: (g.cards || []).map(x => ({ id: x.id, content: x.content })),
     })),
     anniversaries: Array.isArray(c.anniversaries) ? c.anniversaries.slice() : [],
+    contactAnniId: c.contactAnniId || '',
     missedCalls: Array.isArray(c.missedCalls) ? c.missedCalls.slice() : [],
   };
 }
@@ -413,6 +414,7 @@ function applyContactFields(cur, imp) {
   if (imp.settings) cur.settings = { ...cur.settings, ...imp.settings };
   if (Array.isArray(imp.cardGroups)) cur.cardGroups = imp.cardGroups.map(g => ({ ...g, cards: (g.cards || []).map(x => ({ ...x })) }));
   if (Array.isArray(imp.anniversaries)) cur.anniversaries = imp.anniversaries.slice();
+  if (imp.contactAnniId !== undefined) cur.contactAnniId = imp.contactAnniId;
   if (Array.isArray(imp.missedCalls)) cur.missedCalls = imp.missedCalls.slice();
 }
 
@@ -588,6 +590,7 @@ async function executeLegacy(obj) {
       cur.settings = { ...cur.settings, ...imported.settings };
     }
     if (imported.anniversaries) cur.anniversaries = imported.anniversaries.slice();
+    if (imported.contactAnniId !== undefined) cur.contactAnniId = imported.contactAnniId;
     if (imported.letters) {
       cur.letters = imported.letters.slice();
       letterCnt += cur.letters.length;

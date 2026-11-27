@@ -3,6 +3,7 @@
 import { state } from './01-state.js';
 import { dbGet, dbPut, escapeHtml } from './02-core.js';
 import { getContact, openPage } from './03-data.js';
+import { BUILTIN_CARDS } from './23-builtin-cards.js';
 
 const META_PREFIX = 'cardUsage_';
 // 按联系人串行写库：补算与实时回复可能同时命中，避免读改写互相覆盖
@@ -84,13 +85,17 @@ export async function renderCardUsage() {
   for (const g of ((c && c.cardGroups) || [])) {
     for (const card of (g.cards || [])) live.set(card.id, card.content);
   }
+  // 内置字卡同样可被抽中；按 id 解析文本并标注来源，不当作「已删除」
+  const builtin = new Map(BUILTIN_CARDS.map(x => [x.id, x.content]));
   const rows = entries.map(x => {
     const has = live.has(x.id);
+    const isBuiltin = !has && builtin.has(x.id);
     return {
       id: x.id,
       count: x.count,
-      deleted: !has,
-      text: has ? (live.get(x.id) || '') : (x.name || '（旧字卡）')
+      deleted: !has && !isBuiltin,
+      builtin: isBuiltin,
+      text: has ? (live.get(x.id) || '') : (isBuiltin ? builtin.get(x.id) : (x.name || '（旧字卡）'))
     };
   }).sort((a, b) => b.count - a.count || a.text.localeCompare(b.text, 'zh'));
 
@@ -103,11 +108,11 @@ export async function renderCardUsage() {
   const cloudHtml = cloudRows.map(r => {
     const fs = cloudFontSize(r.count, min, max);
     const op = 0.62 + 0.38 * ((fs - FONT_MIN) / (FONT_MAX - FONT_MIN));
-    return `<span class="cu-word" style="font-size:${fs.toFixed(1)}px;opacity:${op.toFixed(2)};">${escapeHtml(r.text)}${r.deleted ? '<span class="cu-del">已删除</span>' : ''}</span>`;
+    return `<span class="cu-word" style="font-size:${fs.toFixed(1)}px;opacity:${op.toFixed(2)};">${escapeHtml(r.text)}${r.deleted ? '<span class="cu-del">已删除</span>' : ''}${r.builtin ? '<span class="cu-src">内置</span>' : ''}</span>`;
   }).join('');
 
   const listHtml = rows.map(r => `<div class="cu-item">
-      <div class="cu-text">${escapeHtml(r.text)}${r.deleted ? '<span class="cu-del">已删除</span>' : ''}</div>
+      <div class="cu-text">${escapeHtml(r.text)}${r.deleted ? '<span class="cu-del">已删除</span>' : ''}${r.builtin ? '<span class="cu-src">内置</span>' : ''}</div>
       <div class="cu-meta"><span class="cu-count">${r.count} 次</span><br>${fmtPercent(r.count / total * 100)}</div>
     </div>`).join('');
 
